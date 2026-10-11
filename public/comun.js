@@ -195,7 +195,7 @@ export async function iniciarPagina({ activo, titulo = '' } = {}) {
   app.innerHTML = `
   <nav class="menu" aria-label="Menú principal">
     <div class="menu-marca"><img class="logo" src="/img/logo-siguelo.png" alt="Síguelo GPS"><img class="marca-pin" src="/img/logo-pin.png" alt=""><button type="button" class="btn-plegar" aria-label="Plegar menú">${ICONOS.plegar}</button></div>
-    ${e ? `<div class="rc-empresa" title="${esc(e.nombre)}">${e.logo_clave ? `<img class="rc-empresa-logo" src="/api/logo/${esc(e.slug)}" alt="">` : `<span class="rc-empresa-logo" style="background:${esc(e.color || '#0F5F58')}">${esc(e.nombre.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase())}</span>`}<div><b>${esc(e.nombre)}</b><span>Rentacar · Plan ${esc(e.plan || 'Pro')}</span></div></div>` : ''}
+    ${e ? `<div class="rc-empresa" title="${esc(e.nombre)}">${e.logo_clave ? `<img class="rc-empresa-logo" src="/api/logo/${esc(e.slug)}" alt="">` : `<span class="rc-empresa-logo" style="background:${esc(e.color || '#0F5F58')}">${esc(e.nombre.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase())}</span>`}<div><b>${esc(e.nombre)}</b><span>Rentacar · Plan ${esc((e.plan || 'pro').replace(/^./, (c) => c.toUpperCase()))}</span></div></div>` : ''}
     ${MENU.map(([g, items]) => {
       const vis = items.filter(([m]) => YO.permisos[m]);
       return vis.length ? `<div class="menu-grupo">${g}</div>${vis.map(([m, n, href]) => `<a class="item" href="${href}" title="${n}"${m === activo ? ' aria-current="page"' : ''}>${ICONOS[m]}<span>${n}</span></a>`).join('')}` : '';

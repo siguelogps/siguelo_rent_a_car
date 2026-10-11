@@ -104,6 +104,9 @@ async function ocupacionDe(empresaId, desde, hasta, sucursalId) {
 
 export async function calcularReporte(empresaId, consulta = {}) {
   const p = periodoDe(consulta);
+  // Período en curso: se mide hasta hoy (los días futuros no cuentan como ociosos ni bajan la ocupación)
+  const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: ZONA }).format(new Date());
+  if (p.hasta > hoy && p.desde <= hoy && !consulta.incluir_futuro) { p.hasta = hoy; p.etiqueta = `${p.etiqueta} (al ${hoy.slice(8, 10)}-${hoy.slice(5, 7)})`; }
   const sucursalId = consulta.sucursal_id ? Number(consulta.sucursal_id) : null;
   const n = diasEntre(p.desde, p.hasta);
   const [empresa] = await q('SELECT ajustes FROM empresas WHERE id = $1', [empresaId]);

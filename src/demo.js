@@ -143,7 +143,8 @@ export async function sembrarDemo({ clave = 'demo1234' } = {}) {
   ];
   for (const [estado, pat, c, di, hi, df, hf, sr, sd, extras, codigo] of reservas) {
     let inicio = at(di, hi), fin = at(df, hf);
-    if (estado === 'confirmada' && inicio < new Date()) { inicio = new Date(Math.ceil(Date.now() / 36e5) * 36e5 + 2 * 36e5); if (fin <= inicio) fin = new Date(inicio.getTime() + 3 * DIA); }
+    // Si ya pasó la hora del retiro (p. ej. al sembrar de noche), se mueve a mañana a la misma hora local conservando la duración
+    if (estado === 'confirmada' && inicio < new Date()) { const dur = fin - inicio; inicio = at(di + 1, hi); fin = new Date(inicio.getTime() + Math.max(dur, DIA)); }
     const cot = await cotizar({ empresaId: E, categoriaId: veh[pat].cat, inicio, fin, sucursalRetiroId: sr, sucursalDevolucionId: sd, extras, codigoDescuento: codigo });
     await transaccion(async (tx) => {
       const folio = await siguienteFolio(E, estado === 'cotizacion' ? 'C' : 'R', tx);

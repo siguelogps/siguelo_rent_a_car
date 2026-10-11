@@ -43,6 +43,7 @@ export async function infoPublica(e) {
   const pago = await proveedoresPago(e.id);
   return {
     nombre: e.nombre, slug: e.slug, color: e.color || '#0F5F58', logo: !!e.logo_clave, telefono: e.telefono, correo: e.correo, sitio_web: e.sitio_web,
+    ...coloresPortal(e),
     sucursales, categorias, extras, portal_pago: modoPago(e), ...pago,
     edad_minima: e.ajustes?.edad_minima || null, anticipacion_horas: e.ajustes?.portal_anticipacion_horas ?? ANTICIPACION_MIN_H
   };
@@ -320,7 +321,7 @@ export async function resumenParaCliente(r) {
   const { proveedores, simulado } = await proveedoresPago(E);
   const extranjero = c && c.documento_tipo !== 'rut';
   return {
-    empresa: { nombre: e.nombre, slug: e.slug, color: e.color || '#0F5F58', logo: !!e.logo_clave, telefono: e.telefono, correo: e.correo },
+    empresa: { nombre: e.nombre, slug: e.slug, color: e.color || '#0F5F58', logo: !!e.logo_clave, telefono: e.telefono, correo: e.correo, ...coloresPortal(e) },
     reserva: { folio: r.folio, estado: r.estado, inicio: r.inicio, fin: r.fin, total: r.total, garantia: r.garantia, deducible: r.deducible, km_incluidos: r.km_incluidos,
       precio_km_extra: r.precio_km_extra, lineas: r.cotizacion?.lineas || [], dias: r.cotizacion?.dias || null, creado_en: r.creado_en, retiro_real: r.retiro_real, devolucion_real: r.devolucion_real },
     cliente: c ? { nombre: c.nombre, apellidos: c.apellidos, documento_tipo: c.documento_tipo, documento: c.documento, correo: c.correo } : null,
@@ -359,4 +360,12 @@ export async function pagarPendiente(r, proveedor) {
   if (eraCotizacion && cobro.simulado) await avisarConfirmada(r.empresa_id, r.id).catch(() => {});
   if (cobro.error) throw new ErrorHttp(502, `No pudimos iniciar el pago: ${cobro.error}`);
   return cobro;
+}
+
+// Colores del portal (Configuración › Portal): fondo del encabezado y botón principal; si no se eligen, el color de marca.
+const HEX = /^#[0-9a-f]{6}$/i;
+export function coloresPortal(e) {
+  const base = HEX.test(e.color || '') ? e.color : '#0F5F58';
+  const aj = e.ajustes || {};
+  return { color_fondo: HEX.test(aj.portal_color_fondo || '') ? aj.portal_color_fondo : base, color_boton: HEX.test(aj.portal_color_boton || '') ? aj.portal_color_boton : base };
 }

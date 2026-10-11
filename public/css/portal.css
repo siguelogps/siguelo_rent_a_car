@@ -17,7 +17,7 @@ body.pt { background: var(--bg); min-height: 100vh; display: flex; flex-directio
 .pt-pie a { display: inline-flex; align-items: center; gap: 8px; text-decoration: none; color: var(--muted); }
 
 /* Portada con buscador */
-.pt-hero { background: var(--pt-color); color: var(--pt-texto); border-radius: 16px; padding: 26px 26px 56px; display: flex; flex-direction: column; gap: 6px; position: relative; overflow: hidden; }
+.pt-hero { background: var(--pt-fondo, var(--pt-color)); color: var(--pt-fondo-texto, var(--pt-texto)); border-radius: 16px; padding: 26px 26px 56px; display: flex; flex-direction: column; gap: 6px; position: relative; overflow: hidden; }
 .pt-hero::after { content: ''; position: absolute; right: -60px; top: -80px; width: 280px; height: 280px; border-radius: 50%; background: rgba(255,255,255,.08); }
 .pt-hero h1 { font-size: 26px; font-weight: 600; letter-spacing: -.01em; position: relative; }
 .pt-hero p { opacity: .85; position: relative; }
@@ -28,8 +28,8 @@ body.pt { background: var(--bg); min-height: 100vh; display: flex; flex-directio
 .pt-buscador .acciones { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
 .pt-chk { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); cursor: pointer; }
 .pt-chk input { width: 18px; height: 18px; accent-color: var(--pt-color); }
-.btn.pt-primario { background: var(--pt-color); border-color: var(--pt-color); color: var(--pt-texto); font-weight: 600; }
-.btn.pt-primario:hover { filter: brightness(.92); background: var(--pt-color); color: var(--pt-texto); }
+.btn.pt-primario { background: var(--pt-boton, var(--pt-color)); border-color: var(--pt-boton, var(--pt-color)); color: var(--pt-boton-texto, var(--pt-texto)); font-weight: 600; }
+.btn.pt-primario:hover { filter: brightness(.92); background: var(--pt-boton, var(--pt-color)); color: var(--pt-boton-texto, var(--pt-texto)); }
 .pt-ventajas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 .pt-ventajas div { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; background: var(--card); border: 1px solid var(--line); border-radius: 12px; font-size: 13px; }
 .pt-ventajas b { display: block; font-size: 14px; }

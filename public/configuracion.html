@@ -458,6 +458,11 @@ async function portal() {
   const url = `${location.origin}/reservar/${e.slug}`;
   const snippet = `<script src="${location.origin}/embed.js" data-rentacar="${e.slug}"><\/script>`;
   const modo = e.ajustes?.portal_pago || 'opcional';
+  const HEXC = /^#[0-9a-f]{6}$/i, marca = HEXC.test(e.color || '') ? e.color : '#0F5F58';
+  let cFondo = HEXC.test(e.ajustes?.portal_color_fondo || '') ? e.ajustes.portal_color_fondo : marca;
+  let cBoton = HEXC.test(e.ajustes?.portal_color_boton || '') ? e.ajustes.portal_color_boton : marca;
+  let codigos = [];
+  try { codigos = ((await api('tarifas')).descuentos || []).filter((c) => c.activo); } catch { /* sin permiso de tarifas */ }
   panel.innerHTML = `<div class="columnas-2">
     <div class="tarjeta bloque"><h2>Enlace del portal</h2>
       <p class="ayuda">Comparte este enlace en tu sitio, Instagram o Google: tus clientes reservan y pagan en línea con los precios y la disponibilidad reales.</p>
@@ -465,8 +470,24 @@ async function portal() {
       <h2 style="margin-top:6px">Insertar en tu sitio web</h2>
       <p class="ayuda">Pega este código en la página de tu sitio donde quieras el buscador de reservas. Se adapta al ancho y ajusta su alto solo.</p>
       <div class="cf-snippet" id="pt-snip">${esc(snippet)}<button class="btn peq" id="pt-copiar-snip">Copiar</button></div>
-      <p class="cf-ayuda">Opcional: <span class="mono">data-codigo="PRIMAVERA10"</span> precarga un código de descuento y <span class="mono">data-alto-minimo="700"</span> fija el alto inicial.</p>
+      <h2 style="margin-top:6px">Códigos de descuento</h2>
+      <ol class="cf-pasos-desc">
+        <li><b>Crear o editar códigos:</b> en <a href="/tarifas#descuentos">Tarifas › Códigos de descuento</a> defines cada código (porcentaje o monto fijo, vigencia y cantidad de usos) y lo activas o desactivas.</li>
+        <li><b>El cliente lo escribe</b> en el campo «Código de descuento» del buscador y ve el precio rebajado al instante.</li>
+        <li><b>Opcional · precargarlo:</b> para una campaña (por ejemplo, una página de tu sitio o un anuncio) puedes dejar el código ya escrito. Elígelo aquí y copia el código de inserción o el enlace:</li>
+      </ol>
+      <div class="cf-codigo-pre"><select class="campo" id="pt-codigo"><option value="">Sin código precargado</option>${codigos.map((c) => `<option value="${esc(c.codigo)}">${esc(c.codigo)} · ${c.tipo === 'porcentaje' ? `${c.valor} %` : clp(c.valor)}${c.hasta ? ` · hasta ${fecha(c.hasta)}` : ''}</option>`).join('')}</select>
+        ${codigos.length ? '' : '<span class="cf-ayuda">No hay códigos activos. <a href="/tarifas#descuentos">Crear uno</a></span>'}</div>
     </div>
+    <div class="tarjeta bloque"><h2>Colores del portal</h2>
+      <p class="ayuda">Elige el color del encabezado («Arrienda tu vehículo en ${esc(e.nombre)}») y el del botón «Buscar vehículos». El texto se pone blanco o negro solo, según lo que se lea mejor.</p>
+      <div class="cf-colores-portal">
+        <label class="etiqueta">Fondo del encabezado<div class="cf-color"><input type="color" id="pc-fondo" value="${esc(cFondo)}"${ed ? '' : ' disabled'}><input class="campo mono" id="pc-fondo-txt" value="${esc(cFondo)}" style="width:110px"${ed ? '' : ' disabled'}></div></label>
+        <label class="etiqueta">Botón «Buscar vehículos»<div class="cf-color"><input type="color" id="pc-boton" value="${esc(cBoton)}"${ed ? '' : ' disabled'}><input class="campo mono" id="pc-boton-txt" value="${esc(cBoton)}" style="width:110px"${ed ? '' : ' disabled'}></div></label>
+      </div>
+      ${ed ? '<div class="cf-pie"><button class="btn" id="pc-restaurar" type="button">Usar el color de marca</button><button class="btn primario" id="pc-guardar" type="button">Guardar colores</button></div>' : ''}
+    </div>
+    </div><div class="columnas-2">
     <div class="tarjeta bloque"><h2>Pago al reservar</h2>
       <div class="pt-pagos" style="display:flex;flex-direction:column;gap:8px">${[['obligatorio', 'Obligatorio', 'El cliente paga el total en línea al reservar; la reserva queda confirmada.'], ['opcional', 'Opcional', 'El cliente elige pagar en línea (confirmada) o en el mesón (queda como cotización por confirmar).'], ['mostrador', 'Solo en el mesón', 'No se cobra en línea; las reservas llegan como cotización para confirmar.']]
         .map(([v, t, d]) => `<label class="rc-alerta-venc" style="cursor:pointer"><input type="radio" name="portal_pago" value="${v}"${modo === v ? ' checked' : ''}${ed ? '' : ' disabled'}><div><b>${t}</b><small>${d}</small></div></label>`).join('')}</div>
@@ -475,8 +496,32 @@ async function portal() {
     </div></div>
     <div class="tarjeta bloque"><h2>Vista previa <span class="peq muted" style="font-weight:400">así se ve incrustado en tu sitio</span></h2>
       <div class="cf-vista-portal"><iframe id="pt-iframe" src="/embed/${encodeURIComponent(e.slug)}" title="Vista previa del portal de reservas"></iframe></div></div>`;
-  panel.querySelector('#pt-copiar').onclick = () => copiar(url);
-  panel.querySelector('#pt-copiar-snip').onclick = () => copiar(snippet);
+  // Código precargado: actualiza el enlace y el código de inserción
+  const urlCon = () => { const c = panel.querySelector('#pt-codigo').value; return c ? `${url}?codigo=${encodeURIComponent(c)}` : url; };
+  const snipCon = () => { const c = panel.querySelector('#pt-codigo').value; return `<script src="${location.origin}/embed.js" data-rentacar="${e.slug}"${c ? ` data-codigo="${c}"` : ''}><\/script>`; };
+  const refrescarCodigo = () => {
+    panel.querySelector('#pt-url').value = urlCon();
+    panel.querySelector('#pt-snip').firstChild.textContent = snipCon();
+  };
+  panel.querySelector('#pt-codigo').onchange = refrescarCodigo;
+  panel.querySelector('#pt-copiar').onclick = () => copiar(urlCon());
+  panel.querySelector('#pt-copiar-snip').onclick = () => copiar(snipCon());
+  // Colores: vista previa en vivo en el iframe y guardado en los ajustes de la empresa
+  const prevColores = () => { panel.querySelector('#pt-iframe').src = `/embed/${encodeURIComponent(e.slug)}?fondo=${encodeURIComponent(cFondo)}&boton=${encodeURIComponent(cBoton)}`; };
+  for (const k of ['fondo', 'boton']) {
+    const col = panel.querySelector(`#pc-${k}`), tx = panel.querySelector(`#pc-${k}-txt`);
+    const fijar = (v) => { if (!HEXC.test(v)) return; col.value = v; tx.value = v; if (k === 'fondo') cFondo = v; else cBoton = v; };
+    col.addEventListener('input', () => fijar(col.value));
+    col.addEventListener('change', prevColores);
+    tx.addEventListener('change', () => { if (HEXC.test(tx.value.trim())) { fijar(tx.value.trim()); prevColores(); } else toast('Usa un color en formato #RRGGBB', 'error'); });
+  }
+  panel.querySelector('#pc-restaurar')?.addEventListener('click', () => {
+    for (const k of ['fondo', 'boton']) { panel.querySelector(`#pc-${k}`).value = marca; panel.querySelector(`#pc-${k}-txt`).value = marca; }
+    cFondo = marca; cBoton = marca; prevColores();
+  });
+  panel.querySelector('#pc-guardar')?.addEventListener('click', async () => {
+    try { await api('empresa', { method: 'PATCH', body: { ajustes: { portal_color_fondo: cFondo, portal_color_boton: cBoton } } }); toast('Colores del portal guardados', 'ok'); prevColores(); } catch (err) { toastError(err); }
+  });
   panel.querySelector('#pt-guardar')?.addEventListener('click', async () => {
     const v = panel.querySelector('input[name="portal_pago"]:checked')?.value;
     try { await api('empresa', { method: 'PATCH', body: { ajustes: { portal_pago: v } } }); toast('Guardado', 'ok'); panel.querySelector('#pt-iframe').src += ''; } catch (err) { toastError(err); }

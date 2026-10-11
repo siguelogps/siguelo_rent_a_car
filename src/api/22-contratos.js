@@ -1,6 +1,7 @@
 // Módulo 5 · Contrato digital: lista, ficha, generación desde la reserva, enlace de firma, PDF, anulación,
 // y las rutas públicas (sin sesión) de firma (/api/firmar/:token) y verificación por QR (/api/verificar/:codigo).
 import express from 'express';
+import QRCode from 'qrcode';
 import { q, uno } from '../db.js';
 import { requiere, ErrorHttp } from '../auth.js';
 import { registrar } from '../bitacora.js';
@@ -59,6 +60,14 @@ r.get('/contratos/:id/pdf', ver, async (req, res) => {
   res.setHeader('Content-Disposition', `${req.query.descargar ? 'attachment' : 'inline'}; filename="Contrato-${c.folio}.pdf"`);
   res.setHeader('Cache-Control', 'private, no-store');
   res.end(pdf);
+});
+
+r.get('/contratos/:id/qr', ver, async (req, res) => {
+  const c = await uno('SELECT codigo_verificacion FROM contratos WHERE id = $1 AND empresa_id = $2', [idDe(req.params.id), req.empresaId]);
+  if (!c) throw new ErrorHttp(404, 'Contrato no encontrado');
+  res.setHeader('Content-Type', 'image/png');
+  res.setHeader('Cache-Control', 'private, max-age=86400');
+  res.end(await QRCode.toBuffer(urlVerificacion(c.codigo_verificacion), { type: 'png', margin: 1, width: 400, errorCorrectionLevel: 'M' }));
 });
 
 r.post('/reservas/:id/contrato', editar, async (req, res) => {

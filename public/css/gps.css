@@ -1,0 +1,178 @@
+/* Plataforma GPS (/gps) y TAG y multas (/tag-multas). Prefijos gps- y tm-. Sobre app.css + rentacar.css. */
+
+/* ── Mapa y tablero ── */
+.gps-tablero { height: calc(100vh - 250px); min-height: 560px; }
+.gps-tablero .lista-cab { flex-direction: column; align-items: stretch; gap: 8px; }
+.gps-tablero .lista-cab .campo { width: 100%; }
+.gps-filtros { display: flex; flex-wrap: wrap; gap: 6px; }
+.gps-filtros .filtro { min-height: 30px; padding: 0 10px; font-size: 12px; }
+.gps-item { display: flex; gap: 10px; align-items: center; width: 100%; text-align: left; padding: 10px 14px; border: 0; border-bottom: 1px solid var(--line-2); background: var(--card); cursor: pointer; font: inherit; color: inherit; }
+.gps-item:hover { background: var(--soft); }
+.gps-item[aria-pressed="true"] { background: var(--marca-suave); box-shadow: inset 4px 0 0 var(--marca); }
+.gps-item .gps-bola { width: 12px; height: 12px; border-radius: 50%; background: var(--c); flex-shrink: 0; box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 18%, transparent); }
+.gps-item .gps-bola.sin { background: #fff; border: 2px dashed var(--c); box-shadow: none; }
+.gps-item .t { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.gps-item .t small { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gps-item .d { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex-shrink: 0; font-size: 12px; }
+.gps-item .vel { font: 600 12px var(--mono); }
+.gps-item .vel.mueve { color: var(--green); }
+.gps-alerta-n { background: var(--red); color: #fff; font: 600 11px/1 var(--mono); border-radius: 999px; padding: 3px 6px; }
+
+.gps-mapa-caja #mapa { position: absolute; inset: 0; }
+.gps-mapa-caja .leyenda i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+.gps-actualizado { position: absolute; right: 12px; bottom: 12px; z-index: 500; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 12px; color: var(--ink-2); display: flex; gap: 6px; align-items: center; }
+.pin.gps-pin-alerta { box-shadow: 0 0 0 3px var(--red), 0 2px 6px rgba(0,0,0,.28); }
+.pin.gps-inmov::after { content: ''; position: absolute; width: 10px; height: 10px; border-radius: 50%; background: var(--ink); border: 2px solid var(--marca); transform: translate(13px, -13px); }
+.leaflet-tooltip.gps-etiqueta { background: var(--ink); color: #fff; border: 0; font: 600 11px/1 var(--mono); padding: 3px 6px; border-radius: 5px; box-shadow: none; letter-spacing: .03em; }
+.leaflet-tooltip.gps-etiqueta::before { display: none; }
+.leaflet-container { font-family: var(--sans); }
+
+/* ── Detalle ── */
+.gps-detalle .detalle-cab { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; padding: 16px 18px 12px; border-bottom: 1px solid var(--line); }
+.gps-detalle .detalle-cab h2 { font-size: 15px; font-weight: 600; margin-top: 8px; }
+.gps-detalle .detalle-cab .rc-fila { margin-top: 6px; }
+.gps-detalle .cerrar { display: none; }
+.gps-cifras { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.gps-cifra { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.gps-cifra span { font-size: 12px; color: var(--muted); }
+.gps-cifra b { font: 600 18px/1.15 var(--mono); }
+.gps-cifra b small { font-size: 12px; color: var(--muted); font-weight: 500; }
+.gps-cifra .origen { font-size: 11px; font-weight: 600; color: var(--teal); display: flex; gap: 5px; align-items: center; }
+.gps-recorrido { display: grid; grid-template-columns: minmax(0, 1fr) 24px minmax(0, 1fr); align-items: center; gap: 6px; }
+.gps-recorrido > div { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; display: flex; flex-direction: column; gap: 2px; }
+.gps-recorrido span { font-size: 11px; color: var(--muted); }
+.gps-recorrido b { font: 600 14px var(--mono); }
+.gps-recorrido > .flecha { text-align: center; color: var(--muted); border: 0; padding: 0; }
+.gps-total { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 10px 12px; border-radius: 10px; background: var(--ink); color: #fff; }
+.gps-total span { font-size: 12px; color: #AEB4BE; }
+.gps-total b { font: 600 20px var(--mono); color: var(--marca); }
+.gps-spark { width: 100%; height: 46px; display: block; }
+.gps-spark polyline { fill: none; stroke: var(--teal); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.gps-spark polygon { fill: var(--teal-soft); }
+
+/* Alertas */
+.gps-alerta { display: flex; gap: 10px; align-items: flex-start; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--card); }
+.gps-alerta .ic { width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.gps-alerta .ic.geocerca { background: var(--purple-soft); color: var(--purple); }
+.gps-alerta .ic.velocidad { background: var(--red-soft); color: var(--red); }
+.gps-alerta .ic.detenido_fuera_horario { background: var(--amber-soft); color: #B45309; }
+.gps-alerta .ic.sin_senal, .gps-alerta .ic.combustible { background: var(--line-2); color: var(--ink-2); }
+.gps-alerta .tx { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; font-size: 13px; }
+.gps-alerta .tx small { color: var(--muted); font-size: 12px; }
+.gps-alerta .tx .nota { color: var(--green); font-size: 12px; }
+.gps-alerta.atendida { opacity: .7; background: var(--soft); }
+.gps-alertas { display: flex; flex-direction: column; gap: 8px; }
+
+/* Inmovilización */
+.gps-inmov { border: 1.5px solid var(--ink); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.gps-inmov.espera { border-color: #D97706; background: var(--amber-soft); }
+.gps-inmov h4 { font-size: 13px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0; }
+.gps-inmov p { font-size: 13px; }
+.gps-pasos { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; font-size: 11px; color: var(--muted); text-align: center; }
+.gps-pasos div { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.gps-pasos i { width: 22px; height: 22px; border-radius: 50%; border: 2px solid var(--line); display: flex; align-items: center; justify-content: center; font: 600 11px var(--mono); font-style: normal; background: var(--card); }
+.gps-pasos .hecho i { background: var(--ink); border-color: var(--ink); color: var(--marca); }
+.gps-pasos .actual i { background: var(--marca); border-color: var(--ink); color: var(--ink); }
+.gps-pasos .hecho, .gps-pasos .actual { color: var(--ink); font-weight: 500; }
+.gps-confirmar { display: flex; gap: 8px; flex-wrap: wrap; }
+.gps-confirmar .campo { flex: 1; min-width: 120px; font-family: var(--mono); text-transform: uppercase; letter-spacing: .05em; }
+.gps-eventos { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 12px; }
+.gps-eventos li { display: grid; grid-template-columns: 10px minmax(0, 1fr); gap: 8px; }
+.gps-eventos li::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--ink); margin-top: 4px; }
+.gps-eventos li.en_movimiento::before, .gps-eventos li.rechazada::before, .gps-eventos li.fallida::before { background: var(--red); }
+.gps-eventos li.simulada::before { background: var(--blue); }
+.gps-eventos li.enviada::before { background: var(--green); }
+.gps-eventos small { color: var(--muted); display: block; }
+.chip.gps-st-solicitada { background: var(--amber-soft); color: #7C2D12; }
+.chip.gps-st-confirmada { background: var(--marca-suave); color: var(--marca-texto); }
+.chip.gps-st-enviada { background: var(--green-soft); color: #14532D; }
+.chip.gps-st-simulada { background: var(--blue-soft); color: var(--blue); }
+.chip.gps-st-rechazada, .chip.gps-st-fallida { background: var(--red-soft); color: #8F1B12; }
+.chip.gps-st-cancelada { background: #E6E8EC; color: var(--muted); }
+.chip.gps-inmovilizado { background: var(--ink); color: var(--marca); }
+
+.gps-bitacora td:first-child, .gps-bitacora td:nth-child(2) { white-space: nowrap; }
+.gps-bitacora td:nth-child(3) { min-width: 180px; }
+.gps-bitacora td small { display: block; color: var(--muted); font-size: 12px; }
+.gps-unidades td .campo { min-width: 160px; }
+
+@media (max-width: 1180px) {
+  .gps-detalle.flotante { overflow: auto; z-index: 1001; }
+  .gps-detalle .cerrar { display: inline-flex; }
+}
+@media (max-width: 860px) {
+  .gps-tablero { height: auto; min-height: 0; }
+  .gps-mapa-caja { height: 380px; }
+  .gps-cifras { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* ── TAG y multas ── */
+.tm-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: none; }
+.tm-tabs button { min-height: 42px; padding: 0 14px; border: 0; border-bottom: 3px solid transparent; background: none; font: 500 14px var(--sans); color: var(--ink-2); cursor: pointer; white-space: nowrap; display: inline-flex; align-items: center; gap: 7px; }
+.tm-tabs button[aria-selected="true"] { border-bottom-color: var(--marca-ambar); color: var(--ink); font-weight: 600; }
+.tm-tabs .n { font: 600 11px/1 var(--mono); padding: 3px 6px; border-radius: 6px; background: var(--line-2); }
+.tm-tabs button[aria-selected="true"] .n { background: var(--marca); }
+.tm-barra { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding: 14px 16px; border-bottom: 1px solid var(--line); }
+.tm-barra .campo { min-width: 0; }
+.tm-barra .buscar-tm { flex: 1 1 200px; max-width: 280px; }
+.tm-tabla td.monto, .tm-tabla th.monto { text-align: right; }
+.tm-tabla .portico { display: flex; flex-direction: column; line-height: 1.3; }
+.tm-tabla .portico small { color: var(--muted); font-size: 12px; }
+.tm-tabla .sub { display: block; color: var(--muted); font-size: 12px; }
+.chip.tm-asignado, .chip.tm-asignada { background: var(--teal-soft); color: var(--teal); }
+.chip.tm-sin_contrato { background: var(--red-soft); color: #8F1B12; }
+.chip.tm-revisar { background: var(--amber-soft); color: #7C2D12; }
+.chip.tm-notificada { background: var(--blue-soft); color: var(--blue); }
+.chip.tm-cobrado, .chip.tm-cobrada, .chip.tm-pagada { background: var(--green-soft); color: #14532D; }
+.chip.tm-condonado, .chip.tm-condonada { background: #E6E8EC; color: var(--muted); }
+.chip.tm-origen { background: var(--soft); border: 1px solid var(--line); color: var(--ink-2); font-weight: 500; }
+.tm-candidatos { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
+.tm-candidato { display: flex; align-items: center; gap: 8px; justify-content: space-between; padding: 6px 8px; border: 1px dashed #D97706; border-radius: 8px; background: #FFFBF3; font-size: 12px; }
+.tm-candidato div { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
+.tm-candidato small { color: var(--muted); }
+.tm-grupos { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; padding: 16px; }
+.tm-grupo { border: 1px solid var(--line); border-radius: 12px; background: var(--card); display: flex; flex-direction: column; }
+.tm-grupo-cab { padding: 12px 14px; display: flex; justify-content: space-between; gap: 10px; align-items: flex-start; border-bottom: 1px solid var(--line-2); }
+.tm-grupo-cab div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.tm-grupo-cab small { color: var(--muted); font-size: 12px; }
+.tm-grupo-cuerpo { padding: 10px 14px; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.tm-linea { display: flex; justify-content: space-between; gap: 10px; }
+.tm-linea span { color: var(--ink-2); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.tm-linea b { font-family: var(--mono); font-weight: 600; white-space: nowrap; }
+.tm-grupo-pie { margin-top: auto; padding: 10px 14px 14px; display: flex; justify-content: space-between; align-items: center; gap: 10px; border-top: 1px solid var(--line-2); }
+.tm-grupo-pie .monto { font-size: 18px; }
+.tm-dash { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 0; }
+.tm-dash > div { padding: 16px 18px; display: flex; flex-direction: column; gap: 8px; }
+.tm-dash > div + div { border-left: 1px solid var(--line); }
+.tm-cobertura { display: flex; height: 10px; border-radius: 5px; overflow: hidden; background: var(--line-2); }
+.tm-cobertura i { display: block; height: 100%; }
+.tm-cobertura .rev { background: var(--green); } .tm-cobertura .fal { background: var(--red); } .tm-cobertura .nun { background: #B8BEC7; }
+.tm-cob-leyenda { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--ink-2); }
+.tm-cob-leyenda span { display: inline-flex; align-items: center; gap: 6px; }
+.tm-cob-leyenda i { width: 10px; height: 10px; border-radius: 3px; }
+.tm-errores { margin: 0; padding-left: 18px; font-size: 12px; color: #7A1A12; display: flex; flex-direction: column; gap: 2px; }
+.tm-mapeo { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px 14px; }
+.tm-mapeo label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--muted); }
+.tm-mapeo label b { color: var(--ink); font-weight: 600; }
+.tm-mapeo label.req b::after { content: ' *'; color: var(--red); }
+.tm-previa { overflow: auto; border: 1px solid var(--line); border-radius: 10px; max-height: 260px; }
+.tm-previa table { font-size: 12px; }
+.tm-previa td.err { color: var(--red); }
+.tm-soltar { border: 2px dashed #B8BEC7; border-radius: 12px; padding: 26px 16px; text-align: center; color: var(--muted); display: flex; flex-direction: column; gap: 8px; align-items: center; cursor: pointer; background: var(--soft); }
+.tm-soltar.sobre { border-color: var(--marca-ambar); background: var(--marca-suave); }
+.tm-soltar b { color: var(--ink); }
+.tm-resultado { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }
+.tm-resultado div { border: 1px solid var(--line); border-radius: 10px; padding: 10px; display: flex; flex-direction: column; gap: 2px; }
+.tm-resultado span { font-size: 12px; color: var(--muted); }
+.tm-resultado b { font: 600 20px var(--mono); }
+@media (max-width: 860px) {
+  .tm-dash { grid-template-columns: minmax(0, 1fr); }
+  .tm-dash > div + div { border-left: 0; border-top: 1px solid var(--line); }
+  .tm-grupos { grid-template-columns: minmax(0, 1fr); padding: 12px; }
+  .tm-barra .buscar-tm { max-width: none; }
+  .tm-ocultable { display: none; }
+}
+.tm-tabla td:first-child { white-space: nowrap; }
+.tm-candidatos { min-width: 250px; }
+.tm-candidato small { white-space: nowrap; }
+.tm-paso { display: flex; flex-direction: column; gap: 14px; }

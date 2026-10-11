@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TAG y multas</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/gps.css">
+</head>
+<body>
+<main>
+  <div class="pagina-cab">
+    <div><h1>TAG y multas</h1><p>Pasadas por pórticos y multas asignadas al contrato vigente en ese momento, para avisar y cobrar al cliente.</p></div>
+    <div class="acciones" id="acciones"></div>
+  </div>
+  <div class="kpis" id="kpis"></div>
+  <div class="tarjeta">
+    <div class="tm-tabs" role="tablist" id="tabs">
+      <button type="button" role="tab" data-tab="tag">TAG <span class="n" id="n-tag"></span></button>
+      <button type="button" role="tab" data-tab="multas">Multas <span class="n" id="n-multas"></span></button>
+      <button type="button" role="tab" data-tab="notificar">Por notificar <span class="n" id="n-notificar"></span></button>
+      <button type="button" role="tab" data-tab="posteriores">Cobros posteriores <span class="n" id="n-posteriores"></span></button>
+      <button type="button" role="tab" data-tab="importaciones">Importaciones</button>
+    </div>
+    <div id="panel"></div>
+  </div>
+</main>
+<script type="module">
+import { iniciarPagina, api, esc, fecha, hora, fechaHora, pat, patente, clp, miles, modal, toast, toastError, leerForm, puede, ESTADOS_RESERVA } from '/comun.js';
+
+await iniciarPagina({ activo: 'tag_multas', titulo: 'TAG y multas' });
+const $ = (id) => document.getElementById(id);
+const EDITA = puede('tag_multas', 'editar');
+const ESTADOS = { asignado: 'Asignado', asignada: 'Asignada', sin_contrato: 'Sin contrato', revisar: 'Revisar', notificada: 'Notificada', cobrado: 'Cobrado', cobrada: 'Cobrada', pagada: 'Pagada', condonado: 'Condonado', condonada: 'Condonada' };
+const ORIGEN = { dashboard: 'Dashboard Síguelo', csv: 'CSV', excel: 'Excel' };
+const chip = (e) => `<span class="chip tm-${e}">${esc(ESTADOS[e] || e)}</span>`;
+const chipOrigen = (o) => `<span class="chip tm-origen">${esc(ORIGEN[o] || o)}</span>`;
+let tab = (location.hash.slice(1) || 'tag');
+let resumen = null, dash = null;
+
+$('acciones').innerHTML = EDITA ? `<button type="button" class="btn" data-importar="multas">Importar multas</button><button type="button" class="btn" data-importar="tag">Importar TAG</button><button type="button" class="btn primario" id="btn-sinc">Sincronizar dashboard</button>` : '';
+document.addEventListener('click', (e) => { const b = e.target.closest('[data-importar]'); if (b) asistente(b.dataset.importar); });
+$('btn-sinc')?.addEventListener('click', sincronizar);
+
+async function cargarResumen() {
+  resumen = await api('tag-multas/resumen');
+  const r = resumen;
+  $('kpis').innerHTML = `
+    <div class="kpi"><span>TAG este mes</span><b>${miles(r.tag.mes)}</b><small>${clp(r.tag.monto_mes)} en pasadas</small></div>
+    <div class="kpi"><span>Por avisar al cliente</span><b>${clp(r.por_notificar.monto)}</b><small>${r.por_notificar.reservas} reserva${r.por_notificar.reservas === 1 ? '' : 's'} con cargos sin avisar</small></div>
+    <div class="kpi"><span>Multas por cobrar</span><b>${clp(r.multas.monto_por_cobrar)}</b><small${r.multas.revisar ? ' class="mal"' : ''}>${r.multas.revisar ? `${r.multas.revisar} por revisar (día compartido)` : `${r.multas.por_cobrar} asignadas`}</small></div>
+    <div class="kpi"><span>Sin contrato</span><b>${r.tag.sin_contrato + r.multas.sin_contrato}</b><small>${r.tag.sin_contrato} TAG (${clp(r.tag.monto_sin_contrato)}) · ${r.multas.sin_contrato} multas</small></div>
+    <div class="kpi"><span>Cobros posteriores</span><b>${clp(r.cobros_posteriores.monto)}</b><small>${r.cobros_posteriores.clientes} cliente${r.cobros_posteriores.clientes === 1 ? '' : 's'} con contrato ya cerrado</small></div>`;
+  $('n-notificar').textContent = r.por_notificar.reservas || '';
+  $('n-posteriores').textContent = r.cobros_posteriores.clientes || '';
+  $('n-multas').textContent = r.multas.revisar ? `${r.multas.revisar} revisar` : '';
+  $('n-tag').textContent = r.tag.sin_contrato ? `${r.tag.sin_contrato} sin contrato` : '';
+}
+
+function contrato(x) {
+  if (!x.reserva_id) return '<span class="muted peq">—</span>';
+  return `<a href="/reservas/${x.reserva_id}" class="b">${esc(x.folio)}</a><span class="sub">${esc(x.cliente || '')}${x.reserva_estado ? ` · ${esc(ESTADOS_RESERVA[x.reserva_estado] || x.reserva_estado)}` : ''}</span>`;
+}
+const acciones = (tipo, x) => (EDITA && !['cobrado', 'cobrada', 'pagada', 'condonado', 'condonada'].includes(x.estado)
+  ? `<div class="rc-fila" style="justify-content:flex-end;flex-wrap:nowrap"><button type="button" class="btn peq" data-asignar="${tipo}:${x.id}" data-patente="${esc(x.patente)}" data-fecha="${esc(x.fecha_hora || x.fecha_infraccion)}">${x.reserva_id ? 'Reasignar' : 'Asignar'}</button><button type="button" class="btn peq peligro" data-condonar="${tipo}:${x.id}">Condonar</button></div>` : '');
+
+// ── TAG ──
+let filtrosTag = { q: '', estado: '', desde: '', hasta: '' };
+async function verTag() {
+  const p = new URLSearchParams(Object.entries(filtrosTag).filter(([, v]) => v));
+  const lista = await api(`tag-multas/tag?${p}`);
+  const total = lista.reduce((s, t) => s + Number(t.monto), 0);
+  $('panel').innerHTML = `
+    <div class="tm-barra">
+      <input class="campo buscar-tm" type="search" id="f-q" placeholder="Patente…" value="${esc(filtrosTag.q)}" aria-label="Buscar patente">
+      <select class="campo" id="f-estado" aria-label="Estado"><option value="">Todos los estados</option>${['asignado', 'sin_contrato', 'cobrado', 'condonado'].map((e) => `<option value="${e}"${filtrosTag.estado === e ? ' selected' : ''}>${ESTADOS[e]}</option>`).join('')}</select>
+      <input class="campo tm-ocultable" type="date" id="f-desde" value="${esc(filtrosTag.desde)}" aria-label="Desde"><input class="campo tm-ocultable" type="date" id="f-hasta" value="${esc(filtrosTag.hasta)}" aria-label="Hasta">
+      <span class="peq muted" style="margin-left:auto">${lista.length} pasadas · <b class="monto">${clp(total)}</b></span>
+      ${EDITA ? '<button type="button" class="btn peq" id="btn-reasignar" title="Vuelve a buscar el contrato de lo que quedó sin asignar">Reasignar pendientes</button>' : ''}
+    </div>
+    <div class="tabla-env"><table class="tabla tm-tabla"><thead><tr><th>Fecha y hora</th><th>Patente</th><th>Pórtico</th><th class="tm-ocultable">Origen</th><th>Contrato</th><th>Estado</th><th class="monto">Monto</th>${EDITA ? '<th></th>' : ''}</tr></thead><tbody>
+    ${lista.map((t) => `<tr><td class="mono peq">${fecha(t.fecha_hora)}<span class="sub">${hora(t.fecha_hora)}</span></td><td>${pat(t.patente)}</td>
+      <td><span class="portico"><b>${esc(t.autopista || '—')}</b><small>${esc(t.portico || '')}</small></span></td><td class="tm-ocultable">${chipOrigen(t.origen)}</td>
+      <td>${contrato(t)}</td><td>${chip(t.estado)}${t.notificado_en ? `<span class="sub">avisado ${fecha(t.notificado_en)}</span>` : ''}</td><td class="monto">${clp(t.monto)}</td>${EDITA ? `<td>${acciones('tag', t)}</td>` : ''}</tr>`).join('') || `<tr><td colspan="8" class="vacio">Sin pasadas TAG${EDITA ? '. Impórtalas desde un archivo de la concesionaria o sincroniza el dashboard Síguelo.' : ''}</td></tr>`}
+    </tbody></table></div>`;
+  let t = null;
+  $('f-q').oninput = (e) => { clearTimeout(t); t = setTimeout(() => { filtrosTag.q = e.target.value; verTag().then(() => { $('f-q').focus(); $('f-q').setSelectionRange(99, 99); }); }, 300); };
+  for (const k of ['estado', 'desde', 'hasta']) $(`f-${k}`).onchange = (e) => { filtrosTag[k] = e.target.value; verTag(); };
+  $('btn-reasignar')?.addEventListener('click', async () => {
+    try { const r = await api('tag-multas/reasignar', { body: {} }); toast(`TAG: ${r.tag.asignados} asignados · multas: ${r.multas.asignadas} asignadas, ${r.multas.revisar} por revisar`, 'ok'); refrescar(); } catch (e) { toastError(e); }
+  });
+}
+
+// ── Multas ──
+async function verMultas() {
+  const [lista, d] = await Promise.all([api('tag-multas/multas'), api('tag-multas/dashboard')]);
+  dash = d;
+  const c = d.cobertura, totalCob = c.revisadas + c.fallidas + c.nunca;
+  const u = d.ultima;
+  $('panel').innerHTML = `
+    <div class="tm-dash">
+      <div><h3 class="b">Dashboard Síguelo · registro de multas</h3>
+        ${u ? `<p class="peq">Última sincronización <b>${fechaHora(u.creado_en)}</b> (${fecha(u.desde)} a ${fecha(u.hasta)}) ${u.estado === 'ok' ? '<span class="chip ok">Completa</span>' : u.estado === 'parcial' ? '<span class="chip aviso">Parcial</span>' : '<span class="chip error">Con error</span>'}</p>
+          <p class="peq muted">${u.pasadas} pasadas TAG y ${u.multas} multas recibidas · ${u.nuevas_tag + u.nuevas_multas} nuevas${u.utm ? ` · UTM ${clp(u.utm)}` : ''}</p>
+          ${u.errores?.length ? `<ul class="tm-errores">${u.errores.slice(0, 6).map((e) => `<li>${esc(e)}</li>`).join('')}${u.errores.length > 6 ? `<li>… y ${u.errores.length - 6} más (ver Importaciones)</li>` : ''}</ul>` : ''}`
+        : '<p class="peq muted">Aún no se ha sincronizado con el dashboard Síguelo.</p>'}
+        <p class="peq muted">${d.configurada ? (d.activa ? `Sincroniza solo cada ${d.cada_horas} h.` : 'La integración está configurada pero apagada.') : 'Configúralo en Configuración › Integraciones › TAG y multas · Dashboard Síguelo.'} Las multas del registro MTT traen solo la fecha: si ese día lo comparten dos contratos, quedan «por revisar».</p>
+      </div>
+      <div><h3 class="b">Cobertura de la revisión de patentes</h3>
+        ${totalCob ? `<div class="tm-cobertura" role="img" aria-label="${c.revisadas} revisadas, ${c.fallidas} fallidas, ${c.nunca} nunca revisadas"><i class="rev" style="width:${c.revisadas * 100 / totalCob}%"></i><i class="fal" style="width:${c.fallidas * 100 / totalCob}%"></i><i class="nun" style="width:${c.nunca * 100 / totalCob}%"></i></div>
+          <div class="tm-cob-leyenda"><span><i style="background:var(--green)"></i>${c.revisadas} revisadas</span><span><i style="background:var(--red)"></i>${c.fallidas} fallidas</span><span><i style="background:#B8BEC7"></i>${c.nunca} nunca revisadas</span></div>
+          ${c.detalle.filter((x) => x.estado !== 'revisada').map((x) => `<span class="peq">${pat(x.patente)} ${x.estado === 'fallida' ? `<span style="color:var(--red)">falló la revisión${x.revisado_en ? ` · último intento ${fechaHora(x.revisado_en)}` : ''}</span>` : '<span class="muted">aún no revisada en el registro MTT</span>'}</span>`).join('')}`
+        : '<p class="peq muted">Sin datos de cobertura todavía.</p>'}
+      </div>
+    </div>
+    <div class="tabla-env" style="border-top:1px solid var(--line);border-radius:0 0 12px 12px"><table class="tabla tm-tabla"><thead><tr><th>Fecha</th><th>Patente</th><th>Infracción</th><th>Contrato</th><th>Estado</th><th class="monto">Monto</th>${EDITA ? '<th></th>' : ''}</tr></thead><tbody>
+    ${lista.map((m) => `<tr><td class="mono peq">${fecha(m.fecha_infraccion)}<span class="sub">${m.hora_conocida ? hora(m.fecha_infraccion) : 'solo fecha'}</span></td><td>${pat(m.patente)}</td>
+      <td><span class="portico"><b>${esc(m.motivo || 'Multa')}</b><small>${[m.lugar, m.juzgado, m.rol_causa ? `rol ${m.rol_causa}` : ''].filter(Boolean).map(esc).join(' · ')}</small></span>${chipOrigen(m.origen)}</td>
+      <td>${m.estado === 'revisar' && m.candidatos?.length ? `<span class="peq b">El día lo comparten ${m.candidatos.length} contratos:</span><div class="tm-candidatos">${m.candidatos.map((c) => `<div class="tm-candidato"><div><b>${esc(c.folio)} · ${esc(c.cliente || '')}</b><small>${fechaHora(c.desde)} → ${fechaHora(c.hasta)}</small></div>${EDITA ? `<button type="button" class="btn peq" data-elegir="${m.id}:${c.reserva_id}">Asignar</button>` : ''}</div>`).join('')}</div>` : contrato(m)}</td>
+      <td>${chip(m.estado)}${m.notificada_en ? `<span class="sub">avisada ${fecha(m.notificada_en)}</span>` : ''}</td>
+      <td class="monto">${clp(m.monto)}${m.sin_valorizar ? '<span class="sub"><span class="chip aviso">sin valorizar</span></span>' : ''}</td>${EDITA ? `<td>${acciones('multas', m)}</td>` : ''}</tr>`).join('') || '<tr><td colspan="7" class="vacio">Sin multas registradas</td></tr>'}
+    </tbody></table></div>`;
+}
+document.addEventListener('click', async (e) => {
+  const b = e.target.closest('[data-elegir]'); if (!b) return;
+  const [id, reserva] = b.dataset.elegir.split(':');
+  try { await api(`tag-multas/multas/${id}/asignar`, { body: { reserva_id: Number(reserva), motivo: 'Elegida entre los contratos del mismo día' } }); toast('Multa asignada', 'ok'); refrescar(); } catch (err) { toastError(err); }
+});
+
+// ── Por notificar ──
+async function verNotificar() {
+  const lista = await api('tag-multas/por-notificar');
+  $('panel').innerHTML = lista.length ? `<div class="tm-grupos">${lista.map((g) => `
+    <div class="tm-grupo"><div class="tm-grupo-cab"><div><span class="rc-fila"><a href="/reservas/${g.reserva_id}" class="b">${esc(g.folio)}</a>${pat(g.patente)}<span class="chip st-${g.estado === 'en_curso' ? 'en_curso' : g.estado}">${esc(ESTADOS_RESERVA[g.estado] || g.estado)}</span></span>
+        <b>${esc(g.cliente || '')}</b><small>${fecha(g.retiro_real || g.inicio)} → ${fecha(g.devolucion_real || g.fin)} · ${esc(g.correo || 'sin correo')}${g.telefono ? ` · ${esc(g.telefono)}` : ''}</small></div></div>
+      <div class="tm-grupo-cuerpo" id="det-${g.reserva_id}">
+        ${g.n_tag ? `<div class="tm-linea"><span>${g.n_tag} pasada${g.n_tag > 1 ? 's' : ''} TAG</span><b>${clp(g.monto_tag)}</b></div>` : ''}
+        ${g.n_multas ? `<div class="tm-linea"><span>${g.n_multas} multa${g.n_multas > 1 ? 's' : ''}</span><b>${clp(g.monto_multas)}</b></div>` : ''}
+        <button type="button" class="btn peq" data-detalle="${g.reserva_id}" style="align-self:flex-start">Ver detalle</button>
+      </div>
+      <div class="tm-grupo-pie"><span class="monto">${clp(g.total)}</span>${EDITA ? `<button type="button" class="btn primario" data-notificar="${g.reserva_id}">Notificar al cliente</button>` : ''}</div></div>`).join('')}</div>`
+    : '<div class="vacio">No hay cargos pendientes de aviso. Todo lo asignado ya se informó a los clientes.</div>';
+}
+document.addEventListener('click', async (e) => {
+  const d = e.target.closest('[data-detalle]');
+  if (d) {
+    const id = d.dataset.detalle;
+    const r = await api(`tag-multas/reservas/${id}`);
+    const tag = r.tag.filter((t) => t.estado === 'asignado' && !t.notificado_en), mul = r.multas.filter((m) => m.estado === 'asignada');
+    $(`det-${id}`).innerHTML = [...tag.map((t) => `<div class="tm-linea"><span>${fechaHora(t.fecha_hora)} · ${esc(t.autopista || '')} ${esc(t.portico || '')}</span><b>${clp(t.monto)}</b></div>`),
+      ...mul.map((m) => `<div class="tm-linea"><span>${fecha(m.fecha_infraccion)} · Multa: ${esc(m.motivo || '')}</span><b>${clp(m.monto)}</b></div>`)].join('');
+    return;
+  }
+  const n = e.target.closest('[data-notificar]');
+  if (!n) return;
+  n.disabled = true;
+  try {
+    const r = await api(`tag-multas/reservas/${n.dataset.notificar}/notificar`, { body: {} });
+    const ret = r.salidas.filter((s) => s.estado === 'retenida').length;
+    toast(`Aviso de ${clp(r.total)} a ${r.folio}: ${r.salidas.map((s) => (s.canal === 'correo' ? 'correo' : 'WhatsApp')).join(' y ') || 'sin canal'}${ret ? ' (retenido por marcha blanca)' : ''}`, 'ok');
+    refrescar();
+  } catch (err) { toastError(err); n.disabled = false; }
+});
+
+// ── Cobros posteriores ──
+async function verPosteriores() {
+  const lista = await api('tag-multas/cobros-posteriores');
+  $('panel').innerHTML = `<div class="tm-barra"><span class="peq muted">TAG y multas que llegaron cuando el contrato ya estaba cerrado (la liquidación ya se hizo). Quedan asignados para cobrarlos aparte al cliente.</span></div>` + (lista.length ? `<div class="tm-grupos">${lista.map((g) => {
+    const reservas = [...new Map(g.items.map((i) => [i.reserva_id, i.folio])).entries()];
+    const sinAviso = new Set(g.items.filter((i) => !i.avisado_en && (i.tipo === 'tag' || i.estado === 'asignada')).map((i) => i.reserva_id));
+    return `<div class="tm-grupo"><div class="tm-grupo-cab"><div><b>${esc(g.cliente || 'Cliente')}</b><small>${esc(g.correo || '')}${g.telefono ? ` · ${esc(g.telefono)}` : ''}</small><span class="rc-fila">${reservas.map(([id, f]) => `<a class="folio" href="/reservas/${id}">${esc(f)}</a>`).join('')}</span></div></div>
+      <div class="tm-grupo-cuerpo">${g.items.map((i) => `<div class="tm-linea"><span>${i.hora_conocida ? fechaHora(i.fecha) : fecha(i.fecha)} · ${i.tipo === 'tag' ? 'TAG' : 'Multa'} ${esc(i.detalle || '')}${i.avisado_en ? ' · <span class="muted">avisado</span>' : ''}</span><b>${clp(i.monto)}</b></div>`).join('')}</div>
+      <div class="tm-grupo-pie"><span><span class="peq muted">Total a cobrar</span><br><span class="monto">${clp(g.total)}</span></span>${EDITA ? [...sinAviso].map((id) => `<button type="button" class="btn primario peq" data-notificar="${id}">Notificar ${esc(reservas.find((r) => r[0] === id)?.[1] || '')}</button>`).join('') : ''}</div></div>`;
+  }).join('')}</div>` : '<div class="vacio">Sin cobros posteriores pendientes.</div>');
+}
+
+// ── Importaciones ──
+async function verImportaciones() {
+  const lista = await api('tag-multas/importaciones');
+  $('panel').innerHTML = `${EDITA ? `<div class="tm-barra"><span class="peq muted">Archivos CSV o Excel (.xlsx) de las concesionarias (Autopista Central, Costanera Norte, Vespucio Sur y Norte, AVO, rutas concesionadas) o planillas de multas. Se detectan las columnas y tú confirmas antes de importar; lo repetido se ignora solo.</span>
+      <span style="margin-left:auto" class="rc-fila"><button type="button" class="btn" data-importar="multas">Importar multas</button><button type="button" class="btn primario" data-importar="tag">Importar TAG</button></span></div>` : ''}
+    <div class="tabla-env"><table class="tabla tm-tabla"><thead><tr><th>Fecha</th><th>Tipo</th><th>Origen y archivo</th><th class="monto">Filas</th><th class="monto">Nuevas</th><th class="monto tm-ocultable">Repetidas</th><th class="monto">Asignadas</th><th class="monto">Sin contrato</th><th>Errores</th></tr></thead><tbody>
+    ${lista.map((i) => `<tr><td class="mono peq">${fecha(i.creado_en)}<span class="sub">${hora(i.creado_en)}</span></td><td>${i.tipo === 'tag' ? 'TAG' : 'Multas'}</td>
+      <td>${chipOrigen(i.origen)}<span class="sub">${esc(i.nombre_archivo || '')}${i.usuario ? ` · ${esc(i.usuario)}` : i.origen === 'dashboard' ? ' · automática' : ''}</span></td>
+      <td class="monto">${i.filas}</td><td class="monto">${i.nuevas}</td><td class="monto tm-ocultable">${i.duplicadas}</td><td class="monto">${i.asignadas}</td><td class="monto">${i.sin_contrato}</td>
+      <td>${i.errores?.length ? `<details><summary class="peq" style="color:var(--red);cursor:pointer">${i.errores.length} error${i.errores.length > 1 ? 'es' : ''}</summary><ul class="tm-errores">${i.errores.slice(0, 30).map((e) => `<li>${e.fila ? `Fila ${e.fila}: ` : ''}${esc(e.error || e)}</li>`).join('')}</ul></details>` : '<span class="muted peq">—</span>'}</td></tr>`).join('') || '<tr><td colspan="9" class="vacio">Sin importaciones todavía</td></tr>'}
+    </tbody></table></div>`;
+}
+
+// ── Asistente de importación ──
+const aBase64 = (archivo) => new Promise((ok, mal) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = mal; r.readAsDataURL(archivo); });
+async function asistente(tipo) {
+  let archivo = null, datos = null, previa = null;
+  const nombreTipo = tipo === 'tag' ? 'tránsitos TAG' : 'multas';
+  const vistaPrevia = () => {
+    const opciones = (sel) => `<option value="">— No viene —</option>${previa.encabezados.map((h, i) => `<option value="${i}"${sel === i ? ' selected' : ''}>${esc(h)}</option>`).join('')}`;
+    return `<p class="peq muted">${esc(archivo.name)} · ${previa.formato === 'excel' ? 'Excel' : `CSV ${previa.codificacion?.toUpperCase() || ''} separado por «${previa.separador === '\t' ? 'tabulación' : esc(previa.separador)}»`} · ${miles(previa.total)} filas · encabezados en la fila ${previa.fila_encabezados + 1}</p>
+      <div><h3 class="b" style="font-size:14px;margin-bottom:8px">Columnas detectadas · revisa y ajusta</h3>
+      <div class="tm-mapeo">${previa.campos.map((c) => `<label class="${c.requerido ? 'req' : ''}"><b>${esc(c.etiqueta)}</b><select class="campo" data-campo="${c.clave}">${opciones(previa.mapeo[c.clave])}</select></label>`).join('')}</div></div>
+      <div><h3 class="b" style="font-size:14px;margin-bottom:8px">Así se van a importar las primeras filas</h3>
+      <div class="tm-previa"><table class="tabla"><thead><tr><th>Patente</th><th>Fecha y hora</th><th>${tipo === 'tag' ? 'Pórtico' : 'Motivo'}</th><th class="monto">Monto</th></tr></thead><tbody>
+      ${previa.interpretadas.map((r) => (r.error ? `<tr><td colspan="4" class="err">${esc(r.error)}</td></tr>`
+        : `<tr><td>${pat(r.patente)}</td><td class="mono">${tipo === 'tag' || r.hora_conocida ? fechaHora(r.fecha_hora || r.fecha_infraccion) : `${fecha(r.fecha_infraccion)} <span class="muted">(sin hora)</span>`}</td><td>${esc(tipo === 'tag' ? [r.autopista, r.portico].filter(Boolean).join(' · ') : r.motivo || '')}</td><td class="monto">${clp(r.monto)}</td></tr>`)).join('')}
+      </tbody></table></div></div>`;
+  };
+  const leerMapeo = (c) => Object.fromEntries([...c.querySelectorAll('[data-campo]')].map((s) => [s.dataset.campo, s.value === '' ? null : Number(s.value)]));
+  const pedirPrevia = async (c, mapeo = null) => {
+    previa = await api('tag-multas/importar/previa', { body: { tipo, nombre: archivo.name, datos, mapeo, fila_encabezados: previa?.fila_encabezados ?? null } });
+    c.querySelector('#paso').innerHTML = vistaPrevia();
+    c.querySelectorAll('[data-campo]').forEach((s) => { s.onchange = () => pedirPrevia(c, leerMapeo(c)).catch(toastError); });
+  };
+  const r = await modal({
+    titulo: `Importar ${nombreTipo}`, ancho: true,
+    html: `<div id="paso" class="tm-paso"><label class="tm-soltar" id="soltar"><input type="file" accept=".csv,.txt,.xlsx" hidden id="archivo">
+      <b>Elige o arrastra el archivo de ${nombreTipo}</b><span class="peq">CSV (con ; o ,) o Excel .xlsx · máximo 15 MB</span>
+      <span class="peq">${tipo === 'tag' ? 'Debe traer patente, fecha y hora del tránsito, pórtico y monto.' : 'Debe traer patente, fecha de la infracción (y hora si la tiene), motivo y monto.'}</span><span class="btn peq">Elegir archivo</span></label></div>`,
+    alAbrir: (c) => {
+      const zona = c.querySelector('#soltar'), inp = c.querySelector('#archivo');
+      const cargar = async (f) => {
+        if (!f) return;
+        archivo = f;
+        try { datos = await aBase64(f); await pedirPrevia(c); } catch (e) { toastError(e); }
+      };
+      inp.onchange = () => cargar(inp.files[0]);
+      zona.ondragover = (e) => { e.preventDefault(); zona.classList.add('sobre'); };
+      zona.ondragleave = () => zona.classList.remove('sobre');
+      zona.ondrop = (e) => { e.preventDefault(); zona.classList.remove('sobre'); cargar(e.dataTransfer.files[0]); };
+    },
+    botones: [{ texto: 'Cancelar' }, { texto: 'Importar', clase: 'primario', accion: async (c) => {
+      if (!previa) { toast('Primero elige el archivo', 'error'); return false; }
+      const res = await api('tag-multas/importar', { body: { tipo, nombre: archivo.name, datos, mapeo: leerMapeo(c), fila_encabezados: previa.fila_encabezados } });
+      return res;
+    } }]
+  });
+  if (r && r.id) {
+    await modal({ titulo: 'Importación terminada', html: `<div class="tm-resultado"><div><span>Filas leídas</span><b>${r.filas}</b></div><div><span>Nuevas</span><b>${r.nuevas}</b></div><div><span>Repetidas</span><b>${r.duplicadas}</b></div><div><span>Asignadas a contrato</span><b>${r.asignadas}</b></div><div><span>Sin contrato</span><b>${r.sin_contrato}</b></div>${r.revisar ? `<div><span>Por revisar</span><b>${r.revisar}</b></div>` : ''}</div>
+      ${r.errores?.length ? `<div class="aviso error peq"><b>${r.total_errores} fila${r.total_errores > 1 ? 's' : ''} con error:</b><ul class="tm-errores">${r.errores.slice(0, 10).map((e) => `<li>Fila ${e.fila}: ${esc(e.error)}</li>`).join('')}</ul></div>` : ''}` });
+    tab = tipo === 'tag' ? 'tag' : 'multas';
+    refrescar();
+  }
+}
+
+// ── Asignar a mano / condonar ──
+document.addEventListener('click', async (e) => {
+  const a = e.target.closest('[data-asignar]');
+  if (a) {
+    const [tipo, id] = a.dataset.asignar.split(':');
+    const cands = await api(`tag-multas/candidatas?patente=${encodeURIComponent(a.dataset.patente)}&fecha=${encodeURIComponent(a.dataset.fecha)}`);
+    const r = await modal({
+      titulo: `Asignar ${tipo === 'tag' ? 'pasada TAG' : 'multa'} de ${patente(a.dataset.patente)}`,
+      html: `<p class="peq muted">${tipo === 'tag' ? 'Pasada' : 'Infracción'} del ${fechaHora(a.dataset.fecha)}. Contratos del mismo vehículo en los días cercanos:</p>
+        <div class="rc-danos">${cands.map((c) => `<label class="rc-dano"><input type="radio" name="reserva_id" value="${c.id}"><div><b>${esc(c.folio)} · ${esc(c.cliente || '')}</b><small>${fechaHora(c.desde)} → ${fechaHora(c.hasta)} · ${esc(ESTADOS_RESERVA[c.estado])}</small></div></label>`).join('') || '<p class="muted">No hay contratos de este vehículo cerca de esa fecha.</p>'}
+        <label class="rc-dano"><input type="radio" name="reserva_id" value=""><div><b>Sin contrato</b><small>Lo asume la empresa</small></div></label></div>
+        <label class="etiqueta">Motivo (bitácora)<input class="campo" name="motivo" placeholder="Ej.: devolución registrada tarde"></label>`,
+      botones: [{ texto: 'Cancelar' }, { texto: 'Guardar', clase: 'primario', accion: async (c) => {
+        const f = leerForm(c);
+        if (f.reserva_id === undefined) { toast('Elige un contrato o «Sin contrato»', 'error'); return false; }
+        return api(`tag-multas/${tipo}/${id}/asignar`, { body: { reserva_id: f.reserva_id ? Number(f.reserva_id) : null, motivo: f.motivo } });
+      } }]
+    });
+    if (r) { toast('Asignación guardada', 'ok'); refrescar(); }
+    return;
+  }
+  const c = e.target.closest('[data-condonar]');
+  if (c) {
+    const [tipo, id] = c.dataset.condonar.split(':');
+    const r = await modal({ titulo: 'Condonar cargo', html: '<p class="peq muted">No se cobrará al cliente. Queda registrado en la bitácora.</p><label class="etiqueta">Motivo<textarea class="campo" name="motivo" placeholder="Ej.: pórtico mal leído por la concesionaria"></textarea></label>',
+      botones: [{ texto: 'Cancelar' }, { texto: 'Condonar', clase: 'peligro', accion: async (x) => api(`tag-multas/${tipo}/${id}/condonar`, { body: leerForm(x) }) }] });
+    if (r) { toast('Cargo condonado'); refrescar(); }
+  }
+});
+
+async function sincronizar(e) {
+  const b = e.currentTarget; b.disabled = true; const txt = b.textContent; b.textContent = 'Sincronizando… (puede tardar)';
+  try {
+    const r = await api('tag-multas/dashboard/sincronizar', { body: {} });
+    toast(`Dashboard: ${r.nuevas_tag} pasadas y ${r.nuevas_multas} multas nuevas${r.estado !== 'ok' ? ` · ${r.estado === 'parcial' ? 'con avisos' : 'con error'}: revisa Importaciones` : ''}`, r.estado === 'error' ? 'error' : 'ok');
+    refrescar();
+  } catch (err) { toastError(err); } finally { b.disabled = false; b.textContent = txt; }
+}
+
+const VISTAS = { tag: verTag, multas: verMultas, notificar: verNotificar, posteriores: verPosteriores, importaciones: verImportaciones };
+async function refrescar() {
+  if (!VISTAS[tab]) tab = 'tag';
+  document.querySelectorAll('#tabs [data-tab]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.tab === tab)));
+  history.replaceState(null, '', `#${tab}`);
+  try { await Promise.all([cargarResumen(), VISTAS[tab]()]); } catch (e) { toastError(e); }
+}
+$('tabs').addEventListener('click', (e) => { const b = e.target.closest('[data-tab]'); if (b) { tab = b.dataset.tab; $('panel').innerHTML = '<div class="rc-cargando">Cargando…</div>'; refrescar(); } });
+window.addEventListener('hashchange', () => { const t = location.hash.slice(1); if (t !== tab && VISTAS[t]) { tab = t; refrescar(); } });
+refrescar();
+</script>
+</body>
+</html>

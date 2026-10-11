@@ -15,6 +15,16 @@ test('el superadmin se define por SUPERADMIN_CORREO y el de la demo queda desact
   const p = await t.db.uno(`SELECT rol, empresa_id, activo FROM usuarios WHERE correo = 'pablo@siguelogps.cl'`);
   assert.deepEqual([p.rol, p.empresa_id, p.activo], ['superadmin', null, true]);
   assert.equal((await t.db.uno(`SELECT activo FROM usuarios WHERE correo = 'soporte@siguelogps.cl'`)).activo, false);
+  // cambiar SUPERADMIN_CLAVE en el servidor cambia la clave al siguiente arranque; si no cambia, se respeta la de «Mi cuenta»
+  process.env.SUPERADMIN_CLAVE = 'otra-clave-456';
+  await asegurarSuperadmin();
+  await assert.rejects(() => t.como('pablo@siguelogps.cl', 'clave-larga-123'));
+  const s0 = await t.como('pablo@siguelogps.cl', 'otra-clave-456');
+  assert.equal((await s0.post('/api/configuracion/mi-clave', { actual: 'otra-clave-456', nueva: 'clave-larga-123' })).estado, 200);
+  await asegurarSuperadmin(); // misma variable: no pisa la clave elegida
+  const login = (clave) => fetch(`${t.base}/api/ingresar`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ correo: 'pablo@siguelogps.cl', clave }) }).then((r) => r.status);
+  assert.equal(await login('clave-larga-123'), 200);
+  assert.equal(await login('otra-clave-456'), 401);
   const s = await t.como('pablo@siguelogps.cl', 'clave-larga-123');
   const yo = await s.get('/api/yo');
   assert.equal(yo.datos.usuario.rol, 'superadmin');

@@ -1,0 +1,256 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pagos y garantías</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/pagos.css">
+</head>
+<body>
+<main>
+  <div class="pagina-cab">
+    <div><h1>Pagos y garantías</h1><p>Cobros del arriendo, pagos presenciales, enlaces de pago y garantías retenidas en tarjeta.</p></div>
+    <div class="acciones" id="acciones"></div>
+  </div>
+  <div id="aviso-mb"></div>
+  <div class="kpis" id="kpis"></div>
+  <div class="pg-pestanas">
+    <div class="segmentado" id="pestanas" role="tablist">
+      <button type="button" data-tab="pagos" aria-pressed="true">Pagos</button>
+      <button type="button" data-tab="garantias" aria-pressed="false">Garantías <span class="chip teal" id="n-gar">0</span></button>
+    </div>
+  </div>
+
+  <section id="tab-pagos" class="tarjeta">
+    <div class="pg-filtros" id="filtros">
+      <input class="campo" type="search" name="q" placeholder="Buscar folio, cliente, patente o referencia…" aria-label="Buscar">
+      <select class="campo" name="concepto" aria-label="Concepto"><option value="">Todos los conceptos</option></select>
+      <select class="campo" name="metodo" aria-label="Método"><option value="">Todos los métodos</option></select>
+      <select class="campo" name="estado" aria-label="Estado">
+        <option value="">Todos los estados</option><option value="pagado">Pagado</option><option value="simulado">Simulado (marcha blanca)</option><option value="pendiente">Pendiente</option>
+        <option value="retenido">Garantía retenida</option><option value="capturado">Garantía capturada</option><option value="liberado">Garantía liberada</option>
+        <option value="rechazado">Rechazado</option><option value="anulado">Anulado</option><option value="reembolsado">Reembolsado</option>
+      </select>
+      <input class="campo" type="date" name="desde" aria-label="Desde"><input class="campo" type="date" name="hasta" aria-label="Hasta">
+    </div>
+    <div class="tabla-env"><table class="tabla pg-tabla">
+      <thead><tr><th>Fecha</th><th>Reserva</th><th>Cliente</th><th>Concepto</th><th>Método</th><th>Referencia</th><th>Estado</th><th class="monto">Monto</th></tr></thead>
+      <tbody id="filas"><tr><td colspan="8" class="rc-vacio">Cargando…</td></tr></tbody>
+    </table></div>
+    <div class="pg-pie-tabla" id="pie"></div>
+  </section>
+
+  <section id="tab-garantias" hidden>
+    <div style="display:flex;flex-direction:column;gap:18px">
+      <div id="gar-aviso"></div>
+      <div class="pg-gar-rejilla" id="gar-activas"></div>
+      <div class="tarjeta">
+        <div class="bloque" style="padding-bottom:6px"><h2>Historial de garantías</h2></div>
+        <div class="tabla-env"><table class="tabla pg-tabla">
+          <thead><tr><th>Reserva</th><th>Cliente</th><th>Tarjeta</th><th>Proveedor</th><th>Estado</th><th class="monto">Retenida</th><th class="monto">Capturada</th><th class="monto">Liberada</th></tr></thead>
+          <tbody id="gar-hist"></tbody>
+        </table></div>
+      </div>
+    </div>
+  </section>
+</main>
+<script type="module">
+import { iniciarPagina, api, esc, clp, fecha, fechaHora, hora, pat, modal, toast, toastError, confirmar, leerForm, puede } from '/comun.js';
+import { CONCEPTOS, METODOS, metodo, chipPago, barraGarantia, proveedor, diasRestantes, selectorReserva } from '/js/pagos.js';
+
+const yo = await iniciarPagina({ activo: 'pagos', titulo: 'Pagos y garantías' });
+const editar = puede('pagos', 'editar');
+const $ = (s) => document.querySelector(s);
+const mb = !!yo.empresa?.marcha_blanca;
+
+if (editar) $('#acciones').innerHTML = '<button type="button" class="btn" id="btn-link">Cobrar en línea</button><button type="button" class="btn primario" id="btn-manual">+ Registrar pago</button>';
+if (mb) $('#aviso-mb').innerHTML = '<div class="aviso info"><b>Marcha blanca:</b> los cobros en línea, capturas y liberaciones no salen a Webpay ni a Mercado Pago. Se registran como «Simulado» y el flujo continúa como aprobado para probar el sistema de punta a punta.</div>';
+const filtros = $('#filtros');
+filtros.querySelector('[name=concepto]').insertAdjacentHTML('beforeend', Object.entries(CONCEPTOS).map(([k, v]) => `<option value="${k}">${v}</option>`).join(''));
+filtros.querySelector('[name=metodo]').insertAdjacentHTML('beforeend', Object.entries(METODOS).filter(([k]) => k !== 'otro').map(([k, v]) => `<option value="${k}">${v}</option>`).join(''));
+const params = new URLSearchParams(location.search);
+for (const [k, v] of params) { const c = filtros.querySelector(`[name="${k}"]`); if (c) c.value = v; }
+
+let pagos = [];
+async function cargar() {
+  const f = leerForm(filtros);
+  const qs = new URLSearchParams(Object.entries(f).filter(([, v]) => v)).toString();
+  const d = await api(`pagos${qs ? `?${qs}` : ''}`);
+  pagos = d.pagos;
+  const t = d.totales;
+  $('#kpis').innerHTML = `
+    <div class="kpi"><span>Cobrado</span><b class="monto">${clp(t.neto)}</b><small>${t.reembolsado ? `${clp(t.reembolsado)} reembolsado · ` : ''}${t.cantidad} movimientos</small></div>
+    <div class="kpi"><span>Por cobrar</span><b class="monto">${clp(t.pendiente)}</b><small>enlaces y cobros pendientes</small></div>
+    <div class="kpi"><span>Garantías retenidas</span><b class="monto">${clp(t.garantias_retenidas)}</b><small>${t.garantias_n} ${t.garantias_n === 1 ? 'tarjeta' : 'tarjetas'}</small></div>
+    <div class="kpi"><span>Simulados</span><b>${t.simulados}</b><small>${mb ? 'marcha blanca activa' : 'registrados en marcha blanca'}</small></div>`;
+  $('#filas').innerHTML = pagos.map((p, i) => `<tr class="clic${['anulado', 'rechazado'].includes(p.estado) ? ' anulado' : ''}" data-i="${i}">
+      <td><span class="mono">${fecha(p.creado_en)}</span><span class="sub">${hora(p.creado_en)}</span></td>
+      <td>${p.reserva_folio ? `<a class="mono" href="/reservas/${p.reserva_id}" onclick="event.stopPropagation()">${esc(p.reserva_folio)}</a><span class="sub">${p.patente ? esc(p.patente) : ''}</span>` : '<span class="muted">—</span>'}</td>
+      <td>${esc(p.cliente || '')}</td>
+      <td>${esc(CONCEPTOS[p.concepto] || p.concepto)}${p.link_token && p.estado === 'pendiente' ? '<span class="sub">enlace enviado</span>' : ''}</td>
+      <td>${metodo(p.metodo)}${p.tarjeta ? `<span class="sub">···· ${esc(p.tarjeta)}</span>` : ''}</td>
+      <td><span class="folio">${esc(p.autorizacion && !String(p.autorizacion).startsWith('SIM') ? `Aut. ${p.autorizacion}` : p.referencia || '')}</span></td>
+      <td>${chipPago(p)}</td>
+      <td class="monto">${p.concepto === 'reembolso' ? clp(-p.monto) : clp(p.monto)}${p.concepto === 'garantia' && p.monto_capturado ? `<span class="sub">capturado ${clp(p.monto_capturado)}</span>` : ''}</td></tr>`).join('')
+    || '<tr><td colspan="8" class="rc-vacio">No hay pagos con estos filtros</td></tr>';
+  $('#pie').innerHTML = `<span>Cobrado <b>${clp(t.cobrado)}</b></span><span>Reembolsos <b>${clp(-t.reembolsado)}</b></span><span>Neto <b>${clp(t.neto)}</b></span>`;
+}
+
+let tt = null;
+filtros.addEventListener('input', (e) => { clearTimeout(tt); tt = setTimeout(cargar, e.target.type === 'search' ? 250 : 0); });
+$('#filas').addEventListener('click', (e) => { const tr = e.target.closest('tr[data-i]'); if (tr) verPago(pagos[Number(tr.dataset.i)].id); });
+
+// ── Garantías ──
+let garantias = [];
+async function cargarGarantias() {
+  const d = await api('pagos/garantias');
+  garantias = d.garantias;
+  const activas = garantias.filter((g) => g.etapa === 'retenida' || g.etapa === 'solicitada');
+  $('#n-gar').textContent = garantias.filter((g) => g.etapa === 'retenida').length;
+  $('#gar-aviso').innerHTML = `<div class="aviso neutro peq">Retención configurada: <b>${d.dias_retencion} días</b> (Configuración › Ajustes). Ojo: Transbank permite capturar hasta 7 días después de autorizar con algunas tarjetas (débito y prepago); pasado ese plazo la retención se libera sola y no se puede capturar.</div>`;
+  $('#gar-activas').innerHTML = activas.map((g) => {
+    const n = diasRestantes(g.vence_retencion);
+    return `<div class="rc-gar pg-gar-tarjeta">
+      <div class="pg-gar-cab"><div><a href="/liquidaciones/${g.reserva_id}">${esc(g.reserva_folio || 'Sin reserva')}</a><small>${esc(g.cliente || '')}${g.patente ? ` · ${esc(g.patente)}` : ''}</small></div>${proveedor(g.metodo)}</div>
+      <div class="monto">${clp(g.monto)}</div>
+      ${barraGarantia(g.etapa)}
+      <div class="pg-vence${n != null && n <= 5 ? ' pronto' : ''}">${g.tarjeta ? `${esc(g.detalle?.marca || 'Tarjeta')} ···· ${esc(g.tarjeta)} · ` : ''}${g.etapa === 'solicitada' ? 'esperando que el cliente autorice la retención' : `retenida el ${fecha(g.creado_en)}${g.vence_retencion ? ` · vence el ${fecha(g.vence_retencion)} · ${n > 0 ? `quedan ${n} ${n === 1 ? 'día' : 'días'} para capturar` : 'vencida'}` : ''}`}${g.simulado ? ' · <b style="color:var(--marca)">Simulado: marcha blanca</b>' : ''}</div>
+      ${editar ? `<div class="pg-gar-pie">${g.etapa === 'retenida' ? `<button type="button" class="btn" data-liberar="${g.id}">Liberar</button><button type="button" class="btn primario" data-capturar="${g.id}">Capturar</button>` : `<button type="button" class="btn" data-anular-gar="${g.id}">Anular solicitud</button>`}</div>` : ''}
+    </div>`;
+  }).join('') || '<div class="tarjeta"><p class="rc-vacio">No hay garantías retenidas</p></div>';
+  const hist = garantias.filter((g) => !['retenida', 'solicitada'].includes(g.etapa));
+  $('#gar-hist').innerHTML = hist.map((g) => `<tr class="clic" data-id="${g.id}"><td>${g.reserva_folio ? `<span class="mono">${esc(g.reserva_folio)}</span>` : '—'}</td><td>${esc(g.cliente || '')}</td><td>${g.tarjeta ? `···· ${esc(g.tarjeta)}` : '—'}</td><td>${metodo(g.metodo)}</td><td>${chipPago(g)}</td>
+      <td class="monto">${clp(g.monto)}</td><td class="monto">${clp(g.monto_capturado)}</td><td class="monto">${clp(g.monto_liberado)}</td></tr>`).join('') || '<tr><td colspan="8" class="rc-vacio">Sin historial</td></tr>';
+}
+$('#gar-activas').addEventListener('click', (e) => {
+  const c = e.target.closest('[data-capturar]'), l = e.target.closest('[data-liberar]'), a = e.target.closest('[data-anular-gar]');
+  if (c) capturarGar(garantias.find((g) => g.id === Number(c.dataset.capturar)));
+  if (l) liberarGar(garantias.find((g) => g.id === Number(l.dataset.liberar)));
+  if (a) liberarGar(garantias.find((g) => g.id === Number(a.dataset.anularGar)), true);
+});
+$('#gar-hist').addEventListener('click', (e) => { const tr = e.target.closest('tr[data-id]'); if (tr) verPago(Number(tr.dataset.id)); });
+
+async function capturarGar(g) {
+  const ok = await modal({ titulo: `Capturar garantía · ${g.reserva_folio || ''}`, html: `<div class="pg-form">
+      <p class="muted">Retenido: <b class="monto">${clp(g.monto)}</b>${g.tarjeta ? ` · tarjeta ···· ${esc(g.tarjeta)}` : ''}. Se captura una sola vez: lo que no se capture se libera al cliente automáticamente.</p>
+      <label>Monto a capturar<input class="campo" name="monto" type="number" min="1" max="${g.monto}" step="1" value="${g.monto}" required></label>
+      <label>Motivo<input class="campo" name="motivo" placeholder="Ej.: daño en parachoques, TAG, combustible" required></label>
+      ${g.simulado || mb ? '<div class="aviso info peq"><b>Simulado: marcha blanca.</b> No se llamará a Webpay ni a Mercado Pago.</div>' : ''}
+      <p class="ayuda peq muted">Para cobrar los cargos del cierre con detalle, usa la liquidación de la reserva.</p></div>`,
+    botones: [{ texto: 'Cancelar' }, { texto: 'Capturar', clase: 'primario', accion: async (c) => {
+      const f = leerForm(c);
+      if (!f.motivo) { toast('Indica el motivo', 'error'); return false; }
+      return api(`pagos/${g.id}/capturar`, { body: { monto: Number(f.monto), motivo: f.motivo } });
+    } }] });
+  if (ok) { toast('Garantía capturada'); refrescar(); }
+}
+async function liberarGar(g, solicitud = false) {
+  const ok = await modal({ titulo: solicitud ? 'Anular solicitud de garantía' : `Liberar garantía · ${g.reserva_folio || ''}`, html: `<div class="pg-form"><p>${solicitud ? 'La solicitud de garantía quedará anulada.' : `Se liberan <b class="monto">${clp(g.monto)}</b> al cliente (visible en su tarjeta en 1 a 5 días hábiles).`}</p>
+      <label>Motivo<input class="campo" name="motivo" placeholder="Ej.: devolución sin cargos"></label></div>`,
+    botones: [{ texto: 'Cancelar' }, { texto: solicitud ? 'Anular' : 'Liberar garantía', clase: 'primario', accion: (c) => api(`pagos/${g.id}/liberar`, { body: leerForm(c) }) }] });
+  if (ok) { toast(solicitud ? 'Solicitud anulada' : 'Garantía liberada'); refrescar(); }
+}
+
+// ── Detalle de un pago ──
+async function verPago(id) {
+  const p = await api(`pagos/${id}`);
+  const filas = [
+    ['Reserva', p.reserva_folio ? `<a class="mono" href="/reservas/${p.reserva_id}">${esc(p.reserva_folio)}</a>` : '—'], ['Cliente', esc(p.cliente || '—')],
+    ['Concepto', esc(CONCEPTOS[p.concepto])], ['Método', metodo(p.metodo)], ['Estado', chipPago(p)], ['Monto', `<b class="monto">${clp(p.monto)}</b>`],
+    p.monto_capturado ? ['Capturado', `<span class="monto">${clp(p.monto_capturado)}</span>`] : null, p.monto_liberado ? ['Liberado', `<span class="monto">${clp(p.monto_liberado)}</span>`] : null,
+    p.tarjeta ? ['Tarjeta', `···· ${esc(p.tarjeta)}${p.detalle?.tipo_pago ? ` · ${esc(p.detalle.tipo_pago)}` : ''}`] : null,
+    p.autorizacion ? ['Autorización', `<span class="mono">${esc(p.autorizacion)}</span>`] : null, p.referencia ? ['Referencia', `<span class="mono">${esc(p.referencia)}</span>`] : null,
+    p.vence_retencion ? ['Vence retención', fecha(p.vence_retencion)] : null, ['Registrado', `${fechaHora(p.creado_en)}${p.registrado_por_nombre ? ` · ${esc(p.registrado_por_nombre)}` : ''}`],
+    p.detalle?.motivo ? ['Motivo', esc(p.detalle.motivo)] : null
+  ].filter(Boolean);
+  const link = p.link_token && p.estado === 'pendiente' ? `${location.origin}/api/pagos/link/${p.link_token}` : null;
+  const botones = [{ texto: 'Cerrar' }];
+  if (editar && p.estado === 'pendiente') botones.unshift({ texto: 'Anular cobro', clase: 'peligro', accion: async () => { await api(`pagos/${p.id}/anular`, { body: { motivo: 'Anulado desde Pagos' } }); toast('Cobro anulado'); refrescar(); } });
+  if (editar && ['pagado', 'simulado', 'capturado'].includes(p.estado) && p.concepto !== 'reembolso' && !(p.concepto === 'garantia' && p.etapa === 'retenida')) botones.unshift({ texto: 'Reembolsar', accion: () => { setTimeout(() => reembolsarPago(p), 0); } });
+  if (editar && p.etapa === 'retenida') botones.unshift({ texto: 'Capturar', clase: 'primario', accion: () => { setTimeout(() => capturarGar(p), 0); } });
+  await modal({ titulo: `Pago #${p.id}`, html: `
+    ${p.simulado ? `<div class="aviso info peq" style="margin-bottom:10px"><b>Simulado: marcha blanca.</b> ${esc(p.detalle?.motivo_simulado || 'No se llamó al proveedor de pagos.')}</div>` : ''}
+    <dl class="rc-datos" style="grid-template-columns:1fr 1fr">${filas.map(([k, v]) => `<div><dt>${k}</dt><dd>${v}</dd></div>`).join('')}</dl>
+    ${link ? `<div style="margin-top:14px"><div class="peq muted" style="margin-bottom:4px">Enlace de pago</div><div class="pg-enlace"><input class="campo" readonly value="${esc(link)}"><button type="button" class="btn peq" data-copiar>Copiar</button></div></div>` : ''}
+    <h3 style="font-size:13px;margin:16px 0 6px">Historial</h3><div class="pg-hist">${p.historial.map((h) => `<div><span>${esc(h.accion.replaceAll('_', ' '))}${h.detalle?.motivo ? ` · ${esc(h.detalle.motivo)}` : ''}</span><small>${esc(h.cuando)}${h.usuario ? ` · ${esc(h.usuario)}` : ''}</small></div>`).join('') || '<small>Sin movimientos registrados</small>'}</div>`,
+    botones, alAbrir: (c) => c.querySelector('[data-copiar]')?.addEventListener('click', async () => { await navigator.clipboard?.writeText(link); toast('Enlace copiado'); }) });
+}
+
+async function reembolsarPago(p) {
+  const max = (p.cobrado || p.monto) - Number(p.detalle?.reembolsado || 0);
+  const ok = await modal({ titulo: `Reembolsar pago #${p.id}`, html: `<div class="pg-form"><p class="muted">Disponible para reembolsar: <b class="monto">${clp(max)}</b> · ${esc(METODOS[p.metodo])}</p>
+      <label>Monto<input class="campo" name="monto" type="number" min="1" max="${max}" value="${max}"></label><label>Motivo<input class="campo" name="motivo" required></label></div>`,
+    botones: [{ texto: 'Cancelar' }, { texto: 'Reembolsar', clase: 'primario', accion: (c) => { const f = leerForm(c); return api(`pagos/${p.id}/reembolsar`, { body: { monto: Number(f.monto), motivo: f.motivo } }); } }] });
+  if (ok) { toast('Reembolso registrado'); refrescar(); }
+}
+
+// ── Registrar pago presencial ──
+async function registrarPago() {
+  let reserva = null;
+  const ok = await modal({ titulo: 'Registrar pago', html: `<div class="pg-form">
+      <div id="sel"></div>
+      <div class="fila"><label>Concepto<select class="campo" name="concepto">${['arriendo', 'garantia', 'liquidacion', 'multa', 'tag', 'incidente'].map((k) => `<option value="${k}">${CONCEPTOS[k]}</option>`).join('')}</select></label>
+        <label>Monto (CLP)<input class="campo" name="monto" type="number" min="1" step="1" required></label></div>
+      <div><div class="peq muted" style="margin-bottom:5px">Método</div><div class="segmentado" id="met">${['efectivo', 'transferencia', 'pos'].map((m, i) => `<button type="button" data-m="${m}" aria-pressed="${i === 0}">${METODOS[m]}</button>`).join('')}</div></div>
+      <div class="fila"><label>Referencia<input class="campo" name="referencia" placeholder="N° transferencia, voucher o boleta"></label>
+        <label id="lbl-tarjeta" hidden>Últimos 4 dígitos (POS)<input class="campo" name="tarjeta" maxlength="4" inputmode="numeric"></label></div>
+      <label>Notas<input class="campo" name="notas"></label></div>`,
+    alAbrir: (c) => {
+      const monto = c.querySelector('[name=monto]'), concepto = c.querySelector('[name=concepto]');
+      const sugerir = () => { if (!reserva) return; monto.value = concepto.value === 'garantia' ? reserva.garantia : reserva.saldo || ''; };
+      selectorReserva(c.querySelector('#sel'), { alElegir: (r) => { reserva = r; sugerir(); } });
+      concepto.onchange = sugerir;
+      c.querySelector('#met').onclick = (e) => { const b = e.target.closest('[data-m]'); if (!b) return; c.querySelectorAll('#met button').forEach((x) => x.setAttribute('aria-pressed', x === b)); c.querySelector('#lbl-tarjeta').hidden = b.dataset.m !== 'pos'; };
+    },
+    botones: [{ texto: 'Cancelar' }, { texto: 'Registrar pago', clase: 'primario', accion: (c) => {
+      const f = leerForm(c);
+      if (!reserva) { toast('Elige la reserva', 'error'); return false; }
+      return api('pagos/manual', { body: { ...f, monto: Number(f.monto), reserva_id: reserva.id, metodo: c.querySelector('#met [aria-pressed=true]').dataset.m } });
+    } }] });
+  if (ok) { toast('Pago registrado'); refrescar(); }
+}
+
+// ── Cobrar en línea: enlace por WhatsApp / correo ──
+async function cobrarEnLinea() {
+  let reserva = null;
+  const res = await modal({ titulo: 'Cobrar en línea', html: `<div class="pg-form">
+      <div id="sel"></div>
+      <div class="fila"><label>Concepto<select class="campo" name="concepto"><option value="arriendo">Arriendo</option><option value="garantia">Garantía (retención en tarjeta)</option><option value="liquidacion">Liquidación</option></select></label>
+        <label>Monto (CLP)<input class="campo" name="monto" type="number" min="1" step="1" required></label></div>
+      <div><div class="peq muted" style="margin-bottom:5px">Medio de pago</div><div class="segmentado" id="prov"><button type="button" data-p="webpay" aria-pressed="true">Webpay Plus</button><button type="button" data-p="mercadopago" aria-pressed="false">Mercado Pago</button></div></div>
+      <div><div class="peq muted" style="margin-bottom:5px">Enviar el enlace al cliente</div><div class="pg-checks"><label><input type="checkbox" name="whatsapp" checked> WhatsApp</label><label><input type="checkbox" name="correo" checked> Correo</label></div></div>
+      ${mb ? '<div class="aviso info peq"><b>Marcha blanca:</b> el mensaje queda retenido en la bandeja de salida y, si el cliente abre el enlace, el pago se registra como «Simulado».</div>' : ''}</div>`,
+    alAbrir: (c) => {
+      const monto = c.querySelector('[name=monto]'), concepto = c.querySelector('[name=concepto]');
+      const sugerir = () => { if (reserva) monto.value = concepto.value === 'garantia' ? reserva.garantia : reserva.saldo || ''; };
+      selectorReserva(c.querySelector('#sel'), { alElegir: (r) => { reserva = r; sugerir(); } });
+      concepto.onchange = sugerir;
+      c.querySelector('#prov').onclick = (e) => { const b = e.target.closest('[data-p]'); if (b) c.querySelectorAll('#prov button').forEach((x) => x.setAttribute('aria-pressed', x === b)); };
+    },
+    botones: [{ texto: 'Cancelar' }, { texto: 'Crear enlace', clase: 'primario', accion: (c) => {
+      const f = leerForm(c);
+      if (!reserva) { toast('Elige la reserva', 'error'); return false; }
+      return api('pagos/link', { body: { reserva_id: reserva.id, concepto: f.concepto, monto: Number(f.monto), proveedor: c.querySelector('#prov [aria-pressed=true]').dataset.p, enviar: [f.whatsapp && 'whatsapp', f.correo && 'correo'].filter(Boolean) } });
+    } }] });
+  if (!res) return;
+  refrescar();
+  await modal({ titulo: 'Enlace de pago creado', html: `<div class="pg-form"><div class="pg-enlace"><input class="campo" readonly value="${esc(res.url)}"><button type="button" class="btn peq" data-copiar>Copiar</button></div>
+      <p class="peq muted">${esc(res.texto)}</p>
+      ${res.salidas.map((s) => `<div class="rc-entre peq"><span>${s.canal === 'whatsapp' ? 'WhatsApp' : 'Correo'} · ${esc(s.destino)}</span><span class="chip ${s.estado === 'enviada' ? 'ok' : s.estado === 'retenida' ? 'aviso' : 'error'}">${s.estado === 'retenida' ? 'Retenido' : s.estado === 'enviada' ? 'Enviado' : 'Error'}</span></div>`).join('') || '<p class="peq muted">No se envió por ningún canal: copia el enlace y compártelo.</p>'}</div>`,
+    alAbrir: (c) => c.querySelector('[data-copiar]').addEventListener('click', async () => { await navigator.clipboard?.writeText(res.url); toast('Enlace copiado'); }) });
+}
+
+// ── Pestañas ──
+function pestana(t) {
+  document.querySelectorAll('#pestanas button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.tab === t));
+  $('#tab-pagos').hidden = t !== 'pagos'; $('#tab-garantias').hidden = t !== 'garantias';
+  history.replaceState(null, '', t === 'garantias' ? '#garantias' : location.pathname + location.search);
+}
+$('#pestanas').onclick = (e) => { const b = e.target.closest('[data-tab]'); if (b) pestana(b.dataset.tab); };
+$('#btn-manual')?.addEventListener('click', registrarPago);
+$('#btn-link')?.addEventListener('click', cobrarEnLinea);
+const refrescar = () => Promise.all([cargar(), cargarGarantias()]).catch(toastError);
+pestana(location.hash === '#garantias' ? 'garantias' : 'pagos');
+await refrescar();
+</script>
+</body>
+</html>

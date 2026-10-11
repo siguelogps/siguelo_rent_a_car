@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Liquidaciones</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/pagos.css">
+</head>
+<body>
+<main>
+  <div class="pagina-cab">
+    <div><h1>Liquidaciones</h1><p>Cierre de cada arriendo devuelto: cargos calculados automáticamente, captura de la garantía y liberación del saldo.</p></div>
+  </div>
+  <div class="kpis" id="kpis"></div>
+  <div class="pg-pestanas">
+    <div class="segmentado" id="pestanas">
+      <button type="button" data-v="pendientes" aria-pressed="true">Pendientes <span class="chip aviso" id="n-pend">0</span></button>
+      <button type="button" data-v="historial" aria-pressed="false">Historial</button>
+    </div>
+    <input class="campo" type="search" id="buscar" placeholder="Buscar folio, cliente o patente…" style="min-width:260px" aria-label="Buscar">
+  </div>
+  <div class="tarjeta">
+    <div class="tabla-env"><table class="tabla pg-tabla">
+      <thead id="cab"></thead>
+      <tbody id="filas"><tr><td class="rc-vacio">Cargando…</td></tr></tbody>
+    </table></div>
+  </div>
+</main>
+<script type="module">
+import { iniciarPagina, api, esc, clp, fecha, hora, pat, toastError, descargar } from '/comun.js';
+import { diasRestantes } from '/js/pagos.js';
+
+await iniciarPagina({ activo: 'liquidaciones', titulo: 'Liquidaciones' });
+const $ = (s) => document.querySelector(s);
+let vista = location.hash === '#historial' ? 'historial' : 'pendientes';
+const ESTADO = { borrador: ['Por aprobar', 'aviso'], aprobada: ['Saldo por cobrar', 'error'], cobrada: ['Cobrada', 'ok'], anulada: ['Anulada', 'sin'] };
+
+async function kpis() {
+  const [p, h] = await Promise.all([api('liquidaciones'), api('liquidaciones?vista=historial')]);
+  const mes = new Date().toISOString().slice(0, 7);
+  const delMes = h.filter((x) => String(x.aprobado_en || '').slice(0, 7) === mes);
+  $('#n-pend').textContent = p.length;
+  $('#kpis').innerHTML = `
+    <div class="kpi"><span>Por liquidar</span><b>${p.length}</b><small>reservas devueltas</small></div>
+    <div class="kpi"><span>Garantías por resolver</span><b class="monto">${clp(p.reduce((s, x) => s + (['retenido', 'simulado'].includes(x.garantia_estado) ? x.garantia_pago || 0 : 0), 0))}</b><small>retenidas en reservas devueltas</small></div>
+    <div class="kpi"><span>Cargos cobrados este mes</span><b class="monto">${clp(delMes.reduce((s, x) => s + x.total_cargos, 0))}</b><small>${delMes.length} ${delMes.length === 1 ? "liquidación" : "liquidaciones"}</small></div>
+    <div class="kpi"><span>Saldos por cobrar</span><b class="monto" style="${h.some((x) => x.saldo_por_cobrar > 0) ? 'color:var(--red)' : ''}">${clp(h.reduce((s, x) => s + (x.estado === 'aprobada' ? x.saldo_por_cobrar : 0), 0))}</b><small>cargos mayores que la garantía</small></div>`;
+}
+
+async function cargar() {
+  const d = await api(`liquidaciones?vista=${vista}&q=${encodeURIComponent($('#buscar').value.trim())}`);
+  if (vista === 'pendientes') {
+    $('#cab').innerHTML = '<tr><th>Reserva</th><th>Cliente</th><th>Vehículo</th><th>Devuelto</th><th>Garantía</th><th>Estado</th><th class="monto">Cargos</th><th></th></tr>';
+    $('#filas').innerHTML = d.map((x) => {
+      const n = diasRestantes(x.garantia_vence);
+      const gar = x.garantia_pago ? `<span class="monto">${clp(x.garantia_pago)}</span><span class="sub${n != null && n <= 5 ? '" style="color:var(--red);font-weight:600' : ''}">${['retenido', 'simulado'].includes(x.garantia_estado) ? `retenida${n != null ? ` · vence en ${n} días` : ''}` : esc(x.garantia_estado || '')}</span>` : '<span class="muted">Sin garantía</span>';
+      const dev = x.devolucion_real || x.fin;
+      return `<tr class="clic" data-id="${x.reserva_id}"><td><span class="mono"><b>${esc(x.reserva_folio)}</b></span>${x.folio ? `<span class="sub">${esc(x.folio)}</span>` : ''}</td><td>${esc(x.cliente)}</td>
+        <td>${x.patente ? pat(x.patente) : ''} <span class="sub">${esc(x.marca || '')} ${esc(x.modelo || '')}</span></td>
+        <td><span class="mono">${fecha(dev)}</span><span class="sub">${hora(dev)}${x.devolucion_real && new Date(x.devolucion_real) > new Date(x.fin) ? ' · con atraso' : ''}</span></td>
+        <td>${gar}</td><td>${x.id ? '<span class="chip aviso">Por aprobar</span>' : '<span class="chip">Por calcular</span>'}</td>
+        <td class="monto">${x.id ? clp(x.total_cargos) : '<span class="muted">—</span>'}</td><td style="text-align:right"><a class="btn peq primario" href="/liquidaciones/${x.reserva_id}">Liquidar</a></td></tr>`;
+    }).join('') || '<tr><td colspan="8" class="rc-vacio">No hay reservas devueltas por liquidar</td></tr>';
+  } else {
+    $('#cab').innerHTML = '<tr><th>Liquidación</th><th>Reserva</th><th>Cliente</th><th>Aprobada</th><th>Estado</th><th class="monto">Cargos</th><th class="monto">Capturado</th><th class="monto">Liberado</th><th class="monto">Saldo</th><th></th></tr>';
+    $('#filas').innerHTML = d.map((x) => {
+      const [t, c] = ESTADO[x.estado] || [x.estado, ''];
+      return `<tr class="clic" data-id="${x.reserva_id}"><td><span class="mono"><b>${esc(x.folio)}</b></span></td><td><span class="mono">${esc(x.reserva_folio)}</span><span class="sub">${x.patente ? esc(x.patente) : ''}</span></td><td>${esc(x.cliente)}</td>
+        <td><span class="mono">${fecha(x.aprobado_en)}</span><span class="sub">${esc(x.aprobado_por_nombre || '')}</span></td><td><span class="chip ${c}">${t}</span></td>
+        <td class="monto">${clp(x.total_cargos)}</td><td class="monto">${clp(x.garantia_capturada)}</td><td class="monto">${clp(x.garantia_liberada)}</td><td class="monto"${x.saldo_por_cobrar ? ' style="color:var(--red)"' : ''}>${clp(x.saldo_por_cobrar)}</td>
+        <td style="text-align:right"><button type="button" class="btn peq" data-pdf="${x.reserva_id}" data-folio="${esc(x.reserva_folio)}">PDF</button></td></tr>`;
+    }).join('') || '<tr><td colspan="10" class="rc-vacio">Aún no hay liquidaciones aprobadas</td></tr>';
+  }
+}
+
+$('#filas').addEventListener('click', (e) => {
+  const pdf = e.target.closest('[data-pdf]');
+  if (pdf) { e.stopPropagation(); descargar(`/api/liquidaciones/${pdf.dataset.pdf}/pdf`, `Liquidacion-${pdf.dataset.folio}.pdf`).catch(toastError); return; }
+  if (e.target.closest('a')) return;
+  const tr = e.target.closest('tr[data-id]');
+  if (tr) location.href = `/liquidaciones/${tr.dataset.id}`;
+});
+$('#pestanas').onclick = (e) => {
+  const b = e.target.closest('[data-v]'); if (!b) return;
+  vista = b.dataset.v;
+  document.querySelectorAll('#pestanas button').forEach((x) => x.setAttribute('aria-pressed', x === b));
+  history.replaceState(null, '', vista === 'historial' ? '#historial' : location.pathname);
+  cargar().catch(toastError);
+};
+let t = null;
+$('#buscar').addEventListener('input', () => { clearTimeout(t); t = setTimeout(() => cargar().catch(toastError), 250); });
+document.querySelectorAll('#pestanas button').forEach((x) => x.setAttribute('aria-pressed', x.dataset.v === vista));
+await Promise.all([kpis(), cargar()]).catch(toastError);
+</script>
+</body>
+</html>

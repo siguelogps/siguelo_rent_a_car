@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Mantención</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/flota.css">
+</head>
+<body>
+<main>
+  <div class="pagina-cab">
+    <div><h1>Mantención</h1><p>Órdenes de trabajo, taller y mantenciones por km según la plataforma GPS. Mientras un vehículo está en taller queda bloqueado en el calendario de reservas.</p></div>
+    <div class="acciones" id="acciones"></div>
+  </div>
+  <div class="kpis" id="kpis"></div>
+  <div class="columnas">
+    <div class="tarjeta" style="min-width:0"><div class="bloque"><h2>Mantenciones sugeridas <span class="peq muted" style="font-weight:400">por km (menos de 1.000 km), por fecha y revisión técnica a 30 días</span></h2><div class="fl-sugeridas" id="sugeridas"><p class="rc-cargando">Cargando…</p></div></div></div>
+    <div class="tarjeta"><div class="bloque"><h2>Costo por vehículo <span class="peq muted" style="font-weight:400">últimos 12 meses</span></h2><div id="costos"></div></div></div>
+  </div>
+  <div class="tarjeta" style="min-width:0">
+    <div class="fl-filtros"><div class="rc-entre" style="flex-wrap:wrap"><div class="filtros-fila" id="chips"></div><select class="campo" id="f-tipo" aria-label="Tipo"><option value="">Todos los tipos</option></select></div></div>
+    <div class="tabla-env"><table class="tabla fl-tabla tarjetas" id="tabla"><thead><tr><th>Folio</th><th>Vehículo</th><th>Trabajo</th><th>Programada</th><th>Taller</th><th>Estado</th><th class="fl-num">Costo</th><th></th></tr></thead><tbody></tbody></table></div>
+  </div>
+</main>
+<script type="module">
+import { iniciarPagina, api, esc, clp, miles, fecha, fechaHora, isoLocal, pat, patente, puede, modal, toast, toastError, leerForm } from '/comun.js';
+import { TIPOS_OT, ESTADOS_OT, chipOt, marcarError } from '/js/flota-comun.js';
+
+await iniciarPagina({ activo: 'mantencion', titulo: 'Mantención' });
+const EDITA = puede('mantencion', 'editar');
+const $ = (s) => document.querySelector(s);
+let OTS = [], VEH = [], filtro = 'abiertas';
+const params = new URLSearchParams(location.search);
+const hoy = () => isoLocal(new Date()).fecha;
+const enDias = (n) => isoLocal(new Date(Date.now() + n * 864e5)).fecha;
+
+$('#acciones').innerHTML = EDITA ? '<button class="btn primario" id="b-nueva">+ Nueva orden de trabajo</button>' : '';
+$('#b-nueva')?.addEventListener('click', () => formOt());
+$('#f-tipo').innerHTML += Object.entries(TIPOS_OT).map(([k, t]) => `<option value="${k}">${t}</option>`).join('');
+$('#f-tipo').onchange = pintar;
+
+async function cargar() {
+  const [ots, sug, res] = await Promise.all([api('ordenes-trabajo'), api('mantencion/sugeridas'), api('mantencion/resumen')]);
+  OTS = ots;
+  $('#kpis').innerHTML = `
+    <div class="kpi"><span>En taller</span><b style="${res.en_taller ? 'color:#B45309' : ''}">${res.en_taller}</b><small>bloqueados en el calendario</small></div>
+    <div class="kpi"><span>Programadas</span><b>${res.programadas}</b><small>por ingresar al taller</small></div>
+    <div class="kpi"><span>Sugeridas</span><b>${sug.length}</b><small class="${sug.some((s) => s.urgencia === 'vencida') ? 'mal' : ''}">${((n) => `${n} ${n === 1 ? 'vencida' : 'vencidas'}`)(sug.filter((s) => s.urgencia === 'vencida').length)}</small></div>
+    <div class="kpi"><span>Costo del mes</span><b class="monto" style="font-size:24px">${clp(res.costo_mes)}</b><small>${res.terminadas_mes} ${res.terminadas_mes === 1 ? 'orden terminada' : 'órdenes terminadas'}</small></div>
+    <div class="kpi"><span>Costo del año</span><b class="monto" style="font-size:24px">${clp(res.costo_anio)}</b><small>mantención de toda la flota</small></div>`;
+  $('#sugeridas').innerHTML = sug.map((s, i) => {
+    const ic = s.tipo === 'revision_tecnica' ? 'RT' : s.por === 'km' ? 'km' : 'mes';
+    const det = s.por === 'km' ? (s.faltan_km <= 0 ? `Pasada por ${miles(-s.faltan_km)} km` : `Faltan ${miles(s.faltan_km)} km`) + ' según la plataforma GPS'
+      : s.faltan_dias < 0 ? `Venció el ${fecha(s.proxima_fecha)}` : `Vence el ${fecha(s.proxima_fecha)} (en ${s.faltan_dias} ${s.faltan_dias === 1 ? 'día' : 'días'})`;
+    const res = s.reserva ? ` · ${s.reserva.estado === 'en_curso' ? 'arrendado' : 'reserva'} hasta el ${fecha(s.reserva.fin).slice(0, 5)}` : '';
+    const titulo = s.tipo === 'revision_tecnica' ? 'Revisión técnica' : s.motivo;
+    return `<div class="rc-alerta-venc"${s.urgencia === 'vencida' ? ' style="border-color:#F2C9C4"' : ''}><span class="ic ${s.urgencia === 'vencida' ? 'rojo' : 'ambar'}">${ic}</span><div><b>${esc(titulo)} · ${pat(s.patente)}</b><small>${esc(s.marca || '')} ${esc(s.modelo || '')} · ${det}${res}</small></div>${EDITA ? `<button class="btn peq" data-sug="${i}">Crear OT</button>` : ''}</div>`;
+  }).join('') || '<p class="rc-vacio" style="grid-column:1/-1;padding:14px">Nada pendiente: toda la flota está al día</p>';
+  $('#sugeridas').onclick = (e) => { const b = e.target.closest('[data-sug]'); if (b) { const s = sug[Number(b.dataset.sug)]; formOt(null, { vehiculo_id: s.vehiculo_id, tipo: s.tipo, motivo: s.motivo, km_programado: s.km_programado, fecha_programada: s.fecha_programada }); } };
+  const max = Math.max(1, ...res.costo_por_vehiculo.map((x) => x.costo));
+  $('#costos').innerHTML = res.costo_por_vehiculo.length ? `<div class="fl-barras">${res.costo_por_vehiculo.map((x) => `<a class="fl-barra" href="/vehiculos/${x.id}" style="text-decoration:none;color:inherit;grid-template-columns:76px minmax(0,1fr) 92px">${pat(x.patente)}<div class="b"><i class="costo" style="width:${Math.max(3, x.costo * 100 / max)}%"></i></div><span class="n">${clp(x.costo)}</span></a>`).join('')}</div><p class="peq muted">Estos costos alimentan los reportes de rentabilidad por vehículo y la liquidación a inversionistas.</p>` : '<p class="rc-vacio">Sin órdenes terminadas en el período</p>';
+  pintar();
+}
+
+function pintar() {
+  const tipo = $('#f-tipo').value;
+  const base = OTS.filter((o) => !tipo || o.tipo === tipo);
+  const chips = [['abiertas', 'Abiertas', (o) => ['programada', 'en_taller'].includes(o.estado)], ...Object.entries(ESTADOS_OT).map(([k, t]) => [k, t, (o) => o.estado === k]), ['todas', 'Todas', () => true]];
+  $('#chips').innerHTML = chips.map(([k, t, f]) => `<button class="filtro" data-f="${k}" aria-pressed="${filtro === k}">${t} <span class="n">${base.filter(f).length}</span></button>`).join('');
+  const lista = base.filter(chips.find((c) => c[0] === filtro)[2]);
+  $('#tabla tbody').innerHTML = lista.map((o) => {
+    const prog = [o.km_programado ? `${miles(o.km_programado)} km` : '', o.fecha_programada ? fecha(o.fecha_programada) : ''].filter(Boolean).join('<br>') || '—';
+    const cuando = o.estado === 'en_taller' ? `ingresó ${fecha(o.inicio)}${o.bloqueo_fin ? `<br>sale ~${fecha(o.bloqueo_fin)}` : ''}` : o.estado === 'terminada' ? `terminada ${fecha(o.fin)}` : o.estado === 'anulada' ? `anulada ${fecha(o.fin)}` : '';
+    const acc = !EDITA ? '' : o.estado === 'programada' ? `<button class="btn peq oscuro" data-acc="taller" data-id="${o.id}">Enviar a taller</button><button class="btn peq" data-acc="terminar" data-id="${o.id}">Terminar</button><button class="btn peq" data-acc="editar" data-id="${o.id}">Editar</button>`
+      : o.estado === 'en_taller' ? `<button class="btn peq primario" data-acc="terminar" data-id="${o.id}">Terminar</button><button class="btn peq" data-acc="editar" data-id="${o.id}">Editar</button>` : o.estado === 'terminada' ? `<button class="btn peq" data-acc="editar" data-id="${o.id}">Editar costo</button>` : '';
+    return `<tr data-ot="${o.id}">
+      <td data-et="Folio"><span class="folio">${esc(o.folio)}</span><div class="fl-chico">${esc(TIPOS_OT[o.tipo] || o.tipo)}</div></td>
+      <td data-et="Vehículo"><a href="/vehiculos/${o.vehiculo_id}" style="text-decoration:none;color:inherit" class="fl-veh">${pat(o.patente)}<div><span class="peq">${esc(o.marca || '')} ${esc(o.modelo || '')}</span><div class="fl-chico mono" style="white-space:nowrap">${miles(o.km_actual)} km</div></div></a></td>
+      <td data-et="Trabajo" class="ancho">${esc(o.motivo)}${o.notas ? `<div class="fl-chico">${esc(o.notas)}</div>` : ''}${o.incidente_folio ? `<div class="fl-chico">Incidente ${esc(o.incidente_folio)}</div>` : ''}</td>
+      <td data-et="Programada" class="peq mono">${prog}${cuando ? `<div class="fl-chico" style="font-family:var(--sans)">${cuando}</div>` : ''}</td>
+      <td data-et="Taller" class="peq">${esc(o.taller || '—')}</td>
+      <td data-et="Estado">${chipOt(o.estado)}</td>
+      <td data-et="Costo" class="monto fl-num">${clp(o.costo)}</td>
+      <td class="ancho"><div class="fl-acciones-celda nw">${acc}</div></td></tr>`;
+  }).join('') || '<tr><td colspan="8" class="rc-vacio">Sin órdenes de trabajo con este filtro</td></tr>';
+  const sel = Number(params.get('ot'));
+  if (sel) { const tr = document.querySelector(`tr[data-ot="${sel}"]`); if (tr) { tr.setAttribute('aria-selected', 'true'); tr.scrollIntoView({ block: 'center' }); } }
+}
+$('#chips').onclick = (e) => { const b = e.target.closest('[data-f]'); if (b) { filtro = b.dataset.f; pintar(); } };
+$('#tabla').onclick = async (e) => {
+  const b = e.target.closest('[data-acc]');
+  if (!b) return;
+  const o = OTS.find((x) => x.id === Number(b.dataset.id));
+  if (b.dataset.acc === 'editar') return formOt(o);
+  if (b.dataset.acc === 'taller') return enviarTaller(o);
+  if (b.dataset.acc === 'terminar') return terminar(o);
+};
+
+async function formOt(o = null, pre = {}) {
+  if (!VEH.length) VEH = await api('vehiculos');
+  const x = o || { tipo: 'preventiva', ...pre };
+  const soloCosto = o?.estado === 'terminada';
+  const r = await modal({
+    titulo: o ? `Orden ${o.folio} · ${patente(o.patente)}` : 'Nueva orden de trabajo',
+    html: `<div class="fl-form">
+      <label class="etiqueta doble">Vehículo *<select class="campo" name="vehiculo_id"${o ? ' disabled' : ''}><option value="">Elige un vehículo</option>${VEH.map((v) => `<option value="${v.id}"${v.id === x.vehiculo_id ? ' selected' : ''}>${esc(patente(v.patente))} · ${esc(v.marca || '')} ${esc(v.modelo || '')} · ${miles(v.gps_km ?? v.km)} km</option>`).join('')}</select></label>
+      <label class="etiqueta doble">Tipo<select class="campo" name="tipo"${soloCosto ? ' disabled' : ''}>${Object.entries(TIPOS_OT).map(([k, t]) => `<option value="${k}"${k === x.tipo ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
+      <label class="etiqueta todo">Trabajo a realizar *<input class="campo" name="motivo" value="${esc(x.motivo || '')}" placeholder="Mantención 40.000 km: aceite, filtros y frenos"${soloCosto ? ' disabled' : ''}></label>
+      <label class="etiqueta">Programada a los (km)<input class="campo" type="number" min="0" step="1000" name="km_programado" value="${x.km_programado ?? ''}"${soloCosto ? ' disabled' : ''}></label>
+      <label class="etiqueta">Fecha programada<input class="campo" type="date" name="fecha_programada" value="${x.fecha_programada || ''}"${soloCosto ? ' disabled' : ''}></label>
+      <label class="etiqueta">Taller<input class="campo" name="taller" value="${esc(x.taller || '')}" list="talleres"></label>
+      <label class="etiqueta">Costo${soloCosto ? '' : ' estimado'}<input class="campo" type="number" min="0" step="1000" name="costo" value="${x.costo ?? ''}"></label>
+      <label class="etiqueta todo">Notas<textarea class="campo" name="notas" rows="2">${esc(x.notas || '')}</textarea></label></div>
+      <datalist id="talleres">${[...new Set(OTS.map((t) => t.taller).filter(Boolean))].map((t) => `<option value="${esc(t)}">`).join('')}</datalist>
+      ${o?.estado === 'programada' ? '<p class="peq muted">Al enviarla a taller el vehículo queda «en mantención» y bloqueado para reservas hasta que la termines.</p>' : ''}`,
+    botones: [...(o && ['programada', 'en_taller'].includes(o.estado) ? [{ texto: 'Anular orden', clase: 'peligro', valor: 'anular' }] : []), { texto: 'Cancelar' }, { texto: o ? 'Guardar' : 'Crear orden', clase: 'primario', accion: async (cu) => {
+      const d = leerForm(cu);
+      if (o) { delete d.vehiculo_id; if (soloCosto) { delete d.tipo; delete d.motivo; delete d.km_programado; delete d.fecha_programada; } }
+      else if (!d.vehiculo_id) return marcarError(cu, 'vehiculo_id', 'Elige el vehículo');
+      try { return await api(o ? `ordenes-trabajo/${o.id}` : 'ordenes-trabajo', { method: o ? 'PUT' : 'POST', body: d }); } catch (e) { return marcarError(cu, e.campo, e.message); }
+    } }],
+    alAbrir: (cu) => {
+      const v = cu.querySelector('[name=vehiculo_id]'), t = cu.querySelector('[name=tipo]'), m = cu.querySelector('[name=motivo]'), km = cu.querySelector('[name=km_programado]');
+      // Sugerencia de km de la próxima mantención al elegir el vehículo
+      v.addEventListener('change', () => { const ve = VEH.find((y) => y.id === Number(v.value)); if (ve && t.value === 'preventiva' && ve.mantencion.proxima_km) { if (!km.value) km.value = ve.mantencion.proxima_km; if (!m.value) m.value = `Mantención ${miles(ve.mantencion.proxima_km)} km`; } });
+    }
+  });
+  if (r === 'anular') return anular(o);
+  if (r) { toast(o ? 'Orden actualizada' : `Orden ${r.folio} creada`, 'ok'); await cargar(); }
+}
+
+async function enviarTaller(o, forzar = false, finEstimado = null) {
+  let fin = finEstimado;
+  if (!forzar) {
+    const r = await modal({
+      titulo: `Enviar ${patente(o.patente)} a taller`,
+      html: `<p><b>${esc(o.folio)}</b> · ${esc(o.motivo)}${o.taller ? ` · ${esc(o.taller)}` : ''}</p>
+        <div class="fl-form dos"><label class="etiqueta">Salida estimada del taller<input class="campo" type="date" name="fin_estimado" value="${o.fecha_programada && o.fecha_programada > hoy() ? o.fecha_programada : enDias(2)}" min="${enDias(0)}"></label></div>
+        <p class="peq muted">El vehículo queda «en mantención» y bloqueado en el calendario hasta esa fecha (o hasta que termines la orden, lo que ocurra antes). Si choca con una reserva confirmada te avisaremos.</p>`,
+      botones: [{ texto: 'Cancelar' }, { texto: 'Enviar a taller', clase: 'primario', accion: (cu) => leerForm(cu).fin_estimado || enDias(2) }]
+    });
+    if (!r) return;
+    fin = r;
+  }
+  const resp = await api(`ordenes-trabajo/${o.id}/estado`, { crudo: true, method: 'POST', body: { estado: 'en_taller', fin_estimado: fin, forzar } });
+  const j = await resp.json();
+  if (resp.status === 409 && j.conflictos) {
+    const ok = await modal({
+      titulo: 'Choca con reservas confirmadas',
+      html: `<div class="aviso error">${esc(j.error)}</div><div class="fl-conflictos">${j.conflictos.map((c) => `<a href="/reservas/${c.id}" target="_blank"><span class="folio">${esc(c.folio)}</span><span class="peq">${fechaHora(c.inicio)} → ${fechaHora(c.fin)}</span><span class="chip ${c.estado === 'en_curso' ? 'st-en_curso' : 'st-confirmada'}" style="margin-left:auto">${c.estado === 'en_curso' ? 'En curso' : 'Confirmada'}</span></a>`).join('')}</div>
+        <p class="peq muted">Lo ideal es reasignar esas reservas a otro vehículo de la misma categoría desde Reservas. Si confirmas igual, quedarán sin vehículo disponible en esas fechas.</p>`,
+      botones: [{ texto: 'Cancelar' }, { texto: 'Enviar igual', clase: 'peligro', valor: true }]
+    });
+    if (ok) return enviarTaller(o, true, fin);
+    return;
+  }
+  if (!resp.ok) return toastError(new Error(j.error || 'No se pudo enviar a taller'));
+  toast(j.conflictos?.length ? `En taller. Ojo: reservas afectadas ${j.conflictos.join(', ')}` : `${patente(o.patente)} en taller y bloqueado hasta el ${fecha(j.bloqueo_hasta)}`, j.conflictos?.length ? 'error' : 'ok');
+  cargar();
+}
+
+async function terminar(o) {
+  const r = await modal({
+    titulo: `Terminar ${o.folio} · ${patente(o.patente)}`,
+    html: `<p>${esc(o.motivo)}</p><div class="fl-form dos">
+      <label class="etiqueta">Costo final<input class="campo" type="number" min="0" step="1000" name="costo" value="${o.costo || ''}"></label>
+      <label class="etiqueta">Kilometraje al terminar<input class="campo" type="number" min="0" name="km" value="${o.km_actual ?? ''}"><span class="fl-chico">según la plataforma GPS; corrígelo si no coincide</span></label>
+      ${o.tipo === 'revision_tecnica' ? '<label class="etiqueta">Nueva revisión técnica vence<input class="campo" type="date" name="venc_revision_tecnica"></label>' : ''}
+      <label class="etiqueta ${o.tipo === 'revision_tecnica' ? '' : 'todo'}" style="grid-column:1/-1">Notas del taller<textarea class="campo" name="notas" rows="2">${esc(o.notas || '')}</textarea></label></div>
+      <p class="peq muted">${o.tipo === 'preventiva' ? 'Se registra como última mantención (km y fecha) y se calcula la próxima. ' : ''}El vehículo queda disponible y se libera el bloqueo del calendario.</p>`,
+    botones: [{ texto: 'Cancelar' }, { texto: 'Terminar orden', clase: 'primario', accion: async (cu) => {
+      try { return await api(`ordenes-trabajo/${o.id}/estado`, { body: { estado: 'terminada', ...leerForm(cu) } }); } catch (e) { return marcarError(cu, e.campo, e.message); }
+    } }]
+  });
+  if (r) { toast(`${o.folio} terminada · ${patente(o.patente)} disponible`, 'ok'); cargar(); }
+}
+
+async function anular(o) {
+  const r = await modal({ titulo: `Anular ${o.folio}`, html: '<label class="etiqueta">Motivo<textarea class="campo" name="notas" rows="2" placeholder="Ej.: se reprograma, el taller no tiene repuestos"></textarea></label>',
+    botones: [{ texto: 'Volver' }, { texto: 'Anular orden', clase: 'peligro', accion: (cu) => api(`ordenes-trabajo/${o.id}/estado`, { body: { estado: 'anulada', notas: leerForm(cu).notas } }) }] });
+  if (r) { toast('Orden anulada', 'ok'); cargar(); }
+}
+
+await cargar();
+const crear = Number(params.get('crear'));
+if (crear && EDITA) {
+  VEH = await api('vehiculos');
+  const v = VEH.find((x) => x.id === crear);
+  const m = v?.mantencion;
+  formOt(null, { vehiculo_id: crear, tipo: 'preventiva', motivo: m?.proxima_km ? `Mantención ${miles(m.proxima_km)} km` : '', km_programado: m?.proxima_km ?? null });
+  history.replaceState(null, '', location.pathname);
+}
+</script>
+</body>
+</html>

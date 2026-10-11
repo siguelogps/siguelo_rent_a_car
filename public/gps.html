@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Plataforma GPS</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/gps.css">
+</head>
+<body>
+<main>
+  <div class="pagina-cab">
+    <div><h1>Plataforma GPS</h1><p id="estado-linea">Cargando…</p></div>
+    <div class="acciones">
+      <button type="button" class="btn" id="btn-unidades" hidden>Asignar unidades</button>
+      <button type="button" class="btn primario" id="btn-sincronizar" hidden>Sincronizar ahora</button>
+    </div>
+  </div>
+  <div class="kpis" id="kpis"></div>
+
+  <div class="tablero gps-tablero">
+    <section class="tarjeta lista" aria-label="Vehículos">
+      <div class="lista-cab">
+        <input class="campo" id="buscar" type="search" placeholder="Buscar patente, cliente o modelo…" autocomplete="off" aria-label="Buscar vehículo">
+        <div class="gps-filtros" id="filtros" role="group" aria-label="Filtrar"></div>
+      </div>
+      <div class="lista-cuerpo" id="lista"></div>
+    </section>
+    <section class="mapa-caja gps-mapa-caja" aria-label="Mapa de la flota">
+      <div id="mapa"></div>
+      <button type="button" class="btn peq leyenda-toggle" id="btn-leyenda">Leyenda</button>
+      <div class="leyenda" id="leyenda">
+        <span><i style="background:#0F5F58"></i> Arrendado</span><span><i style="background:#1E7B3A"></i> Disponible</span>
+        <span><i style="background:#1E3A8A"></i> Reservado</span><span><i style="background:#D97706"></i> En mantención</span>
+        <span><i style="background:#B42318"></i> Fuera de servicio / atrasado</span><span><i style="background:#fff;border:2px dashed #5B6370"></i> Sin señal (+6 h)</span>
+      </div>
+      <div class="gps-actualizado" id="actualizado"><span class="rc-gps-punto"></span><span>—</span></div>
+    </section>
+    <section class="tarjeta detalle gps-detalle flotante oculto-movil" id="detalle" aria-label="Detalle del vehículo">
+      <div class="detalle-vacio">Elige un vehículo en el mapa o en la lista para ver su posición, el contrato en curso y la inmovilización remota.</div>
+    </section>
+  </div>
+
+  <div class="columnas-2">
+    <div class="tarjeta">
+      <div class="bloque"><h2><span>Alertas <span class="muted peq" id="alertas-n"></span></span><label class="rc-fila peq muted"><input type="checkbox" id="alertas-todas"> Ver atendidas</label></h2>
+        <div class="gps-alertas" id="alertas"></div></div>
+    </div>
+    <div class="tarjeta">
+      <div class="bloque"><h2>Bitácora de inmovilizaciones</h2><p class="ayuda">Toda solicitud requiere la confirmación de otro usuario administrador y solo se envía con el vehículo detenido.</p></div>
+      <div class="tabla-env"><table class="tabla gps-bitacora"><thead><tr><th>Fecha</th><th>Vehículo</th><th>Acción y motivo</th><th>Estado</th></tr></thead><tbody id="bitacora"></tbody></table></div>
+    </div>
+  </div>
+</main>
+<script src="/vendor/leaflet/leaflet.js"></script>
+<script type="module">
+import { iniciarPagina, api, esc, fecha, hora, fechaHora, pat, patente, chipEstado, modal, toast, toastError, miles, leerForm } from '/comun.js';
+
+await iniciarPagina({ activo: 'gps', titulo: 'Plataforma GPS' });
+const $ = (id) => document.getElementById(id);
+const COLORES = { arrendado: '#0F5F58', disponible: '#1E7B3A', reservado: '#1E3A8A', mantencion: '#D97706', fuera_servicio: '#B42318' };
+const TIPOS_ALERTA = { geocerca: 'Fuera de la zona permitida', velocidad: 'Exceso de velocidad', detenido_fuera_horario: 'Detenido fuera de horario', sin_senal: 'Sin señal', combustible: 'Combustible' };
+const ESTADOS_INMOV = { solicitada: 'Esperando confirmación', confirmada: 'Esperando que se detenga', enviada: 'Enviada', simulada: 'Simulada (marcha blanca)', rechazada: 'Rechazada', fallida: 'Fallida', cancelada: 'Cancelada' };
+const ICONO_ALERTA = {
+  geocerca: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4h16v16H4z" stroke-dasharray="3 3"/><path d="M15 12h7M19 9l3 3-3 3"/></svg>',
+  velocidad: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 18a8 8 0 1 1 16 0"/><path d="M12 18l4-6"/></svg>',
+  detenido_fuera_horario: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+  sin_senal: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 8.5a15 15 0 0 1 20 0M5 12a10 10 0 0 1 14 0M8.5 15.5a5 5 0 0 1 7 0"/><path d="M3 3l18 18"/></svg>',
+  combustible: '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 21V5a2 2 0 0 1 2-2h7a2 2 0 0 1 2 2v16M3 21h13M15 9h2a2 2 0 0 1 2 2v6a1.5 1.5 0 0 0 3 0V8l-3-3"/></svg>'
+};
+
+let estado = null, vehiculos = [], seleccion = null, filtro = 'todos', marcadores = new Map(), mapa = null, primeraVez = true;
+const sinSenal = (v) => !v.gps_actualizado_en || Date.now() - new Date(v.gps_actualizado_en) > 6 * 3600e3;
+const colorDe = (v) => (v.atrasada ? COLORES.fuera_servicio : COLORES[v.estado] || '#5B6370');
+const hace = (d) => { if (!d) return 'sin datos'; const m = Math.round((Date.now() - new Date(d)) / 60e3); return m < 1 ? 'recién' : m < 60 ? `hace ${m} min` : m < 1440 ? `hace ${Math.floor(m / 60)} h` : `hace ${Math.floor(m / 1440)} d`; };
+const nivel = (n) => (n == null ? '—' : `<span class="rc-comb" title="${n}/8">${Array.from({ length: 8 }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</span>`);
+const chipInmov = (e) => `<span class="chip gps-st-${e}">${esc(ESTADOS_INMOV[e] || e)}</span>`;
+
+// ── Mapa ──
+function iniciarMapa() {
+  mapa = L.map('mapa', { zoomControl: false, attributionControl: true }).setView([-33.45, -70.66], 6);
+  L.control.zoom({ position: 'topright', zoomInTitle: 'Acercar', zoomOutTitle: 'Alejar' }).addTo(mapa);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; colaboradores de <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }).addTo(mapa);
+}
+function icono(v, sel) {
+  const mueve = (v.gps_velocidad || 0) > 0;
+  const cls = ['pin', sinSenal(v) ? 'sin' : '', sel ? 'sel' : '', v.alertas ? 'gps-pin-alerta' : '', v.gps_inmovilizado ? 'gps-inmov' : ''].filter(Boolean).join(' ');
+  return L.divIcon({ className: 'pin-envoltura', iconSize: sel ? [44, 44] : [32, 32], iconAnchor: sel ? [22, 22] : [16, 16], html: `<div class="${cls}" style="--c:${colorDe(v)}">${mueve ? v.gps_velocidad : 'P'}</div>` });
+}
+function pintarMapa() {
+  const vistos = new Set();
+  for (const v of vehiculos) {
+    if (v.gps_lat == null || v.gps_lng == null) continue;
+    vistos.add(v.id);
+    let m = marcadores.get(v.id);
+    if (!m) {
+      m = L.marker([v.gps_lat, v.gps_lng], { icon: icono(v, v.id === seleccion), keyboard: true, title: patente(v.patente) }).addTo(mapa);
+      m.bindTooltip(patente(v.patente), { permanent: true, direction: 'bottom', offset: [0, 14], className: 'gps-etiqueta' });
+      m.on('click', () => elegir(v.id));
+      marcadores.set(v.id, m);
+    } else { m.setLatLng([v.gps_lat, v.gps_lng]); m.setIcon(icono(v, v.id === seleccion)); }
+    m.setZIndexOffset(v.id === seleccion ? 1000 : 0);
+  }
+  for (const [id, m] of marcadores) if (!vistos.has(id)) { m.remove(); marcadores.delete(id); }
+  if (primeraVez) {
+    const pts = vehiculos.filter((v) => v.gps_lat != null).map((v) => [v.gps_lat, v.gps_lng]);
+    if (pts.length) mapa.fitBounds(pts, { padding: [40, 40], maxZoom: 12 });
+    primeraVez = false;
+  }
+}
+
+// ── Lista y filtros ──
+const FILTROS = [
+  ['todos', 'Todos', () => true], ['arrendado', 'Arrendados', (v) => !!v.reserva_id || v.estado === 'arrendado'], ['disponible', 'Disponibles', (v) => v.estado === 'disponible'],
+  ['movimiento', 'En movimiento', (v) => (v.gps_velocidad || 0) > 0 && !sinSenal(v)], ['alertas', 'Con alertas', (v) => v.alertas > 0], ['sin_senal', 'Sin señal', sinSenal]
+];
+function pintarLista() {
+  $('filtros').innerHTML = FILTROS.map(([k, n, f]) => `<button type="button" class="filtro" data-f="${k}" aria-pressed="${filtro === k}">${n} <span class="n">${vehiculos.filter(f).length}</span></button>`).join('');
+  const txt = $('buscar').value.trim().toUpperCase().replace(/[^A-Z0-9 ÁÉÍÓÚÑ]/g, '');
+  const f = FILTROS.find((x) => x[0] === filtro)[2];
+  const lista = vehiculos.filter(f).filter((v) => !txt || `${v.patente} ${v.marca} ${v.modelo} ${v.cliente || ''} ${v.folio || ''}`.toUpperCase().includes(txt));
+  $('lista').innerHTML = lista.length ? lista.map((v) => {
+    const mueve = (v.gps_velocidad || 0) > 0 && !sinSenal(v);
+    return `<button type="button" class="gps-item" data-id="${v.id}" aria-pressed="${v.id === seleccion}">
+      <span class="gps-bola${sinSenal(v) ? ' sin' : ''}" style="--c:${colorDe(v)}"></span>
+      <span class="t"><span class="rc-fila">${pat(v.patente)} <b class="peq">${esc(v.marca)} ${esc(v.modelo)}</b></span><small>${v.cliente ? `${esc(v.cliente)} · ${esc(v.folio)}` : esc(v.sucursal || v.categoria || '')}</small></span>
+      <span class="d">${v.alertas ? `<span class="gps-alerta-n" title="Alertas sin atender">${v.alertas}</span>` : ''}<span class="vel${mueve ? ' mueve' : ''}">${sinSenal(v) ? 'sin señal' : mueve ? `${v.gps_velocidad} km/h` : 'detenido'}</span><small class="muted">${hace(v.gps_actualizado_en)}</small></span>
+    </button>`;
+  }).join('') : '<div class="vacio">Sin vehículos para este filtro</div>';
+}
+$('filtros').addEventListener('click', (e) => { const b = e.target.closest('[data-f]'); if (b) { filtro = b.dataset.f; pintarLista(); } });
+$('buscar').addEventListener('input', pintarLista);
+$('lista').addEventListener('click', (e) => { const b = e.target.closest('[data-id]'); if (b) elegir(Number(b.dataset.id), true); });
+$('btn-leyenda').onclick = () => $('leyenda').classList.toggle('abierta');
+
+function pintarKpis() {
+  const arr = vehiculos.filter((v) => v.reserva_id).length, mov = vehiculos.filter((v) => (v.gps_velocidad || 0) > 0 && !sinSenal(v)).length;
+  const sin = vehiculos.filter(sinSenal).length, conGps = vehiculos.filter((v) => v.gps_unidad_id).length;
+  $('kpis').innerHTML = `
+    <div class="kpi"><span>Con unidad GPS</span><b>${conGps}<small class="muted"> / ${vehiculos.length}</small></b><small>vehículos de la flota</small></div>
+    <div class="kpi"><span>En arriendo</span><b>${arr}</b><small>${mov} en movimiento ahora</small></div>
+    <div class="kpi"><span>Alertas sin atender</span><b>${estado.alertas_pendientes}</b><small${estado.alertas_pendientes ? ' class="mal"' : ''}>${estado.alertas_pendientes ? 'revisar abajo' : 'todo en orden'}</small></div>
+    <div class="kpi"><span>Sin señal (+6 h)</span><b>${sin}</b><small${sin ? ' class="mal"' : ''}>${sin ? 'revisar equipo o batería' : 'todos reportando'}</small></div>`;
+}
+
+// ── Detalle ──
+async function elegir(id, centrar = false) {
+  seleccion = id;
+  pintarLista(); pintarMapa();
+  const v = vehiculos.find((x) => x.id === id);
+  if (centrar && v?.gps_lat != null) mapa.setView([v.gps_lat, v.gps_lng], Math.max(mapa.getZoom(), 13));
+  $('detalle').classList.remove('oculto-movil');
+  await pintarDetalle();
+}
+function spark(muestras) {
+  const kms = muestras.filter((m) => m.km != null);
+  if (kms.length < 2) return '';
+  const min = kms[0].km, max = kms[kms.length - 1].km || min + 1, t0 = new Date(kms[0].leido_en).getTime(), t1 = new Date(kms[kms.length - 1].leido_en).getTime() || t0 + 1;
+  const pts = kms.map((m) => `${((new Date(m.leido_en) - t0) / (t1 - t0 || 1) * 100).toFixed(1)},${(40 - ((m.km - min) / (max - min || 1)) * 36).toFixed(1)}`).join(' ');
+  return `<svg class="gps-spark" viewBox="0 0 100 42" preserveAspectRatio="none" aria-hidden="true"><polygon points="0,42 ${pts} 100,42"/><polyline points="${pts}"/></svg>`;
+}
+function bloqueInmovilizacion(d) {
+  const p = d.inmovilizaciones.find((i) => ['solicitada', 'confirmada'].includes(i.estado));
+  const ultima = p || d.inmovilizaciones[0];
+  const accionSugerida = d.gps_inmovilizado ? 'liberar' : 'inmovilizar';
+  let html = '';
+  if (p) {
+    const paso = p.estado === 'solicitada' ? 2 : 3;
+    const puedoConfirmar = estado.puede.confirmar && p.solicitado_por !== estado.usuario_id;
+    html += `<div class="gps-inmov${p.estado === 'confirmada' ? ' espera' : ''}">
+      <h4><span>${p.accion === 'inmovilizar' ? 'Inmovilización' : 'Liberación'} solicitada</span>${chipInmov(p.estado)}</h4>
+      <div class="gps-pasos"><div class="hecho"><i>1</i>Solicitud</div><div class="${paso > 2 ? 'hecho' : 'actual'}"><i>2</i>Confirmación de otro administrador</div><div class="${paso === 3 ? 'actual' : ''}"><i>3</i>Envío con el vehículo detenido</div></div>
+      <p><b>Motivo:</b> ${esc(p.motivo)}<br><span class="muted peq">Solicitó ${esc(p.solicitado_nombre)} · ${fechaHora(p.creado_en)}</span></p>
+      ${p.estado === 'solicitada' ? (puedoConfirmar
+        ? `<p class="peq">Para confirmar, escribe la patente del vehículo:</p><div class="gps-confirmar"><input class="campo" id="conf-patente" placeholder="${esc(patente(d.patente))}" autocomplete="off" aria-label="Patente"><button type="button" class="btn ${p.accion === 'inmovilizar' ? 'oscuro' : 'primario'}" data-confirmar="${p.id}">Confirmar</button></div>
+           <button type="button" class="btn peq peligro" data-cancelar="${p.id}">Rechazar solicitud</button>`
+        : `<p class="aviso neutro peq">${p.solicitado_por === estado.usuario_id ? 'Debe confirmarla <b>otro</b> usuario administrador (doble validación).' : 'Solo un administrador puede confirmarla.'}</p>${p.solicitado_por === estado.usuario_id ? `<button type="button" class="btn peq" data-cancelar="${p.id}">Cancelar solicitud</button>` : ''}`)
+        : `<p class="aviso info peq">El vehículo está en movimiento: se enviará solo detenido. La plataforma lo revisa cada 2 minutos.</p>${estado.puede.inmovilizar ? `<div class="rc-fila"><button type="button" class="btn peq" data-reintentar="${p.id}">Reintentar ahora</button><button type="button" class="btn peq peligro" data-cancelar="${p.id}">Cancelar</button></div>` : ''}`}
+    </div>`;
+  } else if (estado.puede.inmovilizar) {
+    html += `<p class="ayuda peq">Solo con confirmación de un segundo administrador y con el vehículo detenido.${estado.integracion.marcha_blanca ? ' En marcha blanca la orden queda <b>simulada</b>.' : ''}</p>
+      <button type="button" class="btn ${accionSugerida === 'inmovilizar' ? 'oscuro' : 'primario'}" data-solicitar="${accionSugerida}" ${d.gps_unidad_id ? '' : 'disabled'}>${accionSugerida === 'inmovilizar' ? 'Solicitar inmovilización' : 'Solicitar liberación'}</button>
+      ${d.gps_unidad_id ? '' : '<p class="peq muted">El vehículo no tiene unidad GPS asignada.</p>'}`;
+  }
+  if (ultima?.eventos?.length) html += `<details${p ? ' open' : ''}><summary class="peq b">Pasos de la última solicitud</summary><ul class="gps-eventos" style="margin-top:8px">${ultima.eventos.map((e) => `<li class="${esc(e.tipo)}"><span>${esc(e.detalle || e.tipo)}<small>${esc(e.usuario)} · ${fechaHora(e.en)}</small></span></li>`).join('')}</ul></details>`;
+  return html || '<p class="muted peq">Tu rol no puede solicitar inmovilizaciones.</p>';
+}
+async function pintarDetalle() {
+  if (!seleccion) return;
+  const caja = $('detalle');
+  let d;
+  try { d = await api(`gps/vehiculos/${seleccion}`); } catch (e) { caja.innerHTML = `<div class="detalle-vacio">${esc(e.message)}</div>`; return; }
+  const rec = d.recorrido;
+  const alertas = d.alertas_lista.filter((a) => !a.atendida);
+  const comb = d.gps_combustible ?? d.combustible_nivel;
+  caja.innerHTML = `
+    <div class="detalle-cab"><div>${pat(d.patente, true)}<h2>${esc(d.marca)} ${esc(d.modelo)} ${d.anio || ''}</h2>
+      <div class="rc-fila">${chipEstado(d.atrasada ? 'atrasada' : d.estado, d.atrasada ? 'Atrasado' : null)}${d.gps_inmovilizado ? '<span class="chip gps-inmovilizado">Inmovilizado</span>' : ''}${sinSenal(d) ? '<span class="chip error">Sin señal</span>' : ''}</div></div>
+      <button type="button" class="btn-icono cerrar" data-cerrar aria-label="Cerrar">✕</button></div>
+    <div class="sec">
+      <div class="gps-cifras">
+        <div class="gps-cifra"><span>Velocidad</span><b>${d.gps_velocidad ?? '—'} <small>km/h</small></b><span>${d.gps_motor == null ? 'Motor sin dato' : d.gps_motor ? 'Motor encendido' : 'Motor apagado'}</span></div>
+        <div class="gps-cifra"><span>Última posición</span><b style="font-size:15px">${d.gps_actualizado_en ? hora(d.gps_actualizado_en) : '—'}</b><span>${d.gps_actualizado_en ? `${fecha(d.gps_actualizado_en)} · ${hace(d.gps_actualizado_en)}` : 'sin datos'}</span></div>
+        <div class="gps-cifra"><span class="origen"><span class="rc-gps-punto${d.gps_km == null ? ' off' : ''}"></span>Kilometraje real</span><b>${miles(d.gps_km ?? d.km)} <small>km</small></b><span>${d.gps_km == null ? 'según registro' : 'odómetro de la plataforma GPS'}</span></div>
+        <div class="gps-cifra"><span class="origen"><span class="rc-gps-punto${d.gps_combustible == null ? ' off' : ''}"></span>Combustible real</span><b>${comb ?? '—'}<small>/8</small></b>${nivel(comb)}</div>
+      </div>
+      ${d.gps_lat != null ? `<span class="peq muted mono">${d.gps_lat.toFixed(5)}, ${d.gps_lng.toFixed(5)}</span>` : ''}
+    </div>
+    <div class="sec"><h3>Contrato en curso</h3>${d.reserva_id ? `
+      <div class="rc-entre"><div><a href="/reservas/${d.reserva_id}" class="b">${esc(d.folio)}</a> · ${esc(d.cliente)}<br><span class="peq muted">Retiro ${fechaHora(d.retiro_real || d.inicio)} · devolución ${fechaHora(d.fin)}</span></div>${d.atrasada ? chipEstado('atrasada', 'Atrasada') : ''}</div>
+      ${d.cliente_telefono ? `<a class="btn peq" href="tel:${esc(d.cliente_telefono)}">Llamar al cliente</a>` : ''}
+      ${rec?.inicio ? `<div class="gps-recorrido"><div><span>Al retiro · ${fecha(rec.inicio.en)}</span><b>${miles(rec.inicio.km)} km</b><span>combustible ${rec.inicio.combustible ?? '—'}/8</span></div><div class="flecha">→</div>
+        <div><span>${rec.fin?.actual ? 'Ahora' : 'Al final'}</span><b>${rec.fin ? `${miles(rec.fin.km)} km` : '—'}</b><span>combustible ${rec.fin?.combustible ?? '—'}/8</span></div></div>
+        <div class="gps-total"><span>Recorrido del contrato (plataforma GPS)</span><b>${miles(rec.km_recorridos ?? 0)} km</b></div>${spark(rec.muestras)}` : '<p class="muted peq">Aún no hay lecturas de la plataforma GPS para este contrato.</p>'}`
+    : `<p class="muted peq">Sin contrato en curso.${d.proxima_reserva ? ` Próxima: <a href="/reservas/${d.proxima_reserva.id}">${esc(d.proxima_reserva.folio)}</a> · ${esc(d.proxima_reserva.cliente)} · ${fechaHora(d.proxima_reserva.inicio)}` : ''}</p>`}</div>
+    ${alertas.length ? `<div class="sec"><h3>Alertas sin atender</h3><div class="gps-alertas">${alertas.map(htmlAlerta).join('')}</div></div>` : ''}
+    <div class="sec"><h3>Inmovilización remota</h3>${bloqueInmovilizacion(d)}</div>`;
+}
+
+const detalle = $('detalle');
+detalle.addEventListener('click', async (e) => {
+  const t = e.target;
+  if (t.closest('[data-cerrar]')) { detalle.classList.add('oculto-movil'); seleccion = null; pintarLista(); pintarMapa(); return; }
+  const sol = t.closest('[data-solicitar]');
+  if (sol) return solicitar(sol.dataset.solicitar);
+  const conf = t.closest('[data-confirmar]');
+  if (conf) {
+    const p = $('conf-patente').value;
+    if (!p.trim()) { toast('Escribe la patente para confirmar', 'error'); $('conf-patente').focus(); return; }
+    conf.disabled = true;
+    try { const r = await api(`gps/inmovilizaciones/${conf.dataset.confirmar}/confirmar`, { body: { patente: p } }); toast(r.mensaje || 'Confirmada', r.en_movimiento ? 'error' : 'ok'); }
+    catch (err) { toastError(err); conf.disabled = false; return; }
+    return recargar();
+  }
+  const rei = t.closest('[data-reintentar]');
+  if (rei) { rei.disabled = true; try { const r = await api(`gps/inmovilizaciones/${rei.dataset.reintentar}/reintentar`, { body: {} }); toast(r.mensaje, r.en_movimiento ? 'error' : 'ok'); } catch (err) { toastError(err); } return recargar(); }
+  const can = t.closest('[data-cancelar]');
+  if (can) {
+    const r = await modal({ titulo: 'Cancelar o rechazar la solicitud', html: '<label class="etiqueta">Motivo<textarea class="campo" name="motivo" placeholder="Ej.: el cliente ya devolvió el vehículo"></textarea></label>', botones: [{ texto: 'Volver' }, { texto: 'Cancelar solicitud', clase: 'peligro', accion: async (c) => api(`gps/inmovilizaciones/${can.dataset.cancelar}/cancelar`, { body: leerForm(c) }) }] });
+    if (r) { toast('Solicitud cerrada'); recargar(); }
+    return;
+  }
+  const at = t.closest('[data-atender]');
+  if (at) return atender(at.dataset.atender);
+});
+
+async function solicitar(accion) {
+  const v = vehiculos.find((x) => x.id === seleccion);
+  const r = await modal({
+    titulo: accion === 'inmovilizar' ? `Solicitar inmovilización de ${patente(v.patente)}` : `Solicitar liberación de ${patente(v.patente)}`,
+    html: `<p class="aviso info">${accion === 'inmovilizar' ? 'La orden corta el motor del vehículo.' : 'La orden vuelve a habilitar el motor.'} Otro <b>administrador</b> debe confirmarla escribiendo la patente, y solo se envía cuando el vehículo está <b>detenido</b>.</p>
+      <label class="etiqueta">Motivo (queda en la bitácora)<textarea class="campo" name="motivo" required placeholder="${accion === 'inmovilizar' ? 'Ej.: arriendo vencido y el cliente no contesta' : 'Ej.: el cliente regularizó el pago'}"></textarea></label>`,
+    botones: [{ texto: 'Cancelar' }, { texto: 'Enviar solicitud', clase: accion === 'inmovilizar' ? 'oscuro' : 'primario', accion: async (c) => api('gps/inmovilizaciones', { body: { vehiculo_id: v.id, accion, ...leerForm(c) } }) }]
+  });
+  if (r) { toast('Solicitud registrada: falta la confirmación de otro administrador', 'ok'); recargar(); }
+}
+
+// ── Alertas ──
+function htmlAlerta(a) {
+  return `<div class="gps-alerta${a.atendida ? ' atendida' : ''}"><span class="ic ${a.tipo}">${ICONO_ALERTA[a.tipo] || ''}</span>
+    <div class="tx"><span class="rc-fila">${a.patente ? pat(a.patente) : ''}<b>${esc(TIPOS_ALERTA[a.tipo])}</b></span><span>${esc(a.detalle || '')}</span>
+      <small>${fechaHora(a.ocurrido_en)}${a.folio ? ` · ${esc(a.folio)} · ${esc(a.cliente || '')}` : ''}</small>
+      ${a.atendida ? `<span class="nota">✓ ${esc(a.nota || '')} — ${esc(a.atendida_nombre || '')} ${fechaHora(a.atendida_en)}</span>` : ''}</div>
+    ${!a.atendida && (estado.puede.editar || estado.puede.inmovilizar) ? `<button type="button" class="btn peq" data-atender="${a.id}">Atender</button>` : ''}</div>`;
+}
+async function pintarAlertas() {
+  const lista = await api(`gps/alertas${$('alertas-todas').checked ? '?todas=1' : ''}`);
+  const pend = lista.filter((a) => !a.atendida).length;
+  $('alertas-n').textContent = pend ? `· ${pend} sin atender` : '';
+  $('alertas').innerHTML = lista.length ? lista.map(htmlAlerta).join('') : '<div class="vacio">Sin alertas. La flota está en orden.</div>';
+}
+$('alertas-todas').onchange = pintarAlertas;
+$('alertas').addEventListener('click', (e) => { const b = e.target.closest('[data-atender]'); if (b) atender(b.dataset.atender); });
+async function atender(id) {
+  const r = await modal({ titulo: 'Atender alerta', html: '<label class="etiqueta">¿Qué se hizo?<textarea class="campo" name="nota" placeholder="Ej.: se llamó al cliente, confirma que vuelve hoy"></textarea></label>',
+    botones: [{ texto: 'Cancelar' }, { texto: 'Marcar atendida', clase: 'primario', accion: async (c) => api(`gps/alertas/${id}/atender`, { body: leerForm(c) }) }] });
+  if (r) { toast('Alerta atendida', 'ok'); recargar(); }
+}
+
+// ── Bitácora ──
+async function pintarBitacora() {
+  const lista = await api('gps/inmovilizaciones');
+  $('bitacora').innerHTML = lista.length ? lista.map((i) => `<tr>
+    <td class="mono peq">${fecha(i.creado_en)}<small>${hora(i.creado_en)}</small></td>
+    <td>${pat(i.patente)}${i.folio ? `<small>${esc(i.folio)}</small>` : ''}</td>
+    <td>${i.accion === 'inmovilizar' ? 'Inmovilizar' : 'Liberar'}<small title="${esc(i.motivo)}">${esc(i.motivo.length > 70 ? `${i.motivo.slice(0, 68)}…` : i.motivo)}</small><small>Solicitó ${esc(i.solicitado_nombre)} · ${i.confirmado_nombre ? `confirmó ${esc(i.confirmado_nombre)}` : 'sin confirmar'}</small></td>
+    <td>${chipInmov(i.estado)}${i.velocidad_al_enviar ? `<small>${i.velocidad_al_enviar} km/h al intentar</small>` : i.respuesta ? `<small>${esc(i.respuesta.slice(0, 70))}</small>` : ''}</td></tr>`).join('') : '<tr><td colspan="4" class="vacio">Sin solicitudes de inmovilización</td></tr>';
+}
+
+// ── Estado, unidades y sincronización ──
+function pintarEstado() {
+  const i = estado.integracion, s = estado.sincronizacion;
+  const partes = [];
+  partes.push(i.activa && i.configurada ? '<span class="chip ok">● Conectada</span>' : i.configurada ? '<span class="chip aviso">Integración apagada</span>' : '<span class="chip sin">Sin conexión configurada · se muestra la última posición guardada</span>');
+  if (i.marcha_blanca) partes.push('<span class="chip rc-marcha">Marcha blanca: inmovilización simulada</span>');
+  if (s) partes.push(s.ok ? `<span class="peq">Sincronizado ${hace(s.en)}</span>` : `<span class="peq" style="color:var(--red)">Error al sincronizar: ${esc(s.error)}</span>`);
+  partes.push(`<span class="peq muted">Velocidad máxima ${i.velocidad_maxima} km/h · horario ${esc(i.horario)}${i.geocerca ? ` · zona «${esc(i.geocerca)}»` : ''}</span>`);
+  $('estado-linea').innerHTML = `<span class="rc-fila">${partes.join('')}</span>`;
+  $('btn-unidades').hidden = $('btn-sincronizar').hidden = !estado.puede.editar;
+}
+$('btn-sincronizar').onclick = async (e) => {
+  e.target.disabled = true;
+  try { const r = await api('gps/sincronizar', { body: {} }); toast(`Sincronizado: ${r.emparejadas} de ${r.unidades} unidades${r.alertas ? ` · ${r.alertas} alertas nuevas` : ''}`, 'ok'); await recargar(); }
+  catch (err) { toastError(err); } finally { e.target.disabled = false; }
+};
+$('btn-unidades').onclick = async () => {
+  let d;
+  try { d = await api('gps/unidades'); } catch (e) { return toastError(e); }
+  const opciones = (sel) => `<option value="">— Sin vehículo —</option>${d.vehiculos.map((v) => `<option value="${v.id}"${v.id === sel ? ' selected' : ''}>${esc(patente(v.patente))} · ${esc(v.marca)} ${esc(v.modelo)}</option>`).join('')}`;
+  await modal({
+    titulo: 'Asignar unidades de la plataforma GPS', ancho: true,
+    html: `<p class="ayuda">Cada unidad de la plataforma GPS se une a un vehículo. Si el nombre de la unidad contiene la patente, se sugiere solo.</p>
+      <div class="tabla-env" style="border:1px solid var(--line)"><table class="tabla gps-unidades"><thead><tr><th>Unidad</th><th>Último reporte</th><th>Vehículo</th><th></th></tr></thead><tbody>
+      ${d.unidades.map((u) => `<tr data-u="${esc(u.id)}" data-n="${esc(u.nombre)}"><td><b>${esc(u.nombre)}</b><br><span class="mono peq muted">ID ${esc(u.id)}</span></td><td class="peq">${u.en ? fechaHora(u.en) : '—'}</td>
+        <td><select class="campo">${opciones(u.vehiculo_id || u.sugerido?.id || null)}</select>${!u.vehiculo_id && u.sugerido ? '<br><span class="chip marca">Sugerido por patente</span>' : ''}</td>
+        <td><button type="button" class="btn peq" data-guardar>${u.vehiculo_id ? 'Guardar' : 'Asignar'}</button></td></tr>`).join('') || '<tr><td colspan="4" class="vacio">La plataforma no devolvió unidades</td></tr>'}
+      </tbody></table></div>`,
+    alAbrir: (c) => c.addEventListener('click', async (e) => {
+      const b = e.target.closest('[data-guardar]'); if (!b) return;
+      const tr = b.closest('tr'); const vid = tr.querySelector('select').value;
+      try {
+        if (vid) await api('gps/unidades/vincular', { body: { vehiculo_id: Number(vid), unidad_id: tr.dataset.u, nombre: tr.dataset.n } });
+        else { const actual = d.unidades.find((x) => x.id === tr.dataset.u); if (actual?.vehiculo_id) await api('gps/unidades/vincular', { body: { vehiculo_id: actual.vehiculo_id, unidad_id: null } }); }
+        toast('Unidad asignada', 'ok'); b.textContent = 'Guardado ✓';
+      } catch (err) { toastError(err); }
+    })
+  });
+  recargar();
+};
+
+async function recargar() {
+  try {
+    [estado, vehiculos] = await Promise.all([api('gps/estado'), api('gps/vehiculos')]);
+    pintarEstado(); pintarKpis(); pintarLista(); pintarMapa();
+    $('actualizado').innerHTML = `<span class="rc-gps-punto"></span><span>Actualizado ${hora(new Date())}</span>`;
+    const escribiendo = document.activeElement?.id === 'conf-patente' || $('conf-patente')?.value;
+    if (seleccion && !escribiendo && !document.querySelector('.modal-fondo')) await pintarDetalle();
+    await Promise.all([pintarAlertas(), pintarBitacora()]);
+  } catch (e) { toastError(e); }
+}
+
+iniciarMapa();
+await recargar();
+const pedido = new URLSearchParams(location.search).get('vehiculo');
+if (pedido) elegir(Number(pedido), true);
+setInterval(() => { if (!document.hidden) recargar(); }, 30000);
+</script>
+</body>
+</html>

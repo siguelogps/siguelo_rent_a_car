@@ -1,0 +1,25 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Entregas y devoluciones</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/patio.css">
+</head>
+<body>
+<main>
+  <div class="pt-cab">
+    <h1>Entregas y devoluciones</h1>
+    <select class="campo" id="sucursal" aria-label="Sucursal"></select>
+    <label class="pt-buscar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input class="campo" id="q" placeholder="Buscar patente, folio o cliente" autocomplete="off" inputmode="search" aria-label="Buscar patente, folio o cliente"></label>
+  </div>
+  <div class="pt-tabs" role="tablist">
+    <button type="button" class="filtro" data-tab="entregas" aria-pressed="true">Entregas <span class="n" id="n-entregas">0</span></button>
+    <button type="button" class="filtro" data-tab="devoluciones" aria-pressed="false">Devoluciones <span class="n" id="n-devoluciones">0</span></button>
+    <button type="button" class="filtro" data-tab="recientes" aria-pressed="false">Recibidas <span class="n" id="n-recientes">0</span></button>
+  </div>
+  <p class="peq muted" id="ayuda"></p>
+  <div class="pt-lista" id="lista"><div class="rc-cargando">Cargando…</div></div>
+</main>
+<script type="module" src="/js/patio-lista.js"></script>
+</body>
+</html>

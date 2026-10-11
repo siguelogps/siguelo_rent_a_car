@@ -1,0 +1,129 @@
+/* Flota, ficha del vehículo, tarifas y mantención. Prefijo fl- (lo común está en rentacar.css: rc-venc, rc-km, rc-comb…) */
+.fl-pestanas { margin-top: 2px; align-self: flex-start; max-width: 100%; }
+.fl-alertas { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.fl-alertas .rc-alerta-venc { align-items: center; min-height: 82px; }
+.fl-alertas .rc-alerta-venc > div { min-width: 0; flex: 1; }
+.fl-alertas .rc-alerta-venc .btn { margin-left: auto; flex-shrink: 0; }
+.fl-alertas .rc-alerta-venc.rojo { border-color: #F2C9C4; }
+.fl-alertas .rc-alerta-venc.ok .ic { background: var(--green-soft); color: var(--green); }
+.fl-filtros { display: flex; flex-direction: column; gap: 12px; padding: 18px 20px 14px; }
+.fl-filtros .rc-fila .campo { min-width: 0; }
+.fl-tabla td { vertical-align: middle; }
+.fl-veh { display: flex; align-items: center; gap: 10px; }
+.fl-veh > div { line-height: 1.25; min-width: 0; }
+.fl-veh b { font-weight: 500; }
+.fl-ubic { flex-wrap: nowrap; gap: 6px; }
+.fl-km-txt { color: var(--muted); }
+.fl-km-txt.pronto { color: #B45309; font-weight: 600; }
+.fl-km-txt.vencido { color: var(--red); font-weight: 600; }
+.fl-chico { font-size: 11px; color: var(--muted); }
+.fl-acciones-celda { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+.fl-num { text-align: right; }
+.tabla th.fl-num { text-align: right; }
+
+/* Formulario de vehículo */
+.fl-form-tit { font-size: 13px; font-weight: 600; color: var(--ink-2); text-transform: uppercase; letter-spacing: .05em; margin-top: 4px; }
+.fl-form { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px 14px; }
+.fl-form .doble { grid-column: span 2; }
+.fl-form .todo { grid-column: 1 / -1; }
+.fl-form .campo { width: 100%; }
+.fl-form.tres { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.fl-form.dos { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.fl-pat .campo { font-family: var(--mono); font-weight: 600; text-transform: uppercase; letter-spacing: .04em; }
+.fl-error .campo { border-color: var(--red); box-shadow: 0 0 0 3px var(--red-soft); }
+.fl-error { color: var(--red) !important; }
+.fl-check { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink); min-height: 38px; }
+.fl-estados { display: flex; flex-wrap: wrap; gap: 8px; }
+.fl-estado-op { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; font-size: 13px; }
+.fl-estado-op:has(input:checked) { border-color: var(--ink); box-shadow: inset 0 0 0 1px var(--ink); }
+
+/* Ficha del vehículo */
+.fl-volver { font-size: 13px; color: var(--muted); text-decoration: none; display: inline-flex; gap: 4px; align-items: center; margin-bottom: 4px; }
+.fl-volver:hover { color: var(--ink); }
+.fl-ficha-cab { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.fl-ficha-cab h1 { font-size: 22px; font-weight: 600; }
+.fl-ficha-cab p { color: var(--muted); font-size: 14px; }
+.fl-ficha-cab .acciones { margin-left: auto; display: flex; gap: 8px; flex-wrap: wrap; }
+.fl-vencs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.fl-venc-caja { border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+.fl-venc-caja > span { font-size: 12px; color: var(--muted); }
+.fl-venc-caja.vencido { border-color: #F2C9C4; background: #FFF8F7; }
+.fl-venc-caja.pronto { border-color: #F6D9B0; background: #FFFBF3; }
+.fl-mapa { height: 220px; border-radius: 10px; border: 1px solid var(--line); background: #E8ECEF; overflow: hidden; }
+.fl-lista-mini { display: flex; flex-direction: column; }
+.fl-lista-mini > a, .fl-lista-mini > div { display: flex; gap: 10px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line-2); color: inherit; text-decoration: none; font-size: 13px; }
+.fl-lista-mini > :last-child { border-bottom: 0; }
+.fl-lista-mini .t { display: flex; flex-direction: column; flex: 1; min-width: 0; line-height: 1.3; }
+.fl-lista-mini .t small { color: var(--muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; }
+.fl-lista-mini .d { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex-shrink: 0; }
+.fl-barras { display: flex; flex-direction: column; gap: 6px; }
+.fl-barra { display: grid; grid-template-columns: 64px minmax(0, 1fr) 96px; gap: 8px; align-items: center; font-size: 12px; }
+.fl-barra .b { height: 10px; border-radius: 3px; background: var(--line-2); overflow: hidden; }
+.fl-barra .b i { display: block; height: 100%; background: var(--teal); border-radius: 3px; }
+.fl-barra .b i.costo { background: #D97706; }
+.fl-barra .n { text-align: right; font: 600 12px var(--mono); }
+.fl-barra .m { font: 500 11px var(--mono); color: var(--muted); }
+
+/* Tarifas */
+.fl-grid-tar td { vertical-align: top; min-width: 170px; }
+.fl-grid-tar td:first-child { min-width: 150px; }
+.fl-celda-tar { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--card); cursor: pointer; text-align: left; width: 100%; font: inherit; color: inherit; }
+.fl-celda-tar:hover { border-color: var(--ink); }
+.fl-celda-tar .monto { font-size: 16px; }
+.fl-celda-tar small { font-size: 11px; color: var(--muted); line-height: 1.35; }
+.fl-celda-tar.vacia { border-style: dashed; color: var(--muted); align-items: center; justify-content: center; min-height: 76px; background: var(--soft); }
+.fl-celda-tar.vacia small { font-size: 12px; }
+.fl-th-tem { display: flex; flex-direction: column; line-height: 1.25; }
+.fl-th-tem small { font-weight: 400; font-family: var(--mono); font-size: 11px; }
+.fl-sim { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 420px); gap: 18px; align-items: start; }
+.fl-extras-sim { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 14px; }
+.fl-extra-sim { display: flex; align-items: center; gap: 8px; font-size: 13px; padding: 6px 0; }
+.fl-extra-sim span { flex: 1; min-width: 0; }
+.fl-extra-sim small { display: block; color: var(--muted); font-size: 11px; }
+.fl-extra-sim input[type=number] { width: 56px; min-height: 32px; }
+.fl-resumen-sim { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.fl-resumen-sim > div { border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; display: flex; flex-direction: column; gap: 2px; }
+.fl-resumen-sim span { font-size: 12px; color: var(--muted); }
+.fl-resumen-sim b { font: 600 14px var(--mono); }
+
+/* Mantención */
+.fl-sugeridas { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 10px; }
+.fl-sugeridas .rc-alerta-venc > div { flex: 1; min-width: 0; }
+.fl-sugeridas .btn { flex-shrink: 0; }
+.fl-conflictos { display: flex; flex-direction: column; gap: 6px; }
+.fl-conflictos a { display: flex; gap: 10px; align-items: center; padding: 8px 10px; border: 1px solid #F2C9C4; background: #FFF8F7; border-radius: 10px; text-decoration: none; color: inherit; font-size: 13px; }
+
+@media (max-width: 1180px) {
+  .fl-alertas { grid-template-columns: minmax(0, 1fr); }
+  .fl-sim { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 860px) {
+  .fl-form { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fl-form.tres { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fl-vencs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .fl-ficha-cab .acciones { margin-left: 0; width: 100%; }
+  .fl-extras-sim { grid-template-columns: minmax(0, 1fr); }
+  .fl-filtros { padding: 14px; }
+  .fl-filtros .rc-fila { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); width: 100%; }
+
+  /* Listado de flota como tarjetas en celular */
+  .fl-tabla.tarjetas thead { display: none; }
+  .fl-tabla.tarjetas, .fl-tabla.tarjetas tbody { display: block; }
+  .fl-tabla.tarjetas tr { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 12px; padding: 12px 14px; border-bottom: 1px solid var(--line); }
+  .fl-tabla.tarjetas td { padding: 0; border: 0; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+  .fl-tabla.tarjetas td[data-et]::before { content: attr(data-et); font-size: 11px; color: var(--muted); }
+  .fl-tabla.tarjetas td.ancho { grid-column: 1 / -1; }
+  .fl-tabla.tarjetas td.fl-movil-oculto { display: none; }
+  .fl-tabla.tarjetas tr:hover td { background: none; }
+}
+@media (max-width: 520px) {
+  .fl-form, .fl-form.tres, .fl-form.dos { grid-template-columns: minmax(0, 1fr); }
+  .fl-form .doble { grid-column: auto; }
+  .fl-sugeridas { grid-template-columns: minmax(0, 1fr); }
+  .fl-resumen-sim { grid-template-columns: minmax(0, 1fr); }
+  .fl-alertas .rc-alerta-venc { flex-wrap: wrap; }
+  .fl-alertas .rc-alerta-venc .btn { margin-left: 48px; }
+}
+.tabla td.mono { white-space: nowrap; }
+.fl-acciones-celda.nw { flex-wrap: nowrap; }
+

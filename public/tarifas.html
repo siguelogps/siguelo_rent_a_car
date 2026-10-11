@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Tarifas</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/flota.css">
+</head>
+<body>
+<main>
+  <div class="pagina-cab">
+    <div><h1>Tarifas</h1><p>Precios por categoría y temporada, extras, recargos y códigos de descuento. El cotizador de reservas y del portal usa estos valores.</p></div>
+    <div class="acciones" id="acciones"></div>
+  </div>
+  <div class="segmentado fl-pestanas" id="pestanas">
+    <button type="button" data-p="tarifas" aria-pressed="true">Tarifas</button>
+    <button type="button" data-p="temporadas">Temporadas</button>
+    <button type="button" data-p="extras">Extras</button>
+    <button type="button" data-p="recargos">Recargos</button>
+    <button type="button" data-p="descuentos">Códigos de descuento</button>
+    <button type="button" data-p="simulador">Simulador</button>
+  </div>
+  <section id="p-tarifas" class="tarjeta">
+    <div class="bloque"><h2>Tarifas por categoría y temporada</h2><p class="ayuda">Semana = 7 días y mes = 30 días; el cotizador aplica la combinación más barata para el cliente. Si una temporada no tiene tarifa propia para una categoría, se usa la base.</p></div>
+    <div class="tabla-env"><table class="tabla fl-grid-tar" id="grid"></table></div>
+  </section>
+  <section id="p-temporadas" class="tarjeta" hidden>
+    <div class="bloque"><h2>Temporadas</h2><p class="ayuda">Si dos temporadas se cruzan, manda la de mayor prioridad. La temporada se determina por la fecha de retiro.</p></div>
+    <div class="tabla-env"><table class="tabla"><thead><tr><th>Temporada</th><th>Desde</th><th>Hasta</th><th class="fl-num">Días</th><th class="fl-num">Prioridad</th><th>Estado</th><th class="fl-num">Tarifas</th><th></th></tr></thead><tbody id="t-tem"></tbody></table></div>
+  </section>
+  <section id="p-extras" class="tarjeta" hidden>
+    <div class="bloque"><h2>Extras</h2><p class="ayuda">Se ofrecen al reservar. El tope limita el cobro por día en arriendos largos.</p></div>
+    <div class="tabla-env"><table class="tabla"><thead><tr><th>Extra</th><th>Código</th><th>Cobro</th><th class="fl-num">Precio</th><th class="fl-num">Tope</th><th>Documento</th><th>Activo</th><th></th></tr></thead><tbody id="t-ext"></tbody></table></div>
+  </section>
+  <section id="p-recargos" class="tarjeta" hidden>
+    <div class="bloque"><h2>Recargos</h2><p class="ayuda">Devolución en otra sucursal (se usa el más específico origen → destino) y conductor joven (según la fecha de nacimiento del conductor).</p></div>
+    <div class="tabla-env"><table class="tabla"><thead><tr><th>Recargo</th><th>Tipo</th><th>Aplica a</th><th>Cobro</th><th class="fl-num">Monto</th><th>Activo</th><th></th></tr></thead><tbody id="t-rec"></tbody></table></div>
+  </section>
+  <section id="p-descuentos" class="tarjeta" hidden>
+    <div class="bloque"><h2>Códigos de descuento</h2><p class="ayuda">El descuento se aplica sobre el arriendo (no sobre extras ni recargos). La vigencia se mide con la fecha de retiro.</p></div>
+    <div class="tabla-env"><table class="tabla"><thead><tr><th>Código</th><th>Descuento</th><th>Vigencia</th><th>Usos</th><th>Activo</th><th></th></tr></thead><tbody id="t-dsc"></tbody></table></div>
+  </section>
+  <section id="p-simulador" hidden>
+    <div class="fl-sim">
+      <div class="tarjeta"><div class="bloque" id="sim-form"></div></div>
+      <div class="tarjeta"><div class="bloque"><h2>Cotización <span class="chip" id="sim-tem"></span></h2><div id="sim-res"><p class="rc-vacio">Completa los datos para cotizar</p></div></div></div>
+    </div>
+  </section>
+</main>
+<script type="module">
+import { iniciarPagina, api, esc, clp, miles, fecha, isoLocal, puede, modal, toast, toastError, leerForm, confirmar, diasHasta } from '/comun.js';
+import { marcarError } from '/js/flota-comun.js';
+
+await iniciarPagina({ activo: 'tarifas', titulo: 'Tarifas' });
+const EDITA = puede('tarifas', 'editar');
+const $ = (s) => document.querySelector(s);
+let D = null, actual = 'tarifas';
+const PEST = ['tarifas', 'temporadas', 'extras', 'recargos', 'descuentos', 'simulador'];
+
+function pestana(p) {
+  actual = p;
+  document.querySelectorAll('#pestanas button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.p === p)));
+  for (const s of PEST) $(`#p-${s}`).hidden = s !== p;
+  history.replaceState(null, '', p === 'tarifas' ? location.pathname : `#${p}`);
+  const btn = { temporadas: '+ Nueva temporada', extras: '+ Nuevo extra', recargos: '+ Nuevo recargo', descuentos: '+ Nuevo código' }[p];
+  $('#acciones').innerHTML = EDITA && btn ? `<button class="btn primario" id="b-nuevo">${btn}</button>` : '';
+  $('#b-nuevo')?.addEventListener('click', () => FORM[p]());
+  if (p === 'simulador') simulador();
+}
+$('#pestanas').onclick = (e) => { const b = e.target.closest('[data-p]'); if (b) pestana(b.dataset.p); };
+
+async function cargar() {
+  D = await api('tarifas');
+  pintarGrid(); pintarTemporadas(); pintarExtras(); pintarRecargos(); pintarDescuentos();
+}
+const sw = (tabla, x, campo = 'activo') => `<label class="switch" title="${x[campo] ? 'Activo' : 'Inactivo'}"><input type="checkbox" data-sw="${tabla}" data-id="${x.id}" data-campo="${campo}"${x[campo] ? ' checked' : ''}${EDITA ? '' : ' disabled'}><span></span></label>`;
+const btnEd = (tipo, id) => (EDITA ? `<div class="fl-acciones-celda"><button class="btn peq" data-ed="${tipo}" data-id="${id}">Editar</button><button class="btn peq peligro" data-del="${tipo}" data-id="${id}">Eliminar</button></div>` : '');
+const rango = (a, b) => (a || b ? `${a ? fecha(a) : '…'} al ${b ? fecha(b) : '…'}` : 'siempre');
+
+// ── Grilla de tarifas ──
+function pintarGrid() {
+  const cols = [{ id: null, nombre: 'Base' }, ...D.temporadas];
+  const celda = (cat, tem) => {
+    const t = D.tarifas.find((x) => x.categoria_id === cat.id && (x.temporada_id ?? null) === tem.id);
+    if (!t) return `<button class="fl-celda-tar vacia" data-cat="${cat.id}" data-tem="${tem.id ?? ''}"${EDITA ? '' : ' disabled'}><small>${tem.id ? 'Usa la base' : 'Sin tarifa'}${EDITA ? '<br>+ Definir' : ''}</small></button>`;
+    return `<button class="fl-celda-tar" data-cat="${cat.id}" data-tem="${tem.id ?? ''}"${EDITA ? '' : ' disabled'}>
+      <span><b class="monto">${clp(t.precio_dia)}</b> <small>/ día</small></span>
+      <small>${t.precio_semana ? `semana ${clp(t.precio_semana)}` : 'sin precio semanal'}${t.precio_mes ? ` · mes ${clp(t.precio_mes)}` : ''}</small>
+      <small>${t.km_libre ? 'Km libre' : `${miles(t.km_dia_incluidos)} km/día · km extra ${clp(t.precio_km_extra)}`}</small>
+      <small>Garantía ${clp(t.garantia)} · deducible ${clp(t.deducible)}</small></button>`;
+  };
+  $('#grid').innerHTML = `<thead><tr><th>Categoría</th>${cols.map((c) => `<th><span class="fl-th-tem">${esc(c.nombre)}${c.id ? `<small>${fecha(c.desde)} → ${fecha(c.hasta)}</small>` : '<small>todo el año</small>'}</span></th>`).join('')}</tr></thead>
+    <tbody>${D.categorias.map((cat) => `<tr><td><b style="font-weight:500">${esc(cat.nombre)}</b><div class="peq muted">${esc(cat.ejemplo || '')}</div>${cat.activa ? '' : '<span class="chip st-cerrada">Inactiva</span>'}</td>${cols.map((tem) => `<td>${celda(cat, tem)}</td>`).join('')}</tr>`).join('') || '<tr><td class="rc-vacio">Crea categorías en Vehículos → Categorías</td></tr>'}</tbody>`;
+}
+$('#grid').onclick = (e) => {
+  const b = e.target.closest('[data-cat]');
+  if (b && EDITA) formTarifa(Number(b.dataset.cat), b.dataset.tem ? Number(b.dataset.tem) : null);
+};
+async function formTarifa(catId, temId) {
+  const cat = D.categorias.find((c) => c.id === catId), tem = D.temporadas.find((t) => t.id === temId);
+  const t = D.tarifas.find((x) => x.categoria_id === catId && (x.temporada_id ?? null) === temId);
+  const base = D.tarifas.find((x) => x.categoria_id === catId && x.temporada_id == null);
+  const x = t || (base ? { ...base, id: null } : { km_dia_incluidos: 250 });
+  const c = (n, et, v, extra = '') => `<label class="etiqueta">${et}<input class="campo" name="${n}" type="number" min="0" step="10" value="${v ?? ''}" ${extra}></label>`;
+  const r = await modal({
+    titulo: `${cat.nombre} · ${tem ? tem.nombre : 'Tarifa base'}`,
+    html: `${!t && base && tem ? '<p class="peq muted">Se precarga con la tarifa base; ajústala para esta temporada.</p>' : ''}
+      <div class="fl-form tres">${c('precio_dia', 'Precio por día *', x.precio_dia, 'required')}${c('precio_semana', 'Precio por semana (7 días)', x.precio_semana)}${c('precio_mes', 'Precio por mes (30 días)', x.precio_mes)}</div>
+      <label class="fl-check"><span class="switch"><input type="checkbox" name="km_libre"${x.km_libre ? ' checked' : ''}><span></span></span> Kilometraje libre</label>
+      <div class="fl-form tres" id="km">${c('km_dia_incluidos', 'Km incluidos por día', x.km_dia_incluidos)}${c('precio_km_extra', 'Precio km extra', x.precio_km_extra)}</div>
+      <div class="fl-form tres">${c('garantia', 'Garantía', x.garantia, 'step="10000"')}${c('deducible', 'Deducible', x.deducible, 'step="10000"')}</div>`,
+    botones: [...(t && tem ? [{ texto: 'Quitar (usar base)', clase: 'peligro', valor: 'borrar' }] : []), { texto: 'Cancelar' }, { texto: 'Guardar', clase: 'primario', accion: async (cu) => {
+      try { return await api('tarifas', { method: 'PUT', body: { ...leerForm(cu), categoria_id: catId, temporada_id: temId } }); } catch (e) { return marcarError(cu, e.campo, e.message); }
+    } }],
+    alAbrir: (cu) => { const k = cu.querySelector('[name=km_libre]'), f = () => { cu.querySelector('#km').hidden = k.checked; }; k.onchange = f; f(); }
+  });
+  if (r === 'borrar') { await api(`tarifas/${t.id}`, { method: 'DELETE' }).catch(toastError); toast('Tarifa de temporada eliminada', 'ok'); }
+  else if (r) toast('Tarifa guardada', 'ok');
+  if (r) cargar();
+}
+
+// ── Temporadas ──
+function pintarTemporadas() {
+  const hoy = isoLocal(new Date()).fecha;
+  $('#t-tem').innerHTML = D.temporadas.map((t) => {
+    const est = t.hasta < hoy ? '<span class="chip st-cerrada">Pasada</span>' : t.desde <= hoy ? '<span class="chip ok">Vigente</span>' : `<span class="chip info">En ${diasHasta(t.desde)} días</span>`;
+    return `<tr><td><b style="font-weight:500">${esc(t.nombre)}</b></td><td class="mono">${fecha(t.desde)}</td><td class="mono">${fecha(t.hasta)}</td><td class="mono fl-num">${Math.round((Date.parse(t.hasta) - Date.parse(t.desde)) / 864e5) + 1}</td><td class="mono fl-num">${t.prioridad}</td><td>${est}</td><td class="mono fl-num">${D.tarifas.filter((x) => x.temporada_id === t.id).length}</td><td>${btnEd('temporadas', t.id)}</td></tr>`;
+  }).join('') || '<tr><td colspan="8" class="rc-vacio">Sin temporadas: se usa siempre la tarifa base</td></tr>';
+}
+const FORM = {};
+FORM.temporadas = (t = null) => crudModal('temporadas', t, t ? `Editar ${t.nombre}` : 'Nueva temporada', (x) => `<div class="fl-form">
+  <label class="etiqueta todo">Nombre *<input class="campo" name="nombre" value="${esc(x.nombre || '')}" placeholder="Temporada alta (verano)"></label>
+  <label class="etiqueta doble">Desde *<input class="campo" type="date" name="desde" value="${x.desde || ''}"></label>
+  <label class="etiqueta doble">Hasta *<input class="campo" type="date" name="hasta" value="${x.hasta || ''}"></label>
+  <label class="etiqueta doble">Prioridad<input class="campo" type="number" name="prioridad" value="${x.prioridad ?? 0}"></label></div>
+  ${t ? '' : '<p class="peq muted">Después define los precios de la temporada en la pestaña Tarifas (por defecto se usa la base).</p>'}`, { prioridad: 10 });
+
+// ── Extras ──
+function pintarExtras() {
+  $('#t-ext').innerHTML = D.extras.map((x) => `<tr><td><b style="font-weight:500">${esc(x.nombre)}</b><div class="peq muted">${esc(x.descripcion || '')}</div></td><td class="mono peq">${esc(x.codigo)}</td><td>${x.cobro === 'dia' ? 'Por día' : 'Cargo único'}</td><td class="monto fl-num">${clp(x.precio)}</td><td class="mono fl-num">${x.tope ? clp(x.tope) : '—'}</td><td>${x.requiere_documento ? '<span class="chip info">Requiere</span>' : ''}</td><td>${sw('extras', x)}</td><td>${btnEd('extras', x.id)}</td></tr>`).join('') || '<tr><td colspan="8" class="rc-vacio">Sin extras</td></tr>';
+}
+FORM.extras = (x0 = null) => crudModal('extras', x0, x0 ? `Editar ${x0.nombre}` : 'Nuevo extra', (x) => `<div class="fl-form">
+  <label class="etiqueta doble">Nombre *<input class="campo" name="nombre" value="${esc(x.nombre || '')}" placeholder="Silla de niño"></label>
+  <label class="etiqueta doble">Código<input class="campo mono" name="codigo" value="${esc(x.codigo || '')}" placeholder="se genera solo"></label>
+  <label class="etiqueta todo">Descripción<input class="campo" name="descripcion" value="${esc(x.descripcion || '')}"></label>
+  <label class="etiqueta">Cobro<select class="campo" name="cobro"><option value="dia"${x.cobro !== 'fijo' ? ' selected' : ''}>Por día</option><option value="fijo"${x.cobro === 'fijo' ? ' selected' : ''}>Cargo único</option></select></label>
+  <label class="etiqueta">Precio<input class="campo" type="number" min="0" step="500" name="precio" value="${x.precio ?? ''}"></label>
+  <label class="etiqueta">Tope por arriendo<input class="campo" type="number" min="0" step="1000" name="tope" value="${x.tope ?? ''}"></label>
+  <label class="fl-check"><input type="checkbox" name="requiere_documento"${x.requiere_documento ? ' checked' : ''}> Requiere documento</label>
+  <label class="fl-check todo"><span class="switch"><input type="checkbox" name="activo"${x.activo !== false ? ' checked' : ''}><span></span></span> Activo</label></div>
+  <p class="peq muted">Ej.: conductor adicional, silla de niño, cadenas, permiso para cruzar a Argentina.</p>`, { cobro: 'dia', activo: true });
+
+// ── Recargos ──
+const TIPO_REC = { otra_sucursal: 'Otra sucursal', conductor_joven: 'Conductor joven', fuera_horario: 'Fuera de horario' };
+function pintarRecargos() {
+  $('#t-rec').innerHTML = D.recargos.map((x) => `<tr><td><b style="font-weight:500">${esc(x.nombre)}</b></td><td>${TIPO_REC[x.tipo] || x.tipo}</td>
+    <td class="peq">${x.tipo === 'otra_sucursal' ? `${esc(x.sucursal_origen || 'Cualquier sucursal')} → ${esc(x.sucursal_destino || 'cualquier otra')}` : x.tipo === 'conductor_joven' ? `menor de ${x.edad_max} años` : 'retiro o devolución fuera del horario'}</td>
+    <td>${x.cobro === 'dia' ? 'Por día' : 'Cargo único'}</td><td class="monto fl-num">${clp(x.monto)}</td><td>${sw('recargos', x)}</td><td>${btnEd('recargos', x.id)}</td></tr>`).join('') || '<tr><td colspan="7" class="rc-vacio">Sin recargos</td></tr>';
+}
+FORM.recargos = (x0 = null) => crudModal('recargos', x0, x0 ? `Editar ${x0.nombre}` : 'Nuevo recargo', (x) => {
+  const suc = (n, sel, vacio) => `<select class="campo" name="${n}"><option value="">${vacio}</option>${D.sucursales.map((s) => `<option value="${s.id}"${s.id === sel ? ' selected' : ''}>${esc(s.nombre)}</option>`).join('')}</select>`;
+  return `<div class="fl-form">
+  <label class="etiqueta doble">Tipo<select class="campo" name="tipo">${Object.entries(TIPO_REC).map(([k, t]) => `<option value="${k}"${k === x.tipo ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
+  <label class="etiqueta doble">Nombre *<input class="campo" name="nombre" value="${esc(x.nombre || '')}" placeholder="Devolución en otra sucursal"></label>
+  <label class="etiqueta doble" data-t="otra_sucursal">Sucursal de retiro${suc('sucursal_origen_id', x.sucursal_origen_id, 'Cualquiera')}</label>
+  <label class="etiqueta doble" data-t="otra_sucursal">Sucursal de devolución${suc('sucursal_destino_id', x.sucursal_destino_id, 'Cualquier otra')}</label>
+  <label class="etiqueta doble" data-t="conductor_joven">Conductor menor de (años)<input class="campo" type="number" min="16" max="40" name="edad_max" value="${x.edad_max ?? 25}"></label>
+  <label class="etiqueta">Cobro<select class="campo" name="cobro"><option value="fijo"${x.cobro !== 'dia' ? ' selected' : ''}>Cargo único</option><option value="dia"${x.cobro === 'dia' ? ' selected' : ''}>Por día</option></select></label>
+  <label class="etiqueta">Monto<input class="campo" type="number" min="0" step="1000" name="monto" value="${x.monto ?? ''}"></label>
+  <label class="fl-check todo"><span class="switch"><input type="checkbox" name="activo"${x.activo !== false ? ' checked' : ''}><span></span></span> Activo</label></div>`;
+}, { tipo: 'otra_sucursal', cobro: 'fijo', activo: true }, (cu) => {
+  const t = cu.querySelector('[name=tipo]'), f = () => cu.querySelectorAll('[data-t]').forEach((l) => { l.hidden = l.dataset.t !== t.value; });
+  t.onchange = f; f();
+}, (d) => { if (d.tipo !== 'conductor_joven') d.edad_max = ''; if (d.tipo !== 'otra_sucursal') { d.sucursal_origen_id = ''; d.sucursal_destino_id = ''; } return d; });
+
+// ── Descuentos ──
+function pintarDescuentos() {
+  const hoy = isoLocal(new Date()).fecha;
+  $('#t-dsc').innerHTML = D.descuentos.map((x) => {
+    const vencido = x.hasta && x.hasta < hoy, agotado = x.usos_max != null && x.usos >= x.usos_max;
+    return `<tr><td><span class="mono" style="font-weight:600">${esc(x.codigo)}</span></td><td class="monto">${x.tipo === 'porcentaje' ? `${x.valor} %` : clp(x.valor)}</td>
+    <td class="peq">${rango(x.desde, x.hasta)}${vencido ? ' <span class="chip st-cerrada">Vencido</span>' : ''}</td>
+    <td class="mono">${x.usos}${x.usos_max != null ? ` / ${x.usos_max}` : ''}${agotado ? ' <span class="chip st-cerrada">Agotado</span>' : ''}</td><td>${sw('descuentos', x)}</td><td>${btnEd('descuentos', x.id)}</td></tr>`;
+  }).join('') || '<tr><td colspan="6" class="rc-vacio">Sin códigos de descuento</td></tr>';
+}
+FORM.descuentos = (x0 = null) => crudModal('descuentos', x0, x0 ? `Editar ${x0.codigo}` : 'Nuevo código de descuento', (x) => `<div class="fl-form">
+  <label class="etiqueta doble">Código *<input class="campo mono" name="codigo" value="${esc(x.codigo || '')}" placeholder="VERANO20" style="text-transform:uppercase"></label>
+  <label class="etiqueta">Tipo<select class="campo" name="tipo"><option value="porcentaje"${x.tipo !== 'monto' ? ' selected' : ''}>Porcentaje</option><option value="monto"${x.tipo === 'monto' ? ' selected' : ''}>Monto fijo</option></select></label>
+  <label class="etiqueta">Valor *<input class="campo" type="number" min="1" name="valor" value="${x.valor ?? ''}"></label>
+  <label class="etiqueta">Desde<input class="campo" type="date" name="desde" value="${x.desde || ''}"></label>
+  <label class="etiqueta">Hasta<input class="campo" type="date" name="hasta" value="${x.hasta || ''}"></label>
+  <label class="etiqueta">Usos máximos<input class="campo" type="number" min="1" name="usos_max" value="${x.usos_max ?? ''}" placeholder="sin límite"></label>
+  <label class="fl-check"><span class="switch"><input type="checkbox" name="activo"${x.activo !== false ? ' checked' : ''}><span></span></span> Activo</label></div>`, { tipo: 'porcentaje', activo: true });
+
+// Modal genérico de alta / edición
+async function crudModal(ruta, fila, titulo, html, defecto = {}, alAbrir = null, preparar = (d) => d) {
+  const r = await modal({ titulo, html: html(fila || defecto), alAbrir, botones: [{ texto: 'Cancelar' }, { texto: 'Guardar', clase: 'primario', accion: async (cu) => {
+    try { return await api(fila ? `${ruta}/${fila.id}` : ruta, { method: fila ? 'PUT' : 'POST', body: preparar(leerForm(cu)) }); } catch (e) { return marcarError(cu, e.campo, e.message); }
+  } }] });
+  if (r) { toast('Guardado', 'ok'); cargar(); }
+}
+const LISTA = { temporadas: () => D.temporadas, extras: () => D.extras, recargos: () => D.recargos, descuentos: () => D.descuentos };
+document.querySelector('main').addEventListener('click', async (e) => {
+  const ed = e.target.closest('[data-ed]');
+  if (ed) return FORM[ed.dataset.ed](LISTA[ed.dataset.ed]().find((x) => x.id === Number(ed.dataset.id)));
+  const del = e.target.closest('[data-del]');
+  if (del) {
+    const x = LISTA[del.dataset.del]().find((y) => y.id === Number(del.dataset.id));
+    const extra = del.dataset.del === 'temporadas' ? ' También se eliminan sus tarifas.' : '';
+    if (!await confirmar('Eliminar', `¿Eliminar «${esc(x.nombre || x.codigo)}»?${extra}`, { boton: 'Eliminar', peligro: true })) return;
+    try { await api(`${del.dataset.del}/${x.id}`, { method: 'DELETE' }); toast('Eliminado', 'ok'); cargar(); } catch (err) { toastError(err); }
+  }
+});
+document.querySelector('main').addEventListener('change', async (e) => {
+  const s = e.target.closest('[data-sw]');
+  if (!s) return;
+  try { await api(`${s.dataset.sw}/${s.dataset.id}`, { method: 'PUT', body: { [s.dataset.campo]: s.checked } }); toast(s.checked ? 'Activado' : 'Desactivado', 'ok'); cargar(); }
+  catch (err) { s.checked = !s.checked; toastError(err); }
+});
+
+// ── Simulador (POST /api/tarifas/cotizar) ──
+let simListo = false;
+async function simulador() {
+  if (simListo) return;
+  simListo = true;
+  const cat = await api('catalogo');
+  const hoy = new Date(), man = new Date(hoy.getTime() + 864e5), fin = new Date(hoy.getTime() + 4 * 864e5);
+  $('#sim-form').innerHTML = `<h2>Simular una cotización</h2>
+    <div class="fl-form">
+      <label class="etiqueta todo">Categoría<select class="campo" name="categoria_id">${cat.categorias.map((c) => `<option value="${c.id}">${esc(c.nombre)} · ${esc(c.ejemplo || '')}</option>`).join('')}</select></label>
+      <label class="etiqueta">Retiro<input class="campo" type="date" name="f_ini" value="${isoLocal(man).fecha}"></label>
+      <label class="etiqueta">Hora<input class="campo" type="time" name="h_ini" value="10:00"></label>
+      <label class="etiqueta">Devolución<input class="campo" type="date" name="f_fin" value="${isoLocal(fin).fecha}"></label>
+      <label class="etiqueta">Hora<input class="campo" type="time" name="h_fin" value="10:00"></label>
+      <label class="etiqueta doble">Sucursal de retiro<select class="campo" name="sucursal_retiro_id">${cat.sucursales.map((s) => `<option value="${s.id}">${esc(s.nombre)}</option>`).join('')}</select></label>
+      <label class="etiqueta doble">Sucursal de devolución<select class="campo" name="sucursal_devolucion_id">${cat.sucursales.map((s) => `<option value="${s.id}">${esc(s.nombre)}</option>`).join('')}</select></label>
+      <label class="etiqueta doble">Código de descuento<input class="campo mono" name="codigo_descuento" placeholder="Ej.: PRIMAVERA10" style="text-transform:uppercase"></label>
+      <label class="etiqueta doble">Fecha de nacimiento del conductor<input class="campo" type="date" name="fecha_nacimiento"></label>
+    </div>
+    <h3 class="fl-form-tit">Extras</h3>
+    <div class="fl-extras-sim">${cat.extras.map((x) => `<label class="fl-extra-sim"><input type="checkbox" data-extra="${esc(x.codigo)}"><span>${esc(x.nombre)}<small>${clp(x.precio)} ${x.cobro === 'dia' ? 'por día' : 'cargo único'}${x.tope ? ` · tope ${clp(x.tope)}` : ''}</small></span><input class="campo" type="number" min="1" value="1" data-cant="${esc(x.codigo)}" aria-label="Cantidad"></label>`).join('')}</div>`;
+  let t = null;
+  $('#sim-form').addEventListener('input', () => { clearTimeout(t); t = setTimeout(cotizar, 250); });
+  $('#sim-form').addEventListener('change', () => { clearTimeout(t); t = setTimeout(cotizar, 50); });
+  cotizar();
+}
+// Fecha y hora de Chile → ISO (con horario de verano)
+function aIso(f, h) {
+  const guess = new Date(`${f}T${h}:00Z`);
+  const p = isoLocal(guess);
+  const desfase = Date.parse(`${p.fecha}T${p.hora}:00Z`) - guess.getTime();
+  return new Date(guess.getTime() - desfase).toISOString();
+}
+async function cotizar() {
+  const f = $('#sim-form'), d = leerForm(f);
+  if (!d.f_ini || !d.f_fin) return;
+  const extras = [...f.querySelectorAll('[data-extra]:checked')].map((c) => ({ codigo: c.dataset.extra, cantidad: Number(f.querySelector(`[data-cant="${c.dataset.extra}"]`).value) || 1 }));
+  const body = { categoria_id: Number(d.categoria_id), inicio: aIso(d.f_ini, d.h_ini || '10:00'), fin: aIso(d.f_fin, d.h_fin || '10:00'), sucursal_retiro_id: Number(d.sucursal_retiro_id), sucursal_devolucion_id: Number(d.sucursal_devolucion_id), extras, codigo_descuento: d.codigo_descuento || null, fecha_nacimiento: d.fecha_nacimiento || null };
+  try {
+    const c = await api('tarifas/cotizar', { body });
+    $('#sim-tem').textContent = `${c.dias} ${c.dias === 1 ? 'día' : 'días'} · ${c.temporada}`;
+    $('#sim-res').innerHTML = `<table class="rc-lineas"><tbody>
+      ${c.lineas.map((l) => `<tr class="${l.monto < 0 ? 'desc' : ''}"><td>${esc(l.concepto)}<small>${esc(l.detalle || '')}</small></td><td>${clp(l.monto)}</td></tr>`).join('')}
+      <tr class="total"><td>Total</td><td>${clp(c.total)}</td></tr></tbody></table>
+      <div class="fl-resumen-sim"><div><span>Kilometraje</span><b>${c.km_libre ? 'Libre' : `${miles(c.km_incluidos)} km`}</b></div><div><span>Km extra</span><b>${c.km_libre ? '—' : clp(c.precio_km_extra)}</b></div><div><span>Garantía</span><b>${clp(c.garantia)}</b></div><div><span>Deducible</span><b>${clp(c.deducible)}</b></div></div>
+      ${c.avisos.length ? `<div class="aviso" style="background:var(--amber-soft);color:#7C2D12">${c.avisos.map(esc).join('<br>')}</div>` : ''}`;
+  } catch (e) { $('#sim-tem').textContent = ''; $('#sim-res').innerHTML = `<div class="aviso error">${esc(e.message)}</div>`; }
+}
+
+await cargar();
+const h = location.hash.slice(1);
+pestana(PEST.includes(h) ? h : 'tarifas');
+</script>
+</body>
+</html>

@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vehículo</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/flota.css">
+<link rel="stylesheet" href="/vendor/leaflet/leaflet.css"><script src="/vendor/leaflet/leaflet.js" defer></script>
+</head>
+<body>
+<main>
+  <div><a class="fl-volver" href="/vehiculos">← Flota</a><div class="fl-ficha-cab" id="cab"><p class="rc-cargando">Cargando…</p></div></div>
+  <div class="kpis" id="kpis"></div>
+  <div class="columnas">
+    <div style="display:flex;flex-direction:column;gap:18px;min-width:0">
+      <div class="tarjeta"><div class="bloque"><h2>Vencimientos y mantención</h2><div class="fl-vencs" id="vencs"></div><div id="mant"></div></div></div>
+      <div class="tarjeta"><div class="bloque"><h2>Próximas reservas</h2></div><div class="tabla-env"><table class="tabla"><thead><tr><th>Folio</th><th>Cliente</th><th>Retiro</th><th>Devolución</th><th>Estado</th><th class="fl-num">Total</th></tr></thead><tbody id="proximas"></tbody></table></div></div>
+      <div class="tarjeta"><div class="bloque"><h2>Órdenes de trabajo <a class="btn peq" id="b-ot2" href="#">+ Nueva OT</a></h2></div><div class="tabla-env"><table class="tabla"><thead><tr><th>Folio</th><th>Tipo</th><th>Trabajo</th><th>Taller</th><th>Fecha</th><th>Estado</th><th class="fl-num">Costo</th></tr></thead><tbody id="ordenes"></tbody></table></div></div>
+      <div class="tarjeta"><div class="bloque"><h2>Historial de arriendos</h2></div><div class="tabla-env"><table class="tabla"><thead><tr><th>Folio</th><th>Cliente</th><th>Retiro</th><th>Devolución</th><th>Estado</th><th class="fl-num">Total</th></tr></thead><tbody id="historial"></tbody></table></div></div>
+      <div class="tarjeta"><div class="bloque"><h2>Datos del vehículo</h2><dl class="rc-datos" id="datos"></dl></div></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:18px;min-width:0">
+      <div class="tarjeta"><div class="bloque"><h2>Ubicación <span class="peq muted" style="font-weight:400" id="gps-origen"></span></h2><div class="fl-mapa" id="fl-mapa"></div><div id="gps-dato" class="peq muted"></div></div></div>
+      <div class="tarjeta"><div class="bloque"><h2>Daños activos <a class="btn peq" href="/incidentes">Incidentes</a></h2><div class="rc-danos" id="danos"></div></div></div>
+      <div class="tarjeta"><div class="bloque"><h2>Ingresos del vehículo</h2><div id="ingresos"></div></div></div>
+      <div class="tarjeta"><div class="bloque"><h2>Bitácora</h2><ul class="historial" id="bitacora"></ul></div></div>
+    </div>
+  </div>
+</main>
+<script type="module">
+import { iniciarPagina, api, esc, clp, miles, fecha, fechaHora, pat, patente, chipEstado, puede } from '/comun.js';
+import { venc, comb, chipVehiculo, formVehiculo, cambiarEstado, TIPOS_OT, chipOt } from '/js/flota-comun.js';
+
+await iniciarPagina({ activo: 'flota', titulo: 'Vehículos' });
+const id = Number(location.pathname.split('/').pop());
+const $ = (s) => document.querySelector(s);
+const EDITA = puede('flota', 'editar'), EDITA_OT = puede('mantencion', 'editar');
+let mapa = null;
+
+async function cargar() {
+  let d;
+  try { d = await api(`vehiculos/${id}`); } catch (e) { $('#cab').innerHTML = `<p class="aviso error">${esc(e.message)}</p>`; return; }
+  const v = d.vehiculo, m = v.mantencion;
+  document.title = `${patente(v.patente)} · ${document.title.split(' · ').pop()}`;
+  $('#cab').innerHTML = `${pat(v.patente, true)}<div><h1>${esc(v.marca || '')} ${esc(v.modelo || '')} ${v.anio || ''}</h1><p>${esc(v.categoria || 'Sin categoría')} · ${esc(v.sucursal || 'sin sucursal')}${v.propietario ? ` · propietario ${esc(v.propietario)}` : ''}${v.activo ? '' : ' · <b style="color:var(--red)">dado de baja</b>'}</p></div>${chipVehiculo(v)}
+    <div class="acciones">${EDITA ? '<button class="btn" id="b-estado">Cambiar estado</button>' : ''}${EDITA_OT ? `<a class="btn" href="/mantencion?crear=${v.id}">Crear OT</a>` : ''}${EDITA ? '<button class="btn primario" id="b-editar">Editar</button>' : ''}</div>`;
+  $('#b-editar')?.addEventListener('click', async () => { if (await formVehiculo(v)) cargar(); });
+  $('#b-estado')?.addEventListener('click', async () => { if (await cambiarEstado(v)) cargar(); });
+  $('#b-ot2').href = `/mantencion?crear=${v.id}`; $('#b-ot2').hidden = !EDITA_OT;
+
+  const g = d.gps;
+  $('#kpis').innerHTML = `
+    <div class="kpi"><span>Kilometraje</span><b class="mono">${miles(g?.km ?? v.km)}</b><small>${g?.origen === 'plataforma_gps' ? 'según la plataforma GPS' : 'registrado a mano'}</small></div>
+    <div class="kpi"><span>Combustible</span><b style="display:flex;align-items:center;gap:10px">${g?.combustible ?? v.combustible_nivel}/8 ${comb(g?.combustible ?? v.combustible_nivel)}</b><small>${v.capacidad_estanque ? `estanque de ${v.capacidad_estanque} L` : '&nbsp;'}</small></div>
+    <div class="kpi"><span>Ingresos acumulados</span><b class="monto">${clp(d.ingresos.total)}</b><small>${d.ingresos.reservas} ${d.ingresos.reservas === 1 ? "arriendo cerrado" : "arriendos cerrados"}</small></div>
+    <div class="kpi"><span>Costo de mantención</span><b class="monto">${clp(d.ingresos.costo_mantencion)}</b><small>órdenes terminadas</small></div>
+    <div class="kpi"><span>Daños activos</span><b style="${d.danos.length ? 'color:var(--red)' : ''}">${d.danos.length}</b><small>${d.danos.length ? 'registrados en entregas' : 'sin daños pendientes'}</small></div>`;
+
+  $('#vencs').innerHTML = v.vencimientos.map((x) => `<div class="fl-venc-caja ${x.dias == null ? '' : x.dias < 0 ? 'vencido' : x.dias <= 30 ? 'pronto' : ''}"><span>${esc(x.nombre)}</span>${venc(x.fecha, x.dias)}</div>`).join('');
+  const pct = m.proxima_km ? Math.max(4, Math.min(100, 100 - (m.faltan_km / (v.mant_cada_km || 1)) * 100)) : 0;
+  const cls = m.faltan_km != null && m.faltan_km <= 0 ? 'vencido' : m.faltan_km != null && m.faltan_km < 1000 ? 'pronto' : '';
+  $('#mant').innerHTML = `<div class="rc-entre" style="flex-wrap:wrap;gap:6px 16px">
+    <div class="rc-km" style="flex:1;min-width:220px"><span class="peq"><b>Próxima mantención:</b> ${m.proxima_km ? `${miles(m.proxima_km)} km` : 'sin plan por km'}${m.proxima_fecha ? ` o el ${fecha(m.proxima_fecha)}` : ''}</span>
+      ${m.proxima_km ? `<div class="rc-km-barra ${cls}"><i style="width:${pct}%"></i></div><small class="peq fl-km-txt ${cls}">${m.faltan_km <= 0 ? `pasada por ${miles(-m.faltan_km)} km` : `faltan ${miles(m.faltan_km)} km`} · cada ${miles(v.mant_cada_km)} km${v.mant_cada_meses ? ` o ${v.mant_cada_meses} meses` : ''}</small>` : ''}</div>
+    <span class="peq muted">Última: ${miles(v.mant_ultima_km)} km${v.mant_ultima_fecha ? ` · ${fecha(v.mant_ultima_fecha)}` : ''}</span></div>
+    ${d.bloqueos.length ? `<div class="aviso" style="background:var(--amber-soft);color:#7C2D12">${d.bloqueos.map((b) => `Bloqueado para reservas del ${fechaHora(b.inicio)} al ${fechaHora(b.fin)} · ${esc(b.motivo)}`).join('<br>')}</div>` : ''}`;
+
+  const filaRes = (r) => `<tr class="clic" data-href="/reservas/${r.id}"><td class="folio">${esc(r.folio)}</td><td>${esc(r.cliente || '')}</td><td class="mono peq">${fechaHora(r.retiro_real || r.inicio)}<div class="muted" style="font-family:var(--sans)">${esc(r.sucursal_retiro || '')}</div></td><td class="mono peq">${fechaHora(r.devolucion_real || r.fin)}<div class="muted" style="font-family:var(--sans)">${esc(r.sucursal_devolucion || '')}</div></td><td>${chipEstado(r.estado === 'en_curso' && new Date(r.fin) < new Date() ? 'atrasada' : r.estado, r.estado === 'en_curso' && new Date(r.fin) < new Date() ? 'Atrasada' : null)}</td><td class="monto fl-num">${clp(r.total)}</td></tr>`;
+  $('#proximas').innerHTML = d.proximas.map(filaRes).join('') || '<tr><td colspan="6" class="rc-vacio">Sin reservas próximas</td></tr>';
+  $('#historial').innerHTML = d.historial.map(filaRes).join('') || '<tr><td colspan="6" class="rc-vacio">Sin arriendos anteriores</td></tr>';
+  $('#ordenes').innerHTML = d.ordenes.map((o) => `<tr class="clic" data-href="/mantencion?ot=${o.id}"><td class="folio">${esc(o.folio)}</td><td>${esc(TIPOS_OT[o.tipo] || o.tipo)}</td><td>${esc(o.motivo)}</td><td class="peq">${esc(o.taller || '')}</td><td class="mono peq">${fecha(o.fin || o.inicio || o.fecha_programada)}</td><td>${chipOt(o.estado)}</td><td class="monto fl-num">${clp(o.costo)}</td></tr>`).join('') || '<tr><td colspan="7" class="rc-vacio">Sin órdenes de trabajo</td></tr>';
+  document.querySelectorAll('tr[data-href]').forEach((tr) => tr.addEventListener('click', () => { location.href = tr.dataset.href; }));
+
+  const dato = (t, val) => `<div><dt>${t}</dt><dd>${val || '<span class="muted">—</span>'}</dd></div>`;
+  $('#datos').innerHTML = [
+    dato('Patente', `<span class="mono">${esc(patente(v.patente))}</span>`), dato('Marca y modelo', esc(`${v.marca || ''} ${v.modelo || ''}`.trim())), dato('Año', v.anio), dato('Color', esc(v.color)),
+    dato('Categoría', esc(v.categoria)), dato('Transmisión', esc(v.transmision)), dato('Combustible', esc(v.combustible_tipo)), dato('Estanque', v.capacidad_estanque ? `${v.capacidad_estanque} L` : ''),
+    dato('VIN (chasis)', `<span class="mono">${esc(v.vin || '')}</span>`), dato('N° de motor', `<span class="mono">${esc(v.motor || '')}</span>`), dato('TAG', esc(v.tag_numero)), dato('Sucursal', esc(v.sucursal)),
+    dato('Propietario', esc(v.propietario || 'Propio de la empresa')), dato('Seguro', esc([v.seguro_compania, v.seguro_poliza && `póliza ${v.seguro_poliza}`].filter(Boolean).join(' · '))), dato('Unidad en plataforma GPS', esc(v.gps_unidad_id)), dato('Notas', esc(v.notas))
+  ].join('');
+
+  // GPS
+  $('#gps-origen').textContent = g?.actualizado_en ? `actualizado ${fechaHora(g.actualizado_en)}` : 'sin datos de la plataforma GPS';
+  $('#gps-dato').innerHTML = g?.lat ? `${g.velocidad ? `${g.velocidad} km/h · ` : ''}motor ${g.motor ? 'encendido' : 'apagado'} · <span class="mono">${g.lat.toFixed(5)}, ${g.lng.toFixed(5)}</span> · <a href="/gps">ver en el mapa</a>` : 'Este vehículo aún no reporta posición. Asocia su unidad en la plataforma GPS desde Editar.';
+  if (g?.lat && window.L) {
+    if (!mapa) { mapa = L.map('fl-mapa', { zoomControl: false, attributionControl: false }); L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 18 }).addTo(mapa); }
+    mapa.setView([g.lat, g.lng], 13);
+    L.circleMarker([g.lat, g.lng], { radius: 9, color: '#15181D', weight: 3, fillColor: '#FFD500', fillOpacity: 1 }).addTo(mapa);
+  } else $('#fl-mapa').hidden = !g?.lat;
+
+  $('#danos').innerHTML = d.danos.map((x, i) => `<div class="rc-dano"><span class="n ${esc(x.tipo)}">${i + 1}</span>${x.archivo_id ? `<span class="th"><img src="/api/archivos/${x.archivo_id}" alt="" style="width:100%;height:100%;object-fit:cover"></span>` : ''}<div><b>${esc({ raya: 'Raya', abolladura: 'Abolladura', trizadura: 'Trizadura', otro: 'Otro' }[x.tipo] || x.tipo)} · ${esc(x.vista)}</b><small>${esc(x.descripcion || '')} · ${fecha(x.creado_en)}${x.incidente_folio ? ` · ${esc(x.incidente_folio)}` : ''}</small></div></div>`).join('') || '<p class="rc-vacio" style="padding:12px">Sin daños activos</p>';
+
+  const maxMes = Math.max(1, ...d.ingresos.por_mes.map((x) => x.total));
+  const nombreMes = (m) => new Intl.DateTimeFormat('es-CL', { month: 'short', year: '2-digit', timeZone: 'UTC' }).format(new Date(`${m}-15T12:00:00Z`));
+  $('#ingresos').innerHTML = d.ingresos.por_mes.length ? `<div class="fl-barras">${d.ingresos.por_mes.map((x) => `<div class="fl-barra"><span class="m">${nombreMes(x.mes)}</span><div class="b"><i style="width:${Math.max(3, x.total * 100 / maxMes)}%"></i></div><span class="n">${clp(x.total)}</span></div>`).join('')}</div>
+    <div class="rc-entre peq" style="border-top:1px solid var(--line-2);padding-top:8px"><span class="muted">Ingresos − mantención</span><b class="monto">${clp(d.ingresos.total - d.ingresos.costo_mantencion)}</b></div>` : '<p class="rc-vacio" style="padding:12px">Aún sin arriendos cerrados</p>';
+
+  const ACC = { vehiculo_creado: 'Vehículo creado', vehiculo_editado: 'Datos editados', vehiculo_estado: 'Cambio de estado', ot_creada: 'Orden de trabajo creada', ot_terminada: 'Orden de trabajo terminada', vehiculo_alerta_vencimientos: 'Alerta de vencimientos', vehiculo_baja: 'Dado de baja', vehiculo_reactivado: 'Reactivado' };
+  const EST = { disponible: 'disponible', arrendado: 'arrendado', reservado: 'reservado', mantencion: 'en mantención', fuera_servicio: 'fuera de servicio' };
+  const det = (b) => {
+    const x = b.detalle || {};
+    if (b.accion === 'vehiculo_estado') return `${EST[x.antes] || x.antes} → ${EST[x.despues] || x.despues}${x.motivo ? ` · ${x.motivo}` : ''}`;
+    if (b.accion === 'vehiculo_alerta_vencimientos') return (x.alertas || []).join(' · ');
+    if (b.accion === 'vehiculo_editado') return Object.keys(x.cambios || {}).map((k) => k.replace(/^venc_/, 'vence ').replace(/_/g, ' ')).join(', ');
+    if (b.accion.startsWith('ot_')) return [x.folio, x.motivo, x.costo != null ? clp(x.costo) : null].filter(Boolean).join(' · ');
+    return '';
+  };
+  $('#bitacora').innerHTML = d.bitacora.map((b) => `<li><span class="marca-ev ${b.usuario ? 'persona' : 'regla'}"></span><div><p><b>${esc(ACC[b.accion] || b.accion)}</b> ${esc(det(b))}</p><small>${fechaHora(b.creado_en)} · ${esc(b.usuario || 'Sistema')}</small></div></li>`).join('') || '<li class="muted peq">Sin movimientos</li>';
+}
+await cargar();
+</script>
+</body>
+</html>

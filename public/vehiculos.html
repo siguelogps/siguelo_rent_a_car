@@ -1,0 +1,269 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flota</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/flota.css">
+</head>
+<body>
+<main>
+  <div class="pagina-cab">
+    <div><h1>Flota</h1><p id="subtitulo">Cargando…</p></div>
+    <div class="acciones" id="acciones"></div>
+  </div>
+  <div class="segmentado fl-pestanas" role="tablist" id="pestanas">
+    <button type="button" data-p="vehiculos" aria-pressed="true">Vehículos</button>
+    <button type="button" data-p="categorias">Categorías</button>
+    <button type="button" data-p="propietarios">Propietarios</button>
+  </div>
+
+  <section id="p-vehiculos">
+    <div class="fl-alertas" id="alertas"></div>
+    <div class="tarjeta" style="margin-top:18px">
+      <div class="fl-filtros">
+        <div class="filtros-fila" id="chips"></div>
+        <div class="rc-fila"><select class="campo" id="f-cat" aria-label="Categoría"><option value="">Todas las categorías</option></select><select class="campo" id="f-suc" aria-label="Sucursal"><option value="">Todas las sucursales</option></select><select class="campo" id="f-prop" aria-label="Propietario"><option value="">Todos los propietarios</option></select></div>
+      </div>
+      <div class="tabla-env">
+        <table class="tabla fl-tabla tarjetas" id="tabla">
+          <thead><tr><th>Vehículo</th><th>Estado</th><th>Ubicación</th><th>Km (GPS)</th><th>Comb.</th><th>Rev. técnica</th><th>Permiso circ.</th><th>SOAP</th><th>Seguro</th><th>Próxima mantención</th></tr></thead>
+          <tbody><tr><td colspan="10" class="rc-cargando">Cargando flota…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <section id="p-categorias" hidden>
+    <div class="tarjeta">
+      <div class="bloque"><h2>Categorías <span class="peq muted" style="font-weight:400">se muestran así en el portal de reservas y en las cotizaciones</span></h2></div>
+      <div class="tabla-env"><table class="tabla" id="t-cat"><thead><tr><th>Orden</th><th>Categoría</th><th>Ejemplo</th><th>Pasajeros</th><th>Maletas</th><th>Transmisión</th><th class="fl-num">Vehículos</th><th class="fl-num">Tarifa base / día</th><th>Estado</th><th></th></tr></thead><tbody></tbody></table></div>
+    </div>
+  </section>
+
+  <section id="p-propietarios" hidden>
+    <div class="tarjeta">
+      <div class="bloque"><h2>Propietarios e inversionistas <span class="peq muted" style="font-weight:400">vehículos de terceros que la empresa arrienda y liquida mensualmente</span></h2></div>
+      <div class="tabla-env"><table class="tabla" id="t-prop"><thead><tr><th>Propietario</th><th>RUT</th><th>Contacto</th><th>Banco</th><th class="fl-num">% del ingreso</th><th>Vehículos</th><th>Estado</th><th></th></tr></thead><tbody></tbody></table></div>
+    </div>
+    <div class="tarjeta" style="margin-top:18px">
+      <div class="bloque">
+        <h2>Liquidación al inversionista <span class="rc-fila"><label class="peq muted" for="mes">Mes</label><input type="month" class="campo" id="mes"></span></h2>
+        <p class="ayuda">Ingresos de las reservas devueltas o cerradas en el mes de sus vehículos × porcentaje acordado, menos los costos de mantención (órdenes de trabajo terminadas en el mes).</p>
+      </div>
+      <div id="liq"></div>
+    </div>
+  </section>
+</main>
+<script type="module">
+import { iniciarPagina, api, esc, clp, miles, pat, patente, rut, puede, modal, toast, toastError, leerForm, confirmar, descargar, validarRut, ESTADOS_VEHICULO, fecha } from '/comun.js';
+import { venc, comb, mantKm, chipVehiculo, ubicacion, formVehiculo, marcarError } from '/js/flota-comun.js';
+
+await iniciarPagina({ activo: 'flota', titulo: 'Vehículos' });
+const EDITA = puede('flota', 'editar');
+const $ = (s) => document.querySelector(s);
+let VEH = [], CATS = [], PROPS = [], filtro = 'todos';
+
+// ── Pestañas ──
+const params = new URLSearchParams(location.search);
+function pestana(p) {
+  document.querySelectorAll('#pestanas button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.p === p)));
+  for (const s of ['vehiculos', 'categorias', 'propietarios']) $(`#p-${s}`).hidden = s !== p;
+  history.replaceState(null, '', p === 'vehiculos' ? location.pathname + location.search : `#${p}`);
+  acciones(p);
+  if (p === 'categorias') cargarCategorias();
+  if (p === 'propietarios') cargarPropietarios();
+}
+$('#pestanas').onclick = (e) => { const b = e.target.closest('[data-p]'); if (b) pestana(b.dataset.p); };
+
+function acciones(p) {
+  const a = $('#acciones');
+  if (p === 'vehiculos') a.innerHTML = `${EDITA ? '<button class="btn" id="b-imp">Importar Excel</button>' : ''}<button class="btn" id="b-exp">Exportar Excel</button>${EDITA ? '<button class="btn primario" id="b-nuevo">+ Agregar vehículo</button>' : ''}`;
+  else if (p === 'categorias') a.innerHTML = EDITA ? '<button class="btn primario" id="b-cat">+ Nueva categoría</button>' : '';
+  else a.innerHTML = EDITA ? '<button class="btn primario" id="b-prop">+ Nuevo propietario</button>' : '';
+  $('#b-exp')?.addEventListener('click', () => descargar('/api/vehiculos/exportar', `flota-${new Date().toISOString().slice(0, 10)}.xlsx`).catch(toastError));
+  $('#b-nuevo')?.addEventListener('click', async () => { const v = await formVehiculo(); if (v) location.href = `/vehiculos/${v.id}`; });
+  $('#b-imp')?.addEventListener('click', importar);
+  $('#b-cat')?.addEventListener('click', () => formCategoria());
+  $('#b-prop')?.addEventListener('click', () => formPropietario());
+}
+
+// ── Vehículos ──
+const conVenc = (v) => v.vencimientos.some((x) => x.dias != null && x.dias <= 30) || v.mantencion.por_km || v.mantencion.por_fecha;
+async function cargarVehiculos() {
+  VEH = await api('vehiculos');
+  const act = VEH.reduce((m, v) => (v.gps_actualizado_en && (!m || v.gps_actualizado_en > m) ? v.gps_actualizado_en : m), null);
+  const min = act ? Math.max(0, Math.round((Date.now() - Date.parse(act)) / 6e4)) : null;
+  $('#subtitulo').textContent = `${VEH.length} vehículos${min != null ? ` · km y combustible actualizados desde la plataforma GPS ${min < 1 ? 'recién' : min < 60 ? `hace ${min} min` : `hace ${Math.round(min / 60)} h`}` : ''}`;
+  const sel = (id, lista, campo) => { const s = $(id), v = s.value; s.innerHTML = s.options[0].outerHTML + [...new Map(lista.filter((x) => x[campo + '_id']).map((x) => [x[campo + '_id'], x[campo]])).entries()].map(([k, n]) => `<option value="${k}">${esc(n)}</option>`).join(''); s.value = v; };
+  sel('#f-cat', VEH, 'categoria'); sel('#f-suc', VEH, 'sucursal'); sel('#f-prop', VEH, 'propietario');
+  $('#f-prop').hidden = !VEH.some((v) => v.propietario_id);
+  alertas();
+  pintar();
+}
+
+function alertas() {
+  const rt = VEH.filter((v) => v.vencimientos[0].dias != null && v.vencimientos[0].dias < 0);
+  const km = VEH.filter((v) => v.mantencion.por_km && v.estado !== 'mantencion').sort((a, b) => a.mantencion.faltan_km - b.mantencion.faltan_km);
+  const prox = [];
+  for (const v of VEH) {
+    for (const x of v.vencimientos) if (x.dias != null && x.dias >= 0 && x.dias <= 30) prox.push(x.nombre);
+    if (v.mantencion.faltan_dias != null && v.mantencion.faltan_dias >= 0 && v.mantencion.faltan_dias <= 30) prox.push('Mantención por fecha');
+  }
+  const cuenta = prox.reduce((m, n) => ({ ...m, [n]: (m[n] || 0) + 1 }), {});
+  const plural = { 'Revisión técnica': 'revisiones técnicas', 'Permiso de circulación': 'permisos de circulación', SOAP: 'SOAP', Seguro: 'seguros', 'Mantención por fecha': 'mantenciones por fecha' };
+  const sing = { 'Revisión técnica': 'revisión técnica', 'Permiso de circulación': 'permiso de circulación', SOAP: 'SOAP', Seguro: 'seguro', 'Mantención por fecha': 'mantención por fecha' };
+  let h = '';
+  if (rt.length) {
+    const v = rt[0];
+    h += `<div class="rc-alerta-venc rojo"><span class="ic rojo">!</span><div><b>${rt.length === 1 ? `Revisión técnica vencida · ${pat(v.patente)}` : `${rt.length} revisiones técnicas vencidas`}</b><small>${rt.length === 1 ? `Venció el ${fecha(v.venc_revision_tecnica)} · bloqueado para nuevas reservas hasta renovarla` : rt.map((x) => patente(x.patente)).join(', ') + ' · bloqueados para nuevas reservas'}</small></div>${EDITA ? `<button class="btn peq" data-renovar="${v.id}">Renovar</button>` : ''}</div>`;
+  } else h += '<div class="rc-alerta-venc ok"><span class="ic">✓</span><div><b>Revisiones técnicas al día</b><small>Ningún vehículo bloqueado por documentos</small></div></div>';
+  if (km.length) {
+    const v = km[0], m = v.mantencion;
+    const res = v.reserva_fin || v.proxima_fin;
+    h += `<div class="rc-alerta-venc"><span class="ic ambar">km</span><div><b>Mantención de ${miles(m.proxima_km)} km · ${pat(v.patente)}</b><small>${m.faltan_km <= 0 ? `Pasada por ${miles(-m.faltan_km)} km` : `Faltan ${miles(m.faltan_km)} km`} según la plataforma GPS${res ? ` · tiene reserva hasta el ${fecha(res).slice(0, 5)}` : ''}${km.length > 1 ? ` · y ${km.length - 1} más` : ''}</small></div>${puede('mantencion', 'editar') ? `<a class="btn peq" href="/mantencion?crear=${v.id}">Crear OT</a>` : ''}</div>`;
+  } else h += '<div class="rc-alerta-venc ok"><span class="ic">km</span><div><b>Mantenciones por km al día</b><small>Ninguna a menos de 1.000 km según la plataforma GPS</small></div></div>';
+  h += `<div class="rc-alerta-venc"><span class="ic azul">${prox.length}</span><div><b>${prox.length} ${prox.length === 1 ? 'vencimiento' : 'vencimientos'} en los próximos 30 días</b><small>${Object.entries(cuenta).map(([n, c]) => `${c} ${c === 1 ? sing[n] : plural[n]}`).join(' · ') || 'Nada por vencer este mes'}</small></div>${prox.length ? '<button class="btn peq" id="b-ver-venc">Ver</button>' : ''}</div>`;
+  $('#alertas').innerHTML = h;
+  $('#b-ver-venc')?.addEventListener('click', () => { filtro = 'venc'; pintar(); $('#tabla').scrollIntoView({ behavior: 'smooth', block: 'start' }); });
+  document.querySelectorAll('[data-renovar]').forEach((b) => b.addEventListener('click', async () => { const v = VEH.find((x) => x.id === Number(b.dataset.renovar)); if (await formVehiculo(v, { foco: 'venc_revision_tecnica' })) cargarVehiculos(); }));
+}
+
+function pintar() {
+  const cat = $('#f-cat').value, suc = $('#f-suc').value, prop = $('#f-prop').value;
+  const base = VEH.filter((v) => (!cat || String(v.categoria_id) === cat) && (!suc || String(v.sucursal_id) === suc) && (!prop || String(v.propietario_id) === prop));
+  const chips = [['todos', 'Todos', () => true], ...Object.entries(ESTADOS_VEHICULO).map(([k, t]) => [k, t, (v) => v.estado === k]), ['venc', 'Con vencimientos', conVenc]];
+  $('#chips').innerHTML = chips.map(([k, t, f]) => `<button class="filtro" data-f="${k}" aria-pressed="${filtro === k}">${t} <span class="n">${base.filter(f).length}</span></button>`).join('');
+  const lista = base.filter(chips.find((c) => c[0] === filtro)[2]);
+  const [rt, pc, soap, seg] = [0, 1, 2, 3];
+  $('#tabla tbody').innerHTML = lista.map((v) => `
+    <tr class="clic" data-id="${v.id}">
+      <td class="ancho"><div class="fl-veh">${pat(v.patente)}<div><b>${esc(v.marca || '')} ${esc(v.modelo || '')} ${v.anio || ''}</b><div class="peq muted"${v.propietario ? ` title="Propietario: ${esc(v.propietario)}"` : ''}>${esc(v.categoria || 'Sin categoría')}${v.propietario ? ' · inversionista' : ''}</div></div></div></td>
+      <td data-et="Estado">${chipVehiculo(v)}</td>
+      <td data-et="Ubicación">${ubicacion(v)}</td>
+      <td data-et="Km (GPS)" class="mono">${miles(v.gps_km ?? v.km)}</td>
+      <td data-et="Combustible">${comb(v.gps_combustible ?? v.combustible_nivel)}</td>
+      ${[[rt, 'Rev. técnica'], [pc, 'Permiso circ.'], [soap, 'SOAP'], [seg, 'Seguro']].map(([i, et]) => `<td data-et="${et}">${venc(v.vencimientos[i].fecha, v.vencimientos[i].dias)}</td>`).join('')}
+      <td data-et="Próxima mantención" class="ancho">${mantKm(v)}</td>
+    </tr>`).join('') || `<tr><td colspan="10" class="rc-vacio">${VEH.length ? 'Ningún vehículo con este filtro' : 'Aún no hay vehículos. Agrégalos uno a uno o importa tu planilla Excel.'}</td></tr>`;
+}
+$('#chips').onclick = (e) => { const b = e.target.closest('[data-f]'); if (b) { filtro = b.dataset.f; pintar(); } };
+for (const id of ['#f-cat', '#f-suc', '#f-prop']) $(id).onchange = pintar;
+$('#tabla tbody').onclick = (e) => { const tr = e.target.closest('tr[data-id]'); if (tr) location.href = `/vehiculos/${tr.dataset.id}`; };
+
+async function importar() {
+  const r = await modal({
+    titulo: 'Importar flota desde Excel',
+    html: `<p>Sube una planilla <b>.xlsx</b> con una fila por vehículo. Columnas reconocidas (en español): <span class="muted">Patente, Marca, Modelo, Año, Categoría, Color, Estado, Sucursal, Propietario, Km, Combustible, Transmisión, VIN (chasis), N° motor, TAG, Revisión técnica (vence), Permiso de circulación (vence), SOAP (vence), Seguro (vence), Compañía de seguro, Póliza, Mantención cada (km), Última mantención (km), Mantención cada (meses), Última mantención (fecha), ID unidad GPS, Notas</span>.</p>
+      <p class="peq muted">Si la patente ya existe se actualizan sus datos (las celdas vacías no borran nada). Las categorías que no existan se crean. Tip: exporta tu flota para usarla como plantilla.</p>
+      <input type="file" class="campo" id="archivo" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" style="padding:6px">`,
+    botones: [{ texto: 'Cancelar' }, { texto: 'Importar', clase: 'primario', accion: async (c) => {
+      const f = c.querySelector('#archivo').files[0];
+      if (!f) { toast('Elige el archivo Excel', 'error'); return false; }
+      const archivo = await new Promise((ok, mal) => { const lr = new FileReader(); lr.onload = () => ok(lr.result); lr.onerror = mal; lr.readAsDataURL(f); });
+      return api('vehiculos/importar', { body: { archivo } });
+    } }]
+  });
+  if (!r) return;
+  await modal({ titulo: 'Resultado de la importación', html: `
+    <div class="kpis"><div class="kpi"><span>Filas leídas</span><b>${r.filas}</b></div><div class="kpi"><span>Nuevos</span><b>${r.nuevas}</b></div><div class="kpi"><span>Actualizados</span><b>${r.actualizadas}</b></div><div class="kpi"><span>Con error</span><b style="${r.errores.length ? 'color:var(--red)' : ''}">${r.errores.length}</b></div></div>
+    ${r.categorias_creadas.length ? `<p class="peq">Categorías creadas: <b>${r.categorias_creadas.map(esc).join(', ')}</b> (define su tarifa en Tarifas).</p>` : ''}
+    ${r.errores.length ? `<div class="aviso error">${r.errores.map((e) => `Fila ${e.fila}${e.patente ? ` (${esc(e.patente)})` : ''}: ${esc(e.error)}`).join('<br>')}</div>` : ''}
+    ${r.avisos.length ? `<div class="aviso" style="background:var(--amber-soft)">${r.avisos.map(esc).join('<br>')}</div>` : ''}` });
+  cargarVehiculos();
+}
+
+// ── Categorías ──
+async function cargarCategorias() {
+  CATS = await api('categorias');
+  $('#t-cat tbody').innerHTML = CATS.map((c) => `<tr>
+    <td class="mono">${c.orden}</td><td><b style="font-weight:500">${esc(c.nombre)}</b><div class="peq muted">${esc(c.descripcion || '')}</div></td><td class="peq">${esc(c.ejemplo || '')}</td>
+    <td class="mono">${c.pasajeros ?? ''}</td><td class="mono">${c.maletas ?? ''}</td><td>${esc(c.transmision || '')}</td>
+    <td class="mono fl-num">${c.vehiculos}</td><td class="monto fl-num">${c.precio_dia ? clp(c.precio_dia) : '<span class="peq muted">sin tarifa</span>'}</td>
+    <td>${c.activa ? '<span class="chip ok">Activa</span>' : '<span class="chip st-cerrada">Inactiva</span>'}</td>
+    <td>${EDITA ? `<div class="fl-acciones-celda"><button class="btn peq" data-ed="${c.id}">Editar</button></div>` : ''}</td></tr>`).join('') || '<tr><td colspan="10" class="rc-vacio">Sin categorías</td></tr>';
+}
+$('#t-cat').onclick = (e) => { const b = e.target.closest('[data-ed]'); if (b) formCategoria(CATS.find((c) => c.id === Number(b.dataset.ed))); };
+async function formCategoria(c = null) {
+  const x = c || { activa: true, pasajeros: 5, maletas: 2 };
+  const r = await modal({
+    titulo: c ? `Editar categoría ${c.nombre}` : 'Nueva categoría',
+    html: `<div class="fl-form">
+      <label class="etiqueta doble">Nombre *<input class="campo" name="nombre" value="${esc(x.nombre || '')}" placeholder="SUV"></label>
+      <label class="etiqueta doble">Ejemplo<input class="campo" name="ejemplo" value="${esc(x.ejemplo || '')}" placeholder="Toyota RAV4 o similar"></label>
+      <label class="etiqueta todo">Descripción<input class="campo" name="descripcion" value="${esc(x.descripcion || '')}"></label>
+      <label class="etiqueta">Pasajeros<input class="campo" type="number" min="1" name="pasajeros" value="${x.pasajeros ?? ''}"></label>
+      <label class="etiqueta">Maletas<input class="campo" type="number" min="0" name="maletas" value="${x.maletas ?? ''}"></label>
+      <label class="etiqueta">Transmisión<select class="campo" name="transmision">${['', 'Manual', 'Automático'].map((t) => `<option${t === (x.transmision || '') ? ' selected' : ''} value="${t}">${t || '—'}</option>`).join('')}</select></label>
+      <label class="etiqueta">Orden<input class="campo" type="number" name="orden" value="${x.orden ?? ''}"></label>
+      <label class="fl-check todo"><span class="switch"><input type="checkbox" name="activa"${x.activa ? ' checked' : ''}><span></span></span> Activa (se ofrece en reservas y en el portal)</label></div>`,
+    botones: [...(c ? [{ texto: 'Eliminar', clase: 'peligro', valor: 'borrar' }] : []), { texto: 'Cancelar' }, { texto: 'Guardar', clase: 'primario', accion: async (cu) => {
+      try { return await api(c ? `categorias/${c.id}` : 'categorias', { method: c ? 'PUT' : 'POST', body: leerForm(cu) }); } catch (e) { return marcarError(cu, e.campo, e.message); }
+    } }]
+  });
+  if (r === 'borrar') {
+    if (!await confirmar('Eliminar categoría', `Si «${esc(c.nombre)}» tiene vehículos o reservas solo se desactivará; si no, se elimina junto con sus tarifas.`, { boton: 'Eliminar', peligro: true })) return;
+    try { const d = await api(`categorias/${c.id}`, { method: 'DELETE' }); toast(d.desactivada ? 'Categoría desactivada (tiene vehículos o reservas)' : 'Categoría eliminada', 'ok'); } catch (e) { return toastError(e); }
+  } else if (r) toast('Categoría guardada', 'ok');
+  if (r) cargarCategorias();
+}
+
+// ── Propietarios ──
+async function cargarPropietarios() {
+  PROPS = await api('propietarios');
+  $('#t-prop tbody').innerHTML = PROPS.map((p) => `<tr>
+    <td><b style="font-weight:500">${esc(p.nombre)}</b></td><td class="mono">${p.rut ? rut(p.rut) : ''}</td>
+    <td class="peq">${esc(p.correo || '')}${p.telefono ? `<div class="muted">${esc(p.telefono)}</div>` : ''}</td>
+    <td class="peq">${esc(p.banco || '')}${p.cuenta ? `<div class="muted mono">${esc(p.cuenta)}</div>` : ''}</td>
+    <td class="mono fl-num">${miles(p.porcentaje)} %</td>
+    <td>${(p.patentes || '').split(',').filter(Boolean).map((x) => pat(x)).join(' ') || '<span class="peq muted">sin vehículos</span>'}</td>
+    <td>${p.activo ? '<span class="chip ok">Activo</span>' : '<span class="chip st-cerrada">Inactivo</span>'}</td>
+    <td>${EDITA ? `<div class="fl-acciones-celda"><button class="btn peq" data-ed="${p.id}">Editar</button></div>` : ''}</td></tr>`).join('') || '<tr><td colspan="8" class="rc-vacio">Sin propietarios externos. Si todos los vehículos son de la empresa, no necesitas nada aquí.</td></tr>';
+  liquidacion();
+}
+$('#t-prop').onclick = (e) => { const b = e.target.closest('[data-ed]'); if (b) formPropietario(PROPS.find((p) => p.id === Number(b.dataset.ed))); };
+async function formPropietario(p = null) {
+  const x = p || { activo: true, porcentaje: 60 };
+  const r = await modal({
+    titulo: p ? `Editar ${p.nombre}` : 'Nuevo propietario',
+    html: `<div class="fl-form">
+      <label class="etiqueta doble">Nombre o razón social *<input class="campo" name="nombre" value="${esc(x.nombre || '')}"></label>
+      <label class="etiqueta">RUT<input class="campo" name="rut" value="${esc(x.rut ? rut(x.rut) : '')}" placeholder="77.123.456-9"></label>
+      <label class="etiqueta">% del ingreso<input class="campo" name="porcentaje" type="number" min="0" max="100" step="0.5" value="${x.porcentaje ?? ''}"></label>
+      <label class="etiqueta doble">Correo<input class="campo" name="correo" type="email" value="${esc(x.correo || '')}"></label>
+      <label class="etiqueta doble">Teléfono<input class="campo" name="telefono" value="${esc(x.telefono || '')}"></label>
+      <label class="etiqueta doble">Banco<input class="campo" name="banco" value="${esc(x.banco || '')}"></label>
+      <label class="etiqueta doble">N° de cuenta<input class="campo" name="cuenta" value="${esc(x.cuenta || '')}"></label>
+      <label class="fl-check todo"><span class="switch"><input type="checkbox" name="activo"${x.activo ? ' checked' : ''}><span></span></span> Activo</label></div>
+      <p class="peq muted">Los vehículos se asignan al propietario desde la ficha de cada vehículo (Editar → Operación).</p>`,
+    botones: [{ texto: 'Cancelar' }, { texto: 'Guardar', clase: 'primario', accion: async (cu) => {
+      const d = leerForm(cu);
+      if (d.rut && !validarRut(d.rut)) return marcarError(cu, 'rut', 'El RUT no es válido');
+      try { return await api(p ? `propietarios/${p.id}` : 'propietarios', { method: p ? 'PUT' : 'POST', body: d }); } catch (e) { return marcarError(cu, e.campo, e.message); }
+    } }]
+  });
+  if (r) { toast('Propietario guardado', 'ok'); cargarPropietarios(); }
+}
+const mesInp = $('#mes');
+mesInp.value = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(new Date()).slice(0, 7);
+mesInp.onchange = liquidacion;
+async function liquidacion() {
+  const d = await api(`propietarios/liquidacion?mes=${mesInp.value}`);
+  const nombreMes = new Intl.DateTimeFormat('es-CL', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${d.mes}-15T12:00:00Z`));
+  $('#liq').innerHTML = d.propietarios.length ? `<div class="tabla-env"><table class="tabla">
+    <thead><tr><th>Propietario / vehículo</th><th class="fl-num">Reservas</th><th class="fl-num">Ingresos</th><th class="fl-num">Participación</th><th class="fl-num">Mantención</th><th class="fl-num">A pagar</th></tr></thead>
+    <tbody>${d.propietarios.map((l) => `
+      <tr style="background:var(--soft)"><td><b>${esc(l.propietario.nombre)}</b> <span class="peq muted">· ${miles(l.porcentaje)} % · ${esc(nombreMes)}</span></td><td class="mono fl-num">${l.vehiculos.reduce((s, v) => s + v.reservas, 0)}</td>
+        <td class="monto fl-num">${clp(l.ingresos)}</td><td class="monto fl-num">${clp(l.participacion)}</td><td class="monto fl-num"${l.costos ? ' style="color:var(--red)"' : ''}>${l.costos ? clp(-l.costos) : '—'}</td>
+        <td class="monto fl-num" style="font-size:15px;${l.a_pagar < 0 ? 'color:var(--red)' : ''}">${clp(l.a_pagar)}</td></tr>
+      ${l.vehiculos.map((v) => `<tr><td style="padding-left:24px">${pat(v.patente)} <span class="peq">${esc(v.marca || '')} ${esc(v.modelo || '')}</span></td><td class="mono fl-num">${v.reservas}</td><td class="mono fl-num">${clp(v.ingresos)}</td><td class="mono fl-num">${clp(Math.round(v.ingresos * l.porcentaje / 100))}</td><td class="mono fl-num">${v.costo_mantencion ? clp(-v.costo_mantencion) : '—'}</td><td></td></tr>`).join('') || '<tr><td colspan="6" class="peq muted" style="padding-left:24px">Sin vehículos asignados</td></tr>'}`).join('')}
+    </tbody></table></div>` : '<p class="rc-vacio">Sin propietarios activos</p>';
+}
+
+// Arranque
+await cargarVehiculos();
+const inicial = location.hash.slice(1);
+pestana(['categorias', 'propietarios'].includes(inicial) ? inicial : 'vehiculos');
+if (params.get('nuevo') === '1' && EDITA) { const v = await formVehiculo(); if (v) location.href = `/vehiculos/${v.id}`; }
+</script>
+</body>
+</html>

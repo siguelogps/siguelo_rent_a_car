@@ -170,7 +170,7 @@ export async function completarInspeccion(req, insp, b) {
   const incidentes = await transaccion(async (tx) => {
     await tx.query(`UPDATE inspecciones SET estado = 'completa', completado_en = now(), firma_archivo_id = $3, firmante_nombre = $4, lat = COALESCE($5, lat), lng = COALESCE($6, lng), realizado_por = $7
       WHERE id = $1 AND empresa_id = $2`, [insp.id, E, firma.id, nombre || null, lat, lng, req.usuario.id]);
-    const datosEstado = { empresaId: E, reservaId: reserva.id, vehiculoId: insp.vehiculo_id, km: insp.km, combustible: insp.combustible, lat, lng };
+    const datosEstado = { empresaId: E, reservaId: reserva.id, vehiculoId: insp.vehiculo_id, km: insp.km, combustible: insp.combustible, lat, lng, usuario: req.usuario };
     if (insp.tipo === 'entrega') { await aplicarEntrega(tx, datosEstado); return []; }
     await aplicarDevolucion(tx, { ...datosEstado, mantencion });
     const nuevos = await tx.query(`SELECT * FROM danos WHERE empresa_id = $1 AND inspeccion_id = $2 AND incidente_id IS NULL ORDER BY creado_en, id`, [E, insp.id]);

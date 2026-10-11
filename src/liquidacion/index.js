@@ -1,6 +1,7 @@
 // Liquidación automática al cierre: calcula los cargos desde las inspecciones (tabla inspecciones), TAG, multas e incidentes,
 // permite editarlos o condonarlos con motivo, y al aprobar captura de la garantía, libera el resto, cobra el saldo,
 // marca TAG/multas/incidentes como cobrados, cierra la reserva, emite el DTE y avisa al cliente con el PDF.
+import { cambiarEstado } from '../reservas/estados.js';
 import { q, uno, transaccion, siguienteFolio } from '../db.js';
 import { ErrorHttp } from '../auth.js';
 import { registrar } from '../bitacora.js';
@@ -215,11 +216,7 @@ export async function aprobar(empresaId, reservaId, opciones = {}, usuarioId = n
       if (inc) await tx.query(`INSERT INTO incidente_eventos (empresa_id, incidente_id, tipo, detalle, monto, usuario_id) VALUES ($1,$2,'cobro',$3,$4,$5)`,
         [empresaId, id, `Cobrado al cliente en la liquidación ${liq.folio}${capturado ? ' (captura de la garantía)' : ''}`, l.monto, usuarioId]);
     }
-    await tx.query(`UPDATE reservas SET estado = 'cerrada', actualizado_en = now() WHERE id = $1 AND empresa_id = $2`, [reservaId, empresaId]);
-    if (reserva.vehiculo_id) {
-      await tx.query(`UPDATE vehiculos SET estado = 'disponible' WHERE id = $1 AND empresa_id = $2 AND estado IN ('arrendado','reservado')
-                       AND NOT EXISTS (SELECT 1 FROM reservas r WHERE r.vehiculo_id = $1 AND r.estado = 'en_curso' AND r.id <> $3)`, [reserva.vehiculo_id, empresaId, reservaId]);
-    }
+    await cambiarEstado(tx, { id: reservaId, empresa_id: empresaId }, 'cerrada', usuarioId ? { id: usuarioId } : null);
     const [x] = await tx.query(`UPDATE liquidaciones SET estado = $2, total_cargos = $3, garantia_retenida = $4, garantia_capturada = $5, garantia_liberada = $6, saldo_por_cobrar = $7,
                                   aprobado_por = $8, aprobado_en = now(), opciones = $9, pago_saldo_id = $10, actualizado_en = now() WHERE id = $1 RETURNING *`,
       [liq.id, saldo > 0 ? 'aprobada' : 'cobrada', total, gRetenida, capturado, liberado, saldo, usuarioId, JSON.stringify({ ...opciones, simulado }), link?.pago.id ?? null]);

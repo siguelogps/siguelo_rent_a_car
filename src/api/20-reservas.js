@@ -158,7 +158,7 @@ r.get('/reservas/excel', ver, async (req, res) => {
   const { where, p } = filtrosLista(req);
   const filas = await q(`${SQL_LISTA} WHERE ${where} ORDER BY r.inicio LIMIT 5000`, p);
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'Síguelo Rentacar';
+  wb.creator = 'Síguelo Rent a Car';
   const ws = wb.addWorksheet('Reservas', { views: [{ state: 'frozen', ySplit: 1 }] });
   ws.columns = [
     { header: 'Folio', key: 'folio', width: 11 }, { header: 'Estado', key: 'estado', width: 15 }, { header: 'Cliente', key: 'cliente', width: 30 },

@@ -110,7 +110,7 @@ function hojaResumen(libro, rep, empresa) {
 
 export async function libroDe(rep, nombre, empresa = '') {
   const libro = new ExcelJS.Workbook();
-  libro.creator = 'Síguelo Rentacar';
+  libro.creator = 'Síguelo Rent a Car';
   libro.created = new Date();
   if (nombre === 'completo') {
     hojaResumen(libro, rep, empresa);

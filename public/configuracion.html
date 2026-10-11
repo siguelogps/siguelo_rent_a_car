@@ -297,7 +297,7 @@ async function plantillas() {
     try { await api(`configuracion/plantillas/${p.id}`, { method: 'PUT', body: { nombre: d.nombre, asunto: d.asunto ?? null, cuerpo: d.cuerpo, activa: d.activa === '1' } }); toast('Plantilla guardada', 'ok'); plantillas(); } catch (e) { toastError(e); }
   });
   ed$.querySelector('#pl-rest')?.addEventListener('click', async () => {
-    if (!await confirmar('Restaurar plantilla', 'Se reemplazará el texto actual por el texto por defecto de Síguelo Rentacar.', { boton: 'Restaurar', peligro: true })) return;
+    if (!await confirmar('Restaurar plantilla', 'Se reemplazará el texto actual por el texto por defecto de Síguelo Rent a Car.', { boton: 'Restaurar', peligro: true })) return;
     try { await api(`configuracion/plantillas/${p.id}/restaurar`, { body: {} }); toast('Plantilla restaurada', 'ok'); plantillas(); } catch (e) { toastError(e); }
   });
 }
@@ -528,7 +528,7 @@ async function miClave() {
   panel.innerHTML = `<form class="tarjeta bloque" id="fc" style="max-width:520px"><h2>Cambiar mi clave</h2>
     <p class="ayuda">${esc(yo.usuario.nombre)} · ${esc(yo.usuario.correo)}</p>
     <label class="etiqueta">Clave actual<input class="campo" type="password" name="actual" autocomplete="current-password" required></label>
-    <label class="etiqueta">Nueva clave (mínimo 8 caracteres)<input class="campo" type="password" name="nueva" autocomplete="new-password" minlength="8" required></label>
+    <label class="etiqueta">Nueva clave (mínimo 10 caracteres)<input class="campo" type="password" name="nueva" autocomplete="new-password" minlength="10" required></label>
     <label class="etiqueta">Repite la nueva clave<input class="campo" type="password" name="repite" autocomplete="new-password" required></label>
     <div class="cf-pie"><button class="btn primario" type="submit">Cambiar clave</button></div></form>`;
   const f = panel.querySelector('#fc');

@@ -195,7 +195,7 @@ export async function iniciarPagina({ activo, titulo = '' } = {}) {
   app.innerHTML = `
   <nav class="menu" aria-label="Menú principal">
     <div class="menu-marca"><img class="logo" src="/img/logo-siguelo.png" alt="Síguelo GPS"><img class="marca-pin" src="/img/logo-pin.png" alt=""><button type="button" class="btn-plegar" aria-label="Plegar menú">${ICONOS.plegar}</button></div>
-    ${e ? `<div class="rc-empresa" title="${esc(e.nombre)}">${e.logo_clave ? `<img class="rc-empresa-logo" src="/api/logo/${esc(e.slug)}" alt="">` : `<span class="rc-empresa-logo" style="background:${esc(e.color || '#0F5F58')}">${esc(e.nombre.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase())}</span>`}<div><b>${esc(e.nombre)}</b><span>Rentacar · Plan ${esc((e.plan || 'pro').replace(/^./, (c) => c.toUpperCase()))}</span></div></div>` : ''}
+    ${e ? `<div class="rc-empresa" title="${esc(e.nombre)}">${e.logo_clave ? `<img class="rc-empresa-logo" src="/api/logo/${esc(e.slug)}" alt="">` : `<span class="rc-empresa-logo" style="background:${esc(e.color || '#0F5F58')}">${esc(e.nombre.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase())}</span>`}<div><b>${esc(e.nombre)}</b><span>Rent a Car · Plan ${esc((e.plan || 'pro').replace(/^./, (c) => c.toUpperCase()))}</span></div></div>` : ''}
     ${MENU.map(([g, items]) => {
       const vis = items.filter(([m]) => YO.permisos[m]);
       return vis.length ? `<div class="menu-grupo">${g}</div>${vis.map(([m, n, href]) => `<a class="item" href="${href}" title="${n}"${m === activo ? ' aria-current="page"' : ''}>${ICONOS[m]}<span>${n}</span></a>`).join('')}` : '';
@@ -219,17 +219,52 @@ export async function iniciarPagina({ activo, titulo = '' } = {}) {
   main.classList.add('contenido');
   app.querySelector('.principal').appendChild(main);
   document.body.prepend(app);
-  document.title = `${titulo ? `${titulo} · ` : ''}${e?.nombre || 'Síguelo Rentacar'}`;
+  document.title = `${titulo ? `${titulo} · ` : ''}${e?.nombre || 'Síguelo Rent a Car'}`;
 
   app.querySelector('.btn-plegar').onclick = () => { app.classList.toggle('plegada'); try { localStorage.setItem('rc_menu_plegado', app.classList.contains('plegada') ? '1' : '0'); } catch { /* sin almacenamiento */ } };
   app.querySelector('.btn-menu-movil').onclick = () => app.classList.toggle('menu-abierto');
-  app.querySelector('#rc-usuario').onclick = async () => {
-    const r = await modal({ titulo: YO.usuario.nombre, html: `<p class="muted">${esc(YO.usuario.correo)} · ${esc(YO.usuario.rol_nombre)}</p><p><a href="/configuracion#mi-clave">Cambiar mi clave</a></p>`, botones: [{ texto: 'Cerrar' }, { texto: 'Cerrar sesión', clase: 'oscuro', valor: 'salir' }] });
-    if (r === 'salir') { await api('salir', { body: {} }); location.href = '/ingresar'; }
-  };
+  app.querySelector('#rc-usuario').onclick = abrirMiCuenta;
   app.querySelector('#rc-empresa')?.addEventListener('change', async (ev) => { await api('empresa-activa', { body: { empresa_id: Number(ev.target.value) } }); location.reload(); });
   activarBuscador(app);
   return YO;
+}
+
+// «Mi cuenta» (igual que en los demás sistemas Síguelo): cambiar la clave y salir.
+const OJO = I('<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>', ' width="18" height="18"');
+function abrirMiCuenta() {
+  const campo = (name, etiqueta, ac) => `<label class="etiqueta">${etiqueta}<span class="rc-clave"><input class="campo" type="password" name="${name}" autocomplete="${ac}"><button type="button" class="rc-ojo" aria-label="Mostrar u ocultar la clave" tabindex="-1">${OJO}</button></span></label>`;
+  const fondo = document.createElement('div');
+  fondo.className = 'modal-fondo';
+  fondo.innerHTML = `<form class="modal" style="width:min(720px,100%)" role="dialog" aria-modal="true" aria-label="Mi cuenta">
+    <div class="modal-cab"><h2>Mi cuenta</h2><button type="button" class="btn-icono" data-cerrar aria-label="Cerrar">${ICONOS.x}</button></div>
+    <div class="modal-cuerpo">
+      <p class="peq muted">${esc(YO.usuario.nombre)} · ${esc(YO.usuario.correo)}</p>
+      ${campo('actual', 'Clave actual', 'current-password')}
+      ${campo('nueva', 'Clave nueva (mínimo 10 caracteres)', 'new-password')}
+      ${campo('repite', 'Repite la clave nueva', 'new-password')}
+      <div class="aviso error" data-err hidden></div>
+    </div>
+    <div class="modal-pie rc-pie-cuenta"><button type="button" class="btn" data-salir>${ICONOS.salir} Salir</button><button type="submit" class="btn primario">${ICONOS.ok} Cambiar clave</button></div></form>`;
+  const cerrar = () => { fondo.remove(); document.removeEventListener('keydown', tecla); };
+  const tecla = (e) => { if (e.key === 'Escape') cerrar(); };
+  document.addEventListener('keydown', tecla);
+  fondo.addEventListener('click', async (e) => {
+    if (e.target === fondo || e.target.closest('[data-cerrar]')) return cerrar();
+    const ojo = e.target.closest('.rc-ojo');
+    if (ojo) { const inp = ojo.previousElementSibling; inp.type = inp.type === 'password' ? 'text' : 'password'; return; }
+    if (e.target.closest('[data-salir]')) { await api('salir', { body: {} }).catch(() => {}); location.href = '/ingresar'; }
+  });
+  const f = fondo.querySelector('form'), err = fondo.querySelector('[data-err]');
+  f.onsubmit = async (e) => {
+    e.preventDefault(); err.hidden = true;
+    const actual = f.actual.value, nueva = f.nueva.value;
+    const mal = !actual ? 'Escribe tu clave actual.' : nueva.length < 10 ? 'La clave nueva debe tener al menos 10 caracteres.' : nueva !== f.repite.value ? 'Las claves nuevas no coinciden.' : null;
+    if (mal) { err.textContent = mal; err.hidden = false; return; }
+    try { await api('configuracion/mi-clave', { body: { actual, nueva } }); cerrar(); toast('Clave cambiada', 'ok'); }
+    catch (e2) { err.textContent = e2.message; err.hidden = false; }
+  };
+  document.body.appendChild(fondo);
+  f.actual.focus();
 }
 
 function activarBuscador(app) {

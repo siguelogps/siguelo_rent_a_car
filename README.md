@@ -1,4 +1,4 @@
-# Síguelo Rentacar
+# Síguelo Rent a Car
 
 Sistema de administración de rentacar (arriendo de vehículos), producto de **Síguelo GPS** para empresas de rentacar en Chile.
 Multi-empresa: cada rentacar es un cliente de Síguelo, con sus propios datos, usuarios y logo en sus documentos.

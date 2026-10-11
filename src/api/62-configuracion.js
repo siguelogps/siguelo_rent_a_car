@@ -36,7 +36,7 @@ r.post('/configuracion/mi-clave', requiere(null, 'ver', { sinEmpresa: true }), a
   const { actual, nueva } = req.body || {};
   const u = await uno('SELECT id, clave_hash FROM usuarios WHERE id = $1', [req.usuario.id]);
   if (!verificarClave(actual || '', u.clave_hash)) throw new ErrorHttp(400, 'La clave actual no es correcta.', { campo: 'actual' });
-  if (String(nueva || '').length < 8) throw new ErrorHttp(400, 'La nueva clave debe tener al menos 8 caracteres.', { campo: 'nueva' });
+  if (String(nueva || '').length < 10) throw new ErrorHttp(400, 'La nueva clave debe tener al menos 10 caracteres.', { campo: 'nueva' });
   if (nueva === actual) throw new ErrorHttp(400, 'La nueva clave debe ser distinta de la actual.', { campo: 'nueva' });
   await q('UPDATE usuarios SET clave_hash = $2 WHERE id = $1', [u.id, hashClave(nueva)]);
   const t = leerCookie(req, 'rc_sesion');

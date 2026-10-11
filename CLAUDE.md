@@ -1,4 +1,4 @@
-# Síguelo Rentacar · convenciones del proyecto
+# Síguelo Rent a Car · convenciones del proyecto
 
 Sistema de administración de rentacar (producto de Síguelo GPS), multi-empresa, para vender a rentacars en Chile.
 Node.js ≥ 22 (ESM), Express 5, PostgreSQL (PGlite embebido si no hay `DATABASE_URL`), frontend en HTML + JS de módulos sin framework.

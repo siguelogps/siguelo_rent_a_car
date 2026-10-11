@@ -43,7 +43,7 @@ export async function exportarFlota(empresaId) {
       LEFT JOIN categorias c ON c.id = v.categoria_id LEFT JOIN sucursales s ON s.id = v.sucursal_id LEFT JOIN propietarios p ON p.id = v.propietario_id
       WHERE v.empresa_id = $1 AND v.activo ORDER BY c.orden NULLS LAST, v.patente`, [empresaId]);
   const wb = new ExcelJS.Workbook();
-  wb.creator = 'Síguelo Rentacar';
+  wb.creator = 'Síguelo Rent a Car';
   const h = wb.addWorksheet('Flota', { views: [{ state: 'frozen', ySplit: 1 }] });
   h.columns = COLUMNAS.map(([key, header, width, tipo]) => ({ key, header, width, style: tipo === 'fecha' ? { numFmt: 'dd-mm-yyyy' } : tipo === 'entero' ? { numFmt: '#,##0' } : {} }));
   h.getRow(1).font = { bold: true };

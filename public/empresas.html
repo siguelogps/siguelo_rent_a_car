@@ -8,7 +8,7 @@
 <body>
 <main>
   <div class="pagina-cab">
-    <div><h1>Empresas</h1><p>Rentacars clientes de Síguelo · solo equipo Síguelo</p></div>
+    <div><h1>Empresas</h1><p>Rent a Car clientes de Síguelo · solo equipo Síguelo</p></div>
     <div class="acciones"><input class="campo" id="filtro" placeholder="Buscar por nombre, RUT o slug…" style="min-width:240px"><button class="btn primario" id="nueva">+ Nueva empresa</button></div>
   </div>
   <div class="kpis" id="kpis"></div>
@@ -96,7 +96,7 @@ document.getElementById('nueva').onclick = () => modal({ titulo: 'Nueva empresa 
 botones: [{ texto: 'Cancelar' }, { texto: 'Crear empresa', clase: 'primario', accion: async (c) => {
   const d = leerForm(c);
   if (d.rut && !validarRut(d.rut)) throw new Error('El RUT de la empresa no es válido');
-  if ((d.admin_clave || '').length < 8) throw new Error('La clave del administrador debe tener al menos 8 caracteres');
+  if ((d.admin_clave || '').length < 10) throw new Error('La clave del administrador debe tener al menos 10 caracteres');
   const e = await api('empresas', { body: d });
   toast(`${e.nombre} creada · portal /reservar/${e.slug}`, 'ok');
   setTimeout(() => modal({ titulo: 'Empresa creada', html: `<p>Entrega estos datos al administrador de <b>${esc(e.nombre)}</b>:</p><div class="cf-clave" style="font-size:15px;text-align:left">Correo: ${esc(d.admin_correo)}<br>Clave temporal: ${esc(d.admin_clave)}</div><p class="peq muted">Puede cambiar la clave en Configuración › Mi clave.</p>` }), 50);

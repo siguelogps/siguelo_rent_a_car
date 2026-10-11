@@ -10,7 +10,7 @@ if (config.produccion && !config.baseDatos && process.env.PERMITIR_PGLITE !== '1
   const { default: express } = await import('express');
   const app = express();
   app.get('/salud', (_req, res) => res.status(503).json({ ok: false, servicio: 'siguelo-rentacar', error: 'Falta DATABASE_URL' }));
-  app.use((_req, res) => res.status(503).type('html').send(`<!doctype html><meta charset="utf-8"><title>Síguelo Rentacar</title>
+  app.use((_req, res) => res.status(503).type('html').send(`<!doctype html><meta charset="utf-8"><title>Síguelo Rent a Car</title>
     <body style="font-family:system-ui;max-width:560px;margin:80px auto;padding:0 16px;color:#15181D">
     <img src="/img/logo-siguelo.png" alt="Síguelo GPS" style="height:34px"><h1 style="font-size:22px">Falta conectar la base de datos</h1>
     <p>Agrega la variable <b>DATABASE_URL</b> con la «Internal Database URL» de PostgreSQL en Render (servicio › Environment) y el sistema arrancará solo.</p></body>`));
@@ -28,7 +28,10 @@ if (!hay.n && config.sembrarDemo) {
   console.log(`Datos de prueba creados: administrador demo@siguelogps.cl${process.env.DEMO_CLAVE ? ' (clave en DEMO_CLAVE)' : ' / demo1234'}`);
 }
 
+const { asegurarSuperadmin } = await import('./superadmin.js');
+await asegurarSuperadmin();
+
 const app = await crearApp();
-app.listen(config.puerto, () => console.log(`Síguelo Rentacar escuchando en ${config.urlBase} (puerto ${config.puerto}, base: ${config.baseDatos ? 'PostgreSQL' : 'PGlite'})`));
+app.listen(config.puerto, () => console.log(`Síguelo Rent a Car escuchando en ${config.urlBase} (puerto ${config.puerto}, base: ${config.baseDatos ? 'PostgreSQL' : 'PGlite'})`));
 if (config.tareas) iniciarTareas();
 }

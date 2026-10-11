@@ -1,6 +1,6 @@
 // PDF del contrato con pdfkit (Helvetica: las fuentes IBM Plex del proyecto vienen solo en woff2).
 // Encabezado con el logo de la empresa (o su nombre), texto del contrato, bloque de firma, QR de verificación
-// y pie pequeño «Documento generado con Síguelo Rentacar».
+// y pie pequeño «Documento generado con Síguelo Rent a Car».
 import PDFDocument from 'pdfkit';
 import QRCode from 'qrcode';
 import { fechaHora } from '../util/formato.js';
@@ -21,7 +21,7 @@ const TINTA = '#15181D', GRIS = '#5B6370', LINEA = '#E2E5EA';
  */
 export async function construirPdf({ contrato, empresa, logo = null, firma = null, urlVerificacion }) {
   const doc = new PDFDocument({ size: 'LETTER', margins: { top: 50, bottom: 60, left: 56, right: 56 }, bufferPages: true,
-    info: { Title: `Contrato ${contrato.folio}`, Author: limpiarTexto(empresa.razon_social || empresa.nombre), Creator: 'Síguelo Rentacar', Subject: 'Contrato de arriendo de vehículo' } });
+    info: { Title: `Contrato ${contrato.folio}`, Author: limpiarTexto(empresa.razon_social || empresa.nombre), Creator: 'Síguelo Rent a Car', Subject: 'Contrato de arriendo de vehículo' } });
   const partes = [];
   doc.on('data', (c) => partes.push(c));
   const fin = new Promise((ok) => doc.on('end', () => ok(Buffer.concat(partes))));
@@ -97,7 +97,7 @@ export async function construirPdf({ contrato, empresa, logo = null, firma = nul
     const yp = doc.page.height - 40;
     const m = doc.page.margins.bottom; doc.page.margins.bottom = 0;
     doc.moveTo(X, yp - 6).lineTo(X + W, yp - 6).lineWidth(0.5).strokeColor(LINEA).stroke();
-    doc.font('Helvetica').fontSize(7).fillColor('#9AA1AD').text('Documento generado con Síguelo Rentacar', X, yp, { width: W / 2, lineBreak: false });
+    doc.font('Helvetica').fontSize(7).fillColor('#9AA1AD').text('Documento generado con Síguelo Rent a Car', X, yp, { width: W / 2, lineBreak: false });
     doc.text(limpiarTexto(`${contrato.folio} · página ${i - rango.start + 1} de ${rango.count}`), X + W / 2, yp, { width: W / 2, align: 'right', lineBreak: false });
     doc.page.margins.bottom = m;
   }

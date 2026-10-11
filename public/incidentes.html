@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Incidentes y daños</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/patio.css">
+</head>
+<body>
+<main>
+  <div class="pagina-cab">
+    <div><h1>Incidentes y daños</h1><p>Trazabilidad de cada daño, accidente o falla: desde el reporte en patio hasta el cobro, el seguro y el pago.</p></div>
+    <div class="acciones" id="acciones"></div>
+  </div>
+  <div class="pt-kpis" id="kpis"></div>
+  <div class="rc-entre" style="flex-wrap:wrap">
+    <div class="filtros-fila" id="filtros"></div>
+    <label class="pt-buscar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input class="campo" id="q" placeholder="Folio, patente, cliente o reserva" autocomplete="off" aria-label="Buscar incidentes"></label>
+  </div>
+  <div class="tarjeta tabla-env" id="tabla"><div class="rc-cargando">Cargando…</div></div>
+</main>
+<script type="module" src="/js/patio-incidentes.js"></script>
+</body>
+</html>

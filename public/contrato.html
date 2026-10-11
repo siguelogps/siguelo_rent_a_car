@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contrato</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/reservas.css">
+</head>
+<body>
+<main><p class="rc-cargando">Cargando contrato…</p></main>
+<script type="module">
+import { iniciarPagina, api, esc, pat, fechaHora, chipEstado, puede, modal, toast, toastError } from '/comun.js';
+import { copiar } from '/js/reservas-util.js';
+await iniciarPagina({ activo: 'contratos', titulo: 'Contratos' });
+const main = document.querySelector('main');
+const id = Number(location.pathname.split('/').pop());
+const editar = puede('contratos', 'editar');
+const CHIP = { pendiente_firma: '<span class="chip aviso">Pendiente de firma</span>', firmado: '<span class="chip ok">Firmado</span>', anulado: '<span class="chip error">Anulado</span>' };
+const ACC = { contrato_generado: 'Contrato generado', contrato_regenerado: 'Contrato actualizado con los datos de la reserva', contrato_firmado: 'Contrato firmado', contrato_anulado: 'Contrato anulado',
+  contrato_enlace_enviado: 'Enlace de firma enviado', contrato_enlace_renovado: 'Enlace de firma renovado', contrato_reenviado: 'Contrato reenviado al cliente' };
+const retenida = (s) => s.salidas.some((x) => x.estado === 'retenida');
+
+async function cargar() {
+  const { contrato: c, enlace, reserva: r, historial, salidas } = await api(`contratos/${id}`);
+  const ev = [...historial.map((h) => ({ en: h.creado_en, html: `<b>${esc(ACC[h.accion] || h.accion.replace(/_/g, ' '))}</b>${h.detalle?.firmante ? ` · ${esc(h.detalle.firmante)}` : ''}${h.detalle?.motivo ? ` · ${esc(h.detalle.motivo)}` : ''}`, sub: h.usuario || (h.accion === 'contrato_firmado' ? 'firma del cliente' : 'sistema') })),
+    ...salidas.map((s) => ({ en: s.creado_en, pend: s.estado !== 'enviada', html: `<b>${s.canal === 'correo' ? 'Correo' : 'WhatsApp'} ${s.estado === 'enviada' ? 'enviado' : s.estado === 'retenida' ? 'retenido (marcha blanca)' : esc(s.estado)}</b> · ${esc(s.destino)}`, sub: '' }))]
+    .sort((a, b) => new Date(b.en) - new Date(a.en));
+  main.innerHTML = `
+  <a href="/contratos" class="peq muted rs-volver">‹ Contratos</a>
+  <div class="pagina-cab">
+    <div><div class="rc-fila"><h1>Contrato <span class="mono">${esc(c.folio)}</span></h1>${CHIP[c.estado]}</div>
+      <p>Reserva <a href="/reservas/${r.id}" class="mono">${esc(r.folio)}</a> · ${esc(r.cliente)} · generado el ${fechaHora(c.creado_en)}${c.creado_por_nombre ? ` por ${esc(c.creado_por_nombre)}` : ''}</p></div>
+    <div class="acciones">
+      <a class="btn" href="/api/contratos/${c.id}/pdf" target="_blank" rel="noopener">${c.estado === 'firmado' ? 'Ver PDF' : 'Vista previa (PDF)'}</a>
+      ${c.estado === 'firmado' ? `<a class="btn" href="/api/contratos/${c.id}/pdf?descargar=1">Descargar PDF</a>${editar ? '<button class="btn" data-a="reenviar">Reenviar al cliente</button>' : ''}` : ''}
+      ${editar && c.estado !== 'anulado' ? '<button class="btn peligro" data-a="anular">Anular contrato</button>' : ''}
+      ${editar && enlace ? '<button class="btn primario" data-a="firmar">Firmar en esta pantalla</button>' : ''}
+    </div>
+  </div>
+  ${c.estado === 'anulado' ? `<div class="aviso error"><b>Contrato anulado</b> el ${fechaHora(c.anulado_en)}${c.anulado_por_nombre ? ` por ${esc(c.anulado_por_nombre)}` : ''}: ${esc(c.anulado_motivo || '')}</div>` : ''}
+  <div class="columnas">
+    <div class="tarjeta bloque"><h2>Texto del contrato</h2><div class="rs-texto-contrato">${esc(c.contenido)}</div></div>
+    <div class="rs-ficha-cols">
+      <div class="tarjeta bloque">
+        <h2>Datos</h2>
+        <dl class="rc-datos">
+          <div><dt>Arrendatario</dt><dd><a href="/clientes/${r.cliente_id}">${esc(r.cliente)}</a><br><span class="peq muted mono">${esc(c.datos?.documento || '')}</span></dd></div>
+          <div><dt>Vehículo</dt><dd>${r.patente ? pat(r.patente) : ''} ${esc(r.marca || '')} ${esc(r.modelo || '')}</dd></div>
+          <div><dt>Período</dt><dd class="mono">${fechaHora(r.inicio)}<br>${fechaHora(r.fin)}</dd></div>
+          <div><dt>Reserva</dt><dd>${chipEstado(r.estado)}</dd></div>
+        </dl>
+      </div>
+      <div class="tarjeta bloque">
+        <h2>Firma</h2>
+        ${c.firmado_en ? `<dl class="rc-datos">
+          <div><dt>Firmante</dt><dd>${esc(c.firmante_nombre)}<br><span class="peq muted mono">${esc(c.firmante_documento || '')}</span></dd></div>
+          <div><dt>Firmado el</dt><dd class="mono">${fechaHora(c.firmado_en)}</dd></div>
+          <div><dt>IP</dt><dd class="mono">${esc(c.firmado_ip || '—')}</dd></div>
+          <div><dt>Dispositivo</dt><dd class="peq">${esc((c.firmado_agente || '—').slice(0, 90))}</dd></div>
+        </dl>
+        ${c.firma_archivo_id ? `<img src="/api/archivos/${c.firma_archivo_id}" alt="Firma del arrendatario" style="max-width:100%;max-height:110px;border:1px solid var(--line);border-radius:10px;background:#fff;padding:6px;align-self:flex-start">` : ''}
+        <div><span class="peq muted">Huella del PDF (SHA-256)</span><div class="rs-hash">${esc(c.hash_sha256 || '—')}</div></div>`
+        : enlace ? `<p class="ayuda">Pendiente de firma. El enlace vence el ${fechaHora(enlace.vence)}.</p>
+          <div class="rs-portal"><input class="campo" readonly value="${esc(enlace.url_firma)}" aria-label="Enlace de firma"><button class="btn peq" data-a="copiar">Copiar</button></div>
+          ${editar ? '<div class="rc-fila"><button class="btn peq" data-a="enviar">Enviar al cliente</button><button class="btn peq" data-a="renovar">Renovar enlace</button></div>' : ''}` : '<p class="muted">Sin firma.</p>'}
+      </div>
+      <div class="tarjeta bloque">
+        <h2>Verificación</h2>
+        <p class="ayuda">El PDF lleva este código QR, que abre la página pública de verificación.</p>
+        <div class="rs-qr"><img alt="Código QR de verificación" src="/api/contratos/${c.id}/qr"></div>
+        <div class="rc-entre"><span class="mono" style="font-weight:600">${esc(c.codigo_verificacion)}</span><a class="btn peq" href="${esc(new URL(c.url_verificacion).pathname)}" target="_blank" rel="noopener">Abrir verificación</a></div>
+      </div>
+      <div class="tarjeta bloque"><h2>Historial</h2><div class="rc-timeline">${ev.map((e) => `<div class="${e.pend ? 'pend' : ''}"><span>${e.html}<small>${fechaHora(e.en)}${e.sub ? ` · ${esc(e.sub)}` : ''}</small></span></div>`).join('')}</div></div>
+    </div>
+  </div>`;
+  document.title = `${c.folio} · Contratos`;
+  main.querySelectorAll('[data-a]').forEach((b) => b.addEventListener('click', async () => {
+    try {
+      const a = b.dataset.a;
+      if (a === 'copiar') toast(await copiar(enlace.url_firma) ? 'Enlace copiado' : enlace.url_firma, 'ok');
+      if (a === 'firmar') { const e = await api(`contratos/${id}/enlace`, { body: {} }); location.href = `${new URL(e.url_firma).pathname}?volver=/contratos/${id}`; }
+      if (a === 'renovar') { await api(`contratos/${id}/enlace`, { body: {} }); toast('Enlace renovado por 7 días', 'ok'); cargar(); }
+      if (a === 'enviar') { const s = await api(`contratos/${id}/enviar-enlace`, { body: { canal: 'ambos' } }); toast(retenida(s) ? 'En la bandeja de salida (retenido por marcha blanca)' : 'Enlace enviado', 'ok'); cargar(); }
+      if (a === 'reenviar') { const s = await api(`contratos/${id}/reenviar`, { body: {} }); toast(retenida(s) ? 'En la bandeja de salida (retenido por marcha blanca)' : 'Contrato reenviado', 'ok'); cargar(); }
+      if (a === 'anular') {
+        const ok = await modal({ titulo: `Anular contrato ${c.folio}`, html: '<p>El contrato dejará de ser válido y la página de verificación lo mostrará como anulado. Luego podrás generar uno nuevo desde la reserva.</p><label class="etiqueta">Motivo (obligatorio)<textarea class="campo" id="motivo" rows="3"></textarea></label>',
+          botones: [{ texto: 'Volver' }, { texto: 'Anular contrato', clase: 'peligro', accion: async (cu) => { const m = cu.querySelector('#motivo').value.trim(); if (m.length < 3) throw new Error('Indica el motivo'); return api(`contratos/${id}/anular`, { body: { motivo: m } }); } }] });
+        if (ok) { toast('Contrato anulado', 'ok'); cargar(); }
+      }
+    } catch (e) { toastError(e); }
+  }));
+}
+cargar().catch((e) => { main.innerHTML = `<div class="aviso error">${esc(e.message)}</div><a href="/contratos">Volver a contratos</a>`; });
+</script>
+</body>
+</html>

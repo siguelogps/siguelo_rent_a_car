@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reservas</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/reservas.css">
+</head>
+<body>
+<main>
+  <div class="pagina-cab">
+    <div><h1 id="titulo">Calendario de reservas</h1><p id="bajada">Arrastra una reserva para cambiarla de vehículo o de fecha. El sistema no permite dobles reservas.</p></div>
+    <div class="acciones">
+      <div class="segmentado" id="vista-modo" role="group" aria-label="Vista"><button type="button" data-modo="calendario" aria-pressed="true">Calendario</button><button type="button" data-modo="lista">Lista</button></div>
+      <button type="button" class="btn" id="btn-excel">Exportar Excel</button>
+      <button type="button" class="btn primario" id="btn-nueva" hidden>+ Nueva reserva</button>
+    </div>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="tarjeta" id="panel-cal">
+    <div class="bloque" style="padding-bottom:12px">
+      <div class="rc-entre" style="flex-wrap:wrap">
+        <div class="rc-fila">
+          <button type="button" class="btn-icono" id="ant" aria-label="Anterior">‹</button>
+          <button type="button" class="btn peq" id="hoy">Hoy</button>
+          <button type="button" class="btn-icono" id="sig" aria-label="Siguiente">›</button>
+          <b class="rs-rango" id="rango"></b>
+        </div>
+        <div class="rc-fila">
+          <div class="segmentado" id="vistas" role="group" aria-label="Período"><button type="button" data-v="dia">Día</button><button type="button" data-v="semana">Semana</button><button type="button" data-v="2semanas">2 semanas</button><button type="button" data-v="mes">Mes</button></div>
+          <select class="campo" id="f-cat" aria-label="Categoría"><option value="">Todas las categorías</option></select>
+          <select class="campo" id="f-suc" aria-label="Sucursal"><option value="">Sucursal: todas</option></select>
+        </div>
+      </div>
+      <div class="rc-leyenda">
+        <span><i style="background:#fff;border:1.5px dashed #9AA1AD;border-left:3px solid #9AA1AD"></i>Cotización</span>
+        <span><i style="background:var(--blue-soft);border-color:var(--blue)"></i>Confirmada</span>
+        <span><i style="background:var(--green-soft);border-color:var(--green)"></i>En curso</span>
+        <span><i style="background:var(--red-soft);border-color:var(--red)"></i>Atrasada</span>
+        <span><i style="background:var(--purple-soft);border-color:var(--purple)"></i>Devuelta (por cerrar)</span>
+        <span><i style="background:#ECEEF1;border-color:#B8BEC7"></i>Cerrada</span>
+        <span><i style="background:repeating-linear-gradient(135deg,#FEF3E2 0 4px,#FCE7C8 4px 8px);border-color:#D97706"></i>Mantención (bloqueado)</span>
+      </div>
+    </div>
+    <div class="rs-scroll"><div class="rc-gantt" id="gantt"><p class="rc-cargando">Cargando calendario…</p></div></div>
+  </div>
+
+  <div class="tarjeta" id="panel-lista" hidden>
+    <div class="bloque" style="padding-bottom:12px">
+      <div class="filtros-fila" id="f-estados"></div>
+      <div class="rc-fila">
+        <input class="campo" id="l-q" placeholder="Folio, cliente, RUT o patente" style="flex:1 1 220px" aria-label="Buscar">
+        <label class="rs-et-in">Retiro desde<input class="campo" type="date" id="l-desde"></label>
+        <label class="rs-et-in">hasta<input class="campo" type="date" id="l-hasta"></label>
+        <select class="campo" id="l-suc" aria-label="Sucursal"><option value="">Todas las sucursales</option></select>
+      </div>
+    </div>
+    <div class="tabla-env"><table class="tabla" id="tabla"></table></div>
+  </div>
+</main>
+<script type="module">
+import { iniciarPagina, api, esc, clp, pat, fecha, hora, chipEstado, puede, descargar, toastError, patente } from '/comun.js';
+import { crearCalendario, columnas } from '/js/reservas-calendario.js';
+import { abrirFormReserva } from '/js/reservas-form.js';
+import { sumarDias, hoyChile, atrasoTxt, diasArriendo, docTxt } from '/js/reservas-util.js';
+
+await iniciarPagina({ activo: 'reservas', titulo: 'Reservas' });
+const $ = (id) => document.getElementById(id);
+const url = new URLSearchParams(location.search);
+let pref = {};
+try { pref = JSON.parse(localStorage.getItem('rs_cal') || '{}'); } catch { pref = {}; }
+const st = { modo: url.get('vista') === 'lista' ? 'lista' : 'calendario', vista: ['dia', 'semana', '2semanas', 'mes'].includes(pref.vista) ? pref.vista : '2semanas', desde: null, cat: url.get('categoria_id') || '', suc: url.get('sucursal_id') || '' };
+const editar = puede('reservas', 'editar');
+$('btn-nueva').hidden = !editar;
+
+const opc = await api('reservas/opciones');
+for (const c of opc.categorias) $('f-cat').insertAdjacentHTML('beforeend', `<option value="${c.id}">${esc(c.nombre)}</option>`);
+for (const s of opc.sucursales) { $('f-suc').insertAdjacentHTML('beforeend', `<option value="${s.id}">Sucursal: ${esc(s.nombre)}</option>`); $('l-suc').insertAdjacentHTML('beforeend', `<option value="${s.id}">${esc(s.nombre)}</option>`); }
+$('f-cat').value = st.cat; $('f-suc').value = st.suc;
+
+function inicioPorDefecto(v) {
+  const h = hoyChile();
+  if (v === 'dia') return h;
+  if (v === 'semana') return sumarDias(h, -1);
+  if (v === '2semanas') return sumarDias(h, -2);
+  return `${h.slice(0, 8)}01`;
+}
+st.desde = inicioPorDefecto(st.vista);
+
+const cal = crearCalendario($('gantt'), { alAbrirNueva: (p) => editar && nueva(p), alCambiar: () => cargar() });
+
+async function nueva(prefill = {}) {
+  const r = await abrirFormReserva({ prefill });
+  if (r) location.href = `/reservas/${r.id}`;
+}
+$('btn-nueva').onclick = () => nueva();
+
+function mover(sentido) {
+  const v = st.vista;
+  if (v === 'mes') { const [a, m] = st.desde.split('-').map(Number); st.desde = new Date(Date.UTC(a, m - 1 + sentido, 1)).toISOString().slice(0, 10); }
+  else st.desde = sumarDias(st.desde, sentido * (v === 'dia' ? 1 : v === 'semana' ? 7 : 14));
+  cargar();
+}
+$('ant').onclick = () => mover(-1); $('sig').onclick = () => mover(1);
+$('hoy').onclick = () => { st.desde = inicioPorDefecto(st.vista); cargar(); };
+document.querySelectorAll('#vistas button').forEach((b) => { b.onclick = () => { st.vista = b.dataset.v; st.desde = inicioPorDefecto(st.vista); try { localStorage.setItem('rs_cal', JSON.stringify({ vista: st.vista })); } catch { /* sin almacenamiento */ } cargar(); }; });
+$('f-cat').onchange = () => { st.cat = $('f-cat').value; cargar(); };
+$('f-suc').onchange = () => { st.suc = $('f-suc').value; cargar(); };
+
+function kpis(k) {
+  const ocup = k.flota.total ? Math.round((k.flota.ocupados * 100) / k.flota.total) : 0;
+  const atr = k.atrasadas[0];
+  $('kpis').innerHTML = `
+    <div class="kpi"><span>Retiros hoy</span><b>${k.retiros}</b><small>${k.retiros_sucursal ? `${k.retiros_sucursal.n} en ${esc(k.retiros_sucursal.nombre)}` : 'sin retiros pendientes'}</small></div>
+    <div class="kpi"><span>Devoluciones hoy</span><b>${k.devoluciones}</b><small>${k.devoluciones_otra ? `${k.devoluciones_otra} en otra sucursal` : 'todas en su sucursal'}</small></div>
+    <div class="kpi"><span>Atrasadas</span><b${k.atrasadas.length ? ' style="color:var(--red)"' : ''}>${k.atrasadas.length}</b><small class="${k.atrasadas.length ? 'mal' : ''}">${atr ? `${esc(atr.patente ? patente(atr.patente) : atr.folio)} · ${atrasoTxt(atr.fin)}${k.atrasadas.length > 1 ? ` y ${k.atrasadas.length - 1} más` : ''}` : 'ninguna'}</small></div>
+    <div class="kpi"><span>Ocupación hoy</span><b>${ocup} %</b><small>${k.flota.ocupados} de ${k.flota.total} vehículos</small></div>
+    <div class="kpi"><span>Cotizaciones abiertas</span><b>${k.cotizaciones}</b><small>${k.cotizaciones_48 ? `${k.cotizaciones_48} retiran en 48 h` : 'por confirmar'}</small></div>`;
+}
+
+let seq = 0;
+async function cargar() {
+  document.querySelectorAll('#vistas button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === st.vista)));
+  const cols = columnas(st.vista, st.desde);
+  const ult = cols[cols.length - 1];
+  $('rango').textContent = st.vista === 'dia'
+    ? new Intl.DateTimeFormat('es-CL', { weekday: 'long', day: '2-digit', month: '2-digit', year: 'numeric', timeZone: 'UTC' }).format(new Date(`${st.desde}T12:00:00Z`)).replace(/\//g, '-')
+    : `${fecha(st.desde)} al ${fecha(ult.fecha)}`;
+  const n = ++seq;
+  const qs = new URLSearchParams({ desde: new Date(cols[0].ini).toISOString(), hasta: new Date(ult.fin).toISOString(), ...(st.cat ? { categoria_id: st.cat } : {}), ...(st.suc ? { sucursal_id: st.suc } : {}) });
+  try {
+    const d = await api(`reservas/calendario?${qs}`);
+    if (n !== seq) return;
+    kpis(d.kpis);
+    cal.pintar(d, cols, st.vista);
+  } catch (e) { toastError(e); }
+}
+
+// ── Lista ──
+const lf = { estado: url.get('estado') || '' };
+const ESTADOS_F = [['', 'Todas'], ['cotizacion', 'Cotizaciones'], ['confirmada', 'Confirmadas'], ['en_curso', 'En curso'], ['atrasada', 'Atrasadas'], ['devuelta', 'Devueltas'], ['cerrada', 'Cerradas'], ['cancelada', 'Canceladas'], ['no_show', 'No se presentó']];
+$('f-estados').innerHTML = ESTADOS_F.map(([k, t]) => `<button type="button" class="filtro" data-e="${k}" aria-pressed="${lf.estado === k}">${t}</button>`).join('');
+$('f-estados').onclick = (e) => { const b = e.target.closest('[data-e]'); if (!b) return; lf.estado = b.dataset.e; $('f-estados').querySelectorAll('.filtro').forEach((x) => x.setAttribute('aria-pressed', String(x === b))); cargarLista(); };
+const qsLista = () => new URLSearchParams(Object.entries({ estado: lf.estado, q: $('l-q').value.trim(), desde: $('l-desde').value, hasta: $('l-hasta').value, sucursal_id: $('l-suc').value }).filter(([, v]) => v));
+let tq = null;
+$('l-q').oninput = () => { clearTimeout(tq); tq = setTimeout(cargarLista, 250); };
+['l-desde', 'l-hasta', 'l-suc'].forEach((i) => { $(i).onchange = cargarLista; });
+
+async function cargarLista() {
+  try {
+    const filas = await api(`reservas?${qsLista()}`);
+    $('tabla').innerHTML = `<thead><tr><th>Folio</th><th>Estado</th><th>Cliente</th><th>Vehículo</th><th>Retiro</th><th>Devolución</th><th>Días</th><th style="text-align:right">Total</th></tr></thead>
+      <tbody>${filas.map((r) => `<tr class="clic" data-id="${r.id}"><td class="folio">${esc(r.folio)}</td><td>${r.atrasada ? chipEstado('atrasada', 'Atrasada') : chipEstado(r.estado)}</td>
+        <td><b>${esc(r.cliente || '—')}</b><div class="peq muted mono">${r.documento ? docTxt(r.documento_tipo, r.documento) : ''}</div></td>
+        <td>${r.patente ? `${pat(r.patente)} <span class="peq muted">${esc(r.marca)} ${esc(r.modelo)}</span>` : `<span class="muted">${esc(r.categoria || '')} · sin asignar</span>`}</td>
+        <td><span class="mono">${fecha(r.inicio)} ${hora(r.inicio)}</span><div class="peq muted">${esc(r.sucursal_retiro || '')}</div></td>
+        <td><span class="mono">${fecha(r.fin)} ${hora(r.fin)}</span><div class="peq muted">${esc(r.sucursal_devolucion || '')}</div></td>
+        <td class="mono">${diasArriendo(r.inicio, r.fin)}</td><td class="monto" style="text-align:right">${clp(r.total)}</td></tr>`).join('') || '<tr><td colspan="8" class="vacio">No hay reservas con estos filtros.</td></tr>'}</tbody>`;
+  } catch (e) { toastError(e); }
+}
+$('tabla').onclick = (e) => { const tr = e.target.closest('tr[data-id]'); if (tr) location.href = `/reservas/${tr.dataset.id}`; };
+
+function modo(m) {
+  st.modo = m;
+  document.querySelectorAll('#vista-modo button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.modo === m)));
+  $('panel-cal').hidden = m !== 'calendario'; $('panel-lista').hidden = m !== 'lista';
+  $('titulo').textContent = m === 'lista' ? 'Reservas' : 'Calendario de reservas';
+  $('bajada').textContent = m === 'lista' ? 'Todas las reservas y cotizaciones con filtros. Exporta a Excel lo que ves.' : 'Arrastra una reserva para cambiarla de vehículo o de fecha. El sistema no permite dobles reservas.';
+  const u = new URL(location.href); if (m === 'lista') u.searchParams.set('vista', 'lista'); else u.searchParams.delete('vista'); history.replaceState(null, '', u);
+  if (m === 'lista') cargarLista(); else cargar();
+}
+document.querySelectorAll('#vista-modo button').forEach((b) => { b.onclick = () => modo(b.dataset.modo); });
+
+$('btn-excel').onclick = async () => {
+  try {
+    let qs;
+    if (st.modo === 'lista') qs = qsLista();
+    else { const cols = columnas(st.vista, st.desde); qs = new URLSearchParams({ desde: cols[0].fecha, hasta: cols[cols.length - 1].fecha, ...(st.suc ? { sucursal_id: st.suc } : {}), ...(st.cat ? { categoria_id: st.cat } : {}) }); }
+    await descargar(`/api/reservas/excel?${qs}`, `reservas-${hoyChile()}.xlsx`);
+  } catch (e) { toastError(e); }
+};
+
+modo(st.modo);
+if (url.get('nueva') === '1' && editar) {
+  history.replaceState(null, '', location.pathname + (st.modo === 'lista' ? '?vista=lista' : ''));
+  nueva({ cliente_id: url.get('cliente_id') || undefined });
+}
+setInterval(() => { if (st.modo === 'calendario' && !document.querySelector('.rc-barra.arrastrando, .modal-fondo')) cargar(); }, 120000);
+</script>
+</body>
+</html>

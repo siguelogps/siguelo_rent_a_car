@@ -1,0 +1,283 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reserva</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/reservas.css">
+</head>
+<body>
+<main><p class="rc-cargando">Cargando reserva…</p></main>
+<script type="module">
+import { iniciarPagina, api, esc, clp, miles, pat, fecha, hora, fechaHora, chipEstado, puede, modal, confirmar, toast, toastError, ESTADOS_VEHICULO } from '/comun.js';
+import { abrirFormReserva } from '/js/reservas-form.js';
+import { diasArriendo, docTxt, estadoLicencia, combustible, ORIGEN, TIPOS_DOC, atrasoTxt, copiar } from '/js/reservas-util.js';
+
+const yo = await iniciarPagina({ activo: 'reservas', titulo: 'Reservas' });
+const main = document.querySelector('main');
+const id = Number(location.pathname.split('/').pop());
+const editar = puede('reservas', 'editar'), editarContrato = puede('contratos', 'editar');
+const ROL = { administrador: 'administración', counter: 'counter', patio: 'patio', finanzas: 'finanzas', superadmin: 'Síguelo' };
+const METODO = { webpay: ['Webpay Plus', '#E4002B'], mercadopago: ['Mercado Pago', '#00B1EA'], efectivo: ['Efectivo', '#1E7B3A'], transferencia: ['Transferencia', '#1E3A8A'], pos: ['POS', '#581C87'], otro: ['Otro', '#5B6370'] };
+const ACCION = {
+  reserva_creada: (d) => [d.estado === 'confirmada' ? 'Reserva creada y confirmada' : 'Cotización creada', d.total ? ` · ${clp(d.total)}` : ''],
+  reserva_confirmada: (d) => ['Reserva confirmada', d.folio_anterior ? ` · la cotización ${esc(d.folio_anterior)} pasó a ${esc(d.folio)}` : ''],
+  reserva_cancelada: (d) => ['Reserva cancelada', d.motivo ? ` · ${esc(d.motivo)}` : ''],
+  reserva_no_show: (d) => ['El cliente no se presentó', d.motivo ? ` · ${esc(d.motivo)}` : ''],
+  reserva_en_curso: () => ['Vehículo entregado (check-out)', ''], reserva_devuelta: () => ['Vehículo devuelto (check-in)', ''], reserva_cerrada: () => ['Reserva liquidada y cerrada', ''],
+  reserva_editada: (d) => ['Reserva editada', d.total !== d.total_anterior ? ` · total ${clp(d.total_anterior)} → ${clp(d.total)}` : ''],
+  reserva_movida: (d) => ['Reserva movida en el calendario', ` · ${d.a?.patente ? `${esc(d.a.patente)} · ` : ''}${fecha(d.a?.inicio)} al ${fecha(d.a?.fin)}${d.total !== d.total_anterior ? ` · total ${clp(d.total)}` : ''}`],
+  reserva_portal_renovado: () => ['Enlace del portal renovado', ''],
+  contrato_generado: (d) => ['Contrato generado', ` · ${esc(d.folio)}`], contrato_regenerado: (d) => ['Contrato actualizado', ` · ${esc(d.folio)}`],
+  contrato_firmado: (d) => ['Contrato firmado', ` · ${esc(d.firmante || '')} · ${esc(d.folio)}`], contrato_anulado: (d) => ['Contrato anulado', ` · ${esc(d.motivo || '')}`],
+  contrato_enlace_enviado: () => ['Enlace de firma enviado al cliente', ''], contrato_enlace_renovado: () => ['Enlace de firma renovado', ''], contrato_reenviado: () => ['Contrato reenviado al cliente', '']
+};
+
+async function cargar() { pintar(await api(`reservas/${id}`)); }
+
+function pasos(r, contrato) {
+  const firmado = contrato?.estado === 'firmado';
+  const n = ['cotizacion', 'confirmada', 'en_curso', 'devuelta', 'cerrada'].indexOf(r.estado);
+  const p = [
+    ['Cotización', true, false, fecha(r.creado_en).slice(0, 5)],
+    ['Confirmada', n >= 1, n === 0, n >= 1 ? '' : 'pendiente'],
+    ['Contrato y firma', firmado, n === 1 && !firmado, firmado ? fecha(contrato.firmado_en).slice(0, 5) : n === 1 ? 'pendiente' : ''],
+    ['Entrega (check-out)', n >= 2, n === 1 && firmado, r.retiro_real ? fecha(r.retiro_real).slice(0, 5) : ''],
+    ['Devolución (check-in)', n >= 3, n === 2, r.devolucion_real ? fecha(r.devolucion_real).slice(0, 5) : n === 2 ? `vence ${fecha(r.fin).slice(0, 5)}` : ''],
+    ['Liquidación y cierre', n >= 4, n === 3, n === 3 ? 'pendiente' : '']
+  ];
+  return p.map(([t, hecho, actual, sub], i) => `<div class="${hecho ? 'hecho' : actual ? 'actual' : ''}"><i>${hecho ? '✓' : i + 1}</i>${t}${sub ? `<small class="muted">${esc(sub)}</small>` : ''}</div>`).join('');
+}
+
+function vencTxt(f, fin) {
+  if (!f) return '<span class="muted">—</span>';
+  const d = new Date(`${f}T23:59:59`), c = d < new Date() ? 'vencido' : d < new Date(fin) ? 'pronto' : 'ok';
+  return `<span class="rc-venc ${c}"><span class="f">${fecha(f)}</span>${c === 'vencido' ? '<small>vencido</small>' : c === 'pronto' ? '<small>vence antes de la devolución</small>' : ''}</span>`;
+}
+
+function tarjetaContrato(r, c) {
+  const puedeGenerar = editarContrato && ['confirmada', 'en_curso'].includes(r.estado);
+  if (!c) {
+    return `<h2>Contrato</h2>
+      <p class="ayuda">${r.estado === 'cotizacion' ? 'Confirma la reserva para generar el contrato.' : 'Al generarlo se toman las condiciones de la plantilla «Contrato de arriendo estándar» y se pide la firma del cliente en la tablet o el celular. Queda validado con código QR.'}</p>
+      ${puedeGenerar ? '<div class="rs-btns"><button class="btn primario grande" data-acc="contrato">Generar contrato y firmar</button><button class="btn" data-acc="vista-previa">Ver vista previa (PDF)</button></div>' : ''}`;
+  }
+  if (c.estado === 'pendiente_firma') {
+    return `<h2>Contrato <span class="chip aviso">Pendiente de firma</span></h2>
+      <div class="rs-contrato-estado"><span class="rc-doc" style="border:0;padding:0"><span class="mini"></span></span><div><b class="mono">${esc(c.folio)}</b><small>generado el ${fechaHora(c.creado_en)}${c.token_firma_vence ? ` · el enlace vence el ${fecha(c.token_firma_vence)}` : ''}</small></div></div>
+      ${editarContrato ? `<div class="rs-btns"><button class="btn primario grande" data-acc="firmar-aqui">Firmar en esta pantalla</button>
+        <button class="btn" data-acc="enviar-enlace">Enviar enlace de firma al cliente</button>
+        <div class="rc-fila"><button class="btn peq" data-acc="copiar-firma" style="flex:1">Copiar enlace</button><button class="btn peq" data-acc="vista-previa" style="flex:1">Vista previa</button><button class="btn peq" data-acc="contrato" style="flex:1" title="Vuelve a tomar los datos de la reserva">Actualizar</button></div></div>` : `<a class="btn" href="/contratos/${c.id}">Ver contrato</a>`}`;
+  }
+  return `<h2>Contrato <span class="chip ok">Firmado</span></h2>
+    <div class="rs-contrato-estado"><span class="rc-doc" style="border:0;padding:0"><span class="mini"></span></span><div><b class="mono">${esc(c.folio)}</b><small>firmado por ${esc(c.firmante_nombre || '')} el ${fechaHora(c.firmado_en)}</small><small>verificación <span class="mono">${esc(c.codigo_verificacion)}</span></small></div></div>
+    <div class="rs-btns"><a class="btn primario" href="/api/contratos/${c.id}/pdf?descargar=1">Descargar PDF firmado</a><a class="btn" href="/contratos/${c.id}">Ver contrato y verificación</a></div>`;
+}
+
+function pintar(f) {
+  const { reserva: r, cliente: c, vehiculo: v, sucursal_retiro: sr, sucursal_devolucion: sd, pagos, contratos, gps } = f;
+  const contrato = contratos.find((x) => x.estado !== 'anulado') || null;
+  const atrasada = r.estado === 'en_curso' && new Date(r.fin) < new Date();
+  const dias = diasArriendo(r.inicio, r.fin, yo.empresa?.ajustes?.tolerancia_min ?? 59);
+  const cot = r.cotizacion || {};
+  // Pagos (los registra el módulo de pagos; aquí solo se muestran)
+  const OKP = ['pagado', 'capturado', 'simulado', 'autorizado'];
+  const arriendo = pagos.filter((p) => ['arriendo', 'liquidacion'].includes(p.concepto) && OKP.includes(p.estado));
+  const pagado = arriendo.reduce((s, p) => s + Number(p.monto), 0);
+  const gar = [...pagos].reverse().find((p) => p.concepto === 'garantia' && !['anulado', 'rechazado'].includes(p.estado));
+  const garPaso = !gar ? 0 : gar.estado === 'pendiente' ? 1 : ['autorizado', 'retenido', 'simulado'].includes(gar.estado) ? 2 : r.estado === 'cerrada' ? 4 : 3;
+  const chipPago = pagado >= r.total && r.total > 0 ? '<span class="chip ok">Pagada</span>' : pagado > 0 ? '<span class="chip aviso">Abono parcial</span>' : ['cotizacion', 'confirmada'].includes(r.estado) ? '<span class="chip">Pago pendiente</span>' : '';
+  const chipGar = garPaso === 2 ? '<span class="chip teal">Garantía retenida</span>' : garPaso >= 3 ? `<span class="chip">Garantía ${gar.estado === 'capturado' ? 'capturada' : 'liberada'}</span>` : '';
+  const tel = String(c?.telefono || '').replace(/\D/g, '');
+  const empresa = yo.empresa?.nombre || '';
+  const waTxt = encodeURIComponent(`Hola ${c?.nombre || ''}, te escribimos de ${empresa} por tu reserva ${r.folio}: retiro el ${fechaHora(r.inicio)} en ${sr?.nombre || ''}. Puedes ver tu reserva y subir tus documentos aquí: ${f.url_portal}`);
+
+  const acc = [];
+  if (tel) acc.push(`<a class="btn" href="https://wa.me/${tel}?text=${waTxt}" target="_blank" rel="noopener">Enviar por WhatsApp</a>`);
+  if (editar && ['cotizacion', 'confirmada'].includes(r.estado)) acc.push('<button class="btn" data-acc="editar">Editar</button>');
+  if (editar && r.estado === 'confirmada' && new Date(r.inicio) < new Date()) acc.push('<button class="btn" data-acc="no_show">No se presentó</button>');
+  if (editar && ['cotizacion', 'confirmada'].includes(r.estado)) acc.push(`<button class="btn peligro" data-acc="cancelar">${r.estado === 'cotizacion' ? 'Descartar cotización' : 'Cancelar reserva'}</button>`);
+  if (editar && r.estado === 'cotizacion') acc.push('<button class="btn primario" data-acc="confirmar">Confirmar reserva</button>');
+  if (r.estado === 'confirmada') {
+    if (editarContrato && contrato?.estado !== 'firmado') acc.push(`<button class="btn${contrato ? '' : ' primario'}" data-acc="${contrato ? 'firmar-aqui' : 'contrato'}">${contrato ? 'Firmar contrato' : 'Generar contrato y firmar'}</button>`);
+    acc.push(`<a class="btn${contrato?.estado === 'firmado' ? ' primario' : ''}" href="/patio/${r.id}">Entregar vehículo</a>`);
+  }
+  if (r.estado === 'en_curso') acc.push(`<a class="btn primario" href="/patio/${r.id}">Recibir devolución</a>`);
+  if (r.estado === 'devuelta') acc.push(`<a class="btn primario" href="/liquidaciones/${r.id}">Liquidar</a>`);
+
+  // Documentos del cliente y conductores
+  const docsCli = f.documentos.filter((d) => d.entidad === 'cliente');
+  const esperados = c?.tipo === 'empresa' ? [] : c?.documento_tipo === 'rut' ? ['cedula_frente', 'cedula_reverso', 'licencia'] : ['pasaporte', 'licencia'];
+  const miniDoc = (d) => (d && /^image\//.test(d.mime) ? `<span class="mini foto" style="background-image:url('/api/archivos/${d.id}')"></span>` : '<span class="mini"></span>');
+  const docHtml = esperados.map((t) => {
+    const d = docsCli.find((x) => x.tipo === t);
+    const sub = !d ? 'falta subirlo' : t === 'licencia' && c.licencia_vence ? `vigente hasta ${fecha(c.licencia_vence)}` : `subido ${d.meta?.origen === 'portal' ? 'por el cliente' : 'en el mesón'} · ${fecha(d.creado_en)}`;
+    return d ? `<a href="/api/archivos/${d.id}" target="_blank" rel="noopener" class="rc-doc">${miniDoc(d)}<div><b>${TIPOS_DOC[t]}</b><small>${esc(sub)}</small></div><span class="chip ok">✓</span></a>`
+      : `<div class="rc-doc">${miniDoc(null)}<div><b>${TIPOS_DOC[t]}</b><small>${esc(sub)}</small></div><span class="chip aviso">Falta</span></div>`;
+  }).concat(docsCli.filter((d) => !esperados.includes(d.tipo)).map((d) => `<a href="/api/archivos/${d.id}" target="_blank" rel="noopener" class="rc-doc">${miniDoc(d)}<div><b>${esc(TIPOS_DOC[d.tipo] || d.nombre || 'Documento')}</b><small>${fecha(d.creado_en)}</small></div><span class="chip ok">✓</span></a>`))
+    .concat(f.conductores.map((x) => {
+      const lic = f.documentos.find((d) => d.entidad === 'conductor' && Number(d.entidad_id) === Number(x.id) && d.tipo === 'licencia');
+      const est = estadoLicencia(x.licencia_vence, r.fin);
+      return `<div class="rc-doc">${miniDoc(lic)}<div><b>Conductor adicional · ${esc(x.nombre)}</b><small class="mono">${x.documento ? docTxt(x.documento_tipo, x.documento) : 'sin documento'} · licencia clase ${esc(x.licencia_clase || '—')}</small></div>${!lic ? '<span class="chip aviso">Falta licencia</span>' : est.mal ? `<span class="chip ${est.clase}">${esc(est.txt)}</span>` : '<span class="chip ok">✓</span>'}</div>`;
+    })).join('');
+  const licCli = c && c.tipo !== 'empresa' ? estadoLicencia(c.licencia_vence, r.fin) : null;
+
+  // Historial: bitácora + pagos + mensajes
+  const ev = [
+    ...f.bitacora.map((b) => { const fn = ACCION[b.accion]; const [t, d] = fn ? fn(b.detalle || {}) : [esc(b.accion.replace(/_/g, ' ')), '']; return { en: b.creado_en, html: `<b>${t}</b>${d}`, sub: b.usuario ? `por ${esc(b.usuario)}` : r.origen === 'portal' ? 'portal web' : 'sistema' }; }),
+    ...pagos.map((p) => ({ en: p.creado_en, html: `<b>${p.concepto === 'garantia' ? 'Garantía' : 'Pago'} ${p.estado === 'simulado' ? 'simulado (marcha blanca)' : esc(p.estado)}</b> · <span class="monto">${clp(p.monto)}</span> ${esc(METODO[p.metodo]?.[0] || p.metodo)}${p.autorizacion ? ` · autorización ${esc(p.autorizacion)}` : ''}`, sub: 'pagos y garantías' })),
+    ...f.salidas.map((s) => ({ en: s.creado_en, pend: s.estado !== 'enviada', html: s.estado === 'retenida' ? `<b>${s.canal === 'correo' ? 'Correo' : 'WhatsApp'} no enviado</b> · ${esc(s.asunto || 'mensaje al cliente')} · marcha blanca activa` : `<b>${s.canal === 'correo' ? 'Correo' : 'WhatsApp'} ${s.estado === 'enviada' ? 'enviado' : esc(s.estado)}</b> · ${esc(s.destino)}`, sub: s.estado === 'retenida' ? 'se enviará al activar las comunicaciones en Configuración' : '' }))
+  ];
+  // Hitos que no quedaron en la bitácora (reservas importadas o del portal)
+  const hay = (acc) => f.bitacora.some((b) => b.accion === acc);
+  if (!hay('reserva_creada')) ev.push({ en: r.creado_en, html: `<b>${r.folio.startsWith('C-') ? 'Cotización creada' : 'Reserva creada'}</b> · ${esc(ORIGEN[r.origen] || r.origen)}${r.codigo_descuento ? ` con código <span class="mono">${esc(r.codigo_descuento)}</span>` : ''}`, sub: r.creado_por_nombre ? `por ${esc(r.creado_por_nombre)}` : esc(ORIGEN[r.origen] || '') });
+  if (r.retiro_real && !hay('reserva_en_curso')) ev.push({ en: r.retiro_real, html: '<b>Vehículo entregado (check-out)</b>', sub: esc(sr?.nombre || '') });
+  if (r.devolucion_real && !hay('reserva_devuelta')) ev.push({ en: r.devolucion_real, html: '<b>Vehículo devuelto (check-in)</b>', sub: esc(sd?.nombre || '') });
+  ev.sort((a, b) => new Date(b.en) - new Date(a.en));
+
+  main.innerHTML = `
+  <a href="/reservas" class="peq muted rs-volver">‹ Calendario de reservas</a>
+  <div class="pagina-cab">
+    <div>
+      <div class="rc-fila"><h1>${r.estado === 'cotizacion' ? 'Cotización' : 'Reserva'} <span class="mono">${esc(r.folio)}</span></h1>${atrasada ? chipEstado('atrasada', 'Atrasada') : chipEstado(r.estado)}${chipPago}${chipGar}</div>
+      <p>Creada el ${fecha(r.creado_en)} por ${esc(ORIGEN[r.origen] || r.origen)}${r.creado_por_nombre ? ` · atendida por ${esc(r.creado_por_nombre)} (${esc(ROL[r.creado_por_rol] || r.creado_por_rol)})` : ''}</p>
+    </div>
+    <div class="acciones rs-ficha-acciones">${acc.join('')}</div>
+  </div>
+  ${['cancelada', 'no_show'].includes(r.estado) ? `<div class="aviso error"><b>${r.estado === 'cancelada' ? 'Reserva cancelada' : 'El cliente no se presentó'}</b>${r.motivo_cancelacion ? ` · ${esc(r.motivo_cancelacion)}` : ''}</div>` : ''}
+  ${atrasada ? `<div class="aviso error"><b>Devolución atrasada:</b> debía volver el ${fechaHora(r.fin)} (${atrasoTxt(r.fin)}). Revisa su ubicación en la plataforma GPS.</div>` : ''}
+  <div class="tarjeta pad"><div class="rc-pasos">${pasos(r, contrato)}</div></div>
+
+  <div class="columnas">
+    <div class="rs-ficha-cols">
+      <div class="tarjeta bloque">
+        <h2><span><span class="num">1</span>Retiro y devolución</span>${Number(r.sucursal_retiro_id) !== Number(r.sucursal_devolucion_id) ? '<span class="chip aviso">Devuelve en otra sucursal · recargo</span>' : ''}</h2>
+        <div class="rc-tramo">
+          <div class="lugar"><span>Retiro${r.retiro_real ? ` · entregado ${fechaHora(r.retiro_real)}` : ''}</span><b>${fecha(r.inicio)} · ${hora(r.inicio)}</b><div>${esc(sr?.nombre || '')}${sr?.comuna ? ` · ${esc(sr.comuna)}` : ''}</div></div>
+          <div class="flecha">→<br><small class="mono">${dias} ${dias === 1 ? 'día' : 'días'}</small></div>
+          <div class="lugar"><span>Devolución${r.devolucion_real ? ` · devuelto ${fechaHora(r.devolucion_real)}` : ''}</span><b>${fecha(r.fin)} · ${hora(r.fin)}</b><div>${esc(sd?.nombre || '')}${sd?.comuna ? ` · ${esc(sd.comuna)}` : ''}</div></div>
+        </div>
+      </div>
+
+      <div class="tarjeta bloque">
+        <h2><span><span class="num">2</span>Vehículo</span>${editar && ['cotizacion', 'confirmada'].includes(r.estado) ? `<button class="btn peq" data-acc="editar">${v ? 'Cambiar vehículo' : 'Asignar vehículo'}</button>` : ''}</h2>
+        ${v ? `<div class="rs-vehiculo-cab">
+          <a href="/vehiculos/${v.id}" style="text-decoration:none">${pat(v.patente, true)}</a>
+          <div><b style="font-size:16px">${esc(v.marca)} ${esc(v.modelo)} ${v.anio || ''}</b><div class="muted peq">${esc([v.categoria, v.color, v.transmision, v.combustible_tipo].filter(Boolean).join(' · ').toLowerCase().replace(/^./, (x) => x.toUpperCase()))}</div></div>
+          ${chipEstado(v.estado, ESTADOS_VEHICULO[v.estado])}
+        </div>
+        <dl class="rc-datos">
+          <div><dt>Kilometraje actual</dt><dd class="mono">${miles(gps?.km ?? v.km)} km ${gps?.origen === 'plataforma_gps' ? '<span class="chip teal" style="font-family:var(--sans)">plataforma GPS</span>' : ''}</dd></div>
+          <div><dt>Combustible</dt><dd>${combustible(gps?.combustible ?? v.combustible_nivel)}</dd></div>
+          <div><dt>TAG</dt><dd class="mono">${esc(v.tag_numero || '—')}</dd></div>
+          <div><dt>Kilometraje incluido</dt><dd>${r.km_incluidos ? `${miles(r.km_incluidos)} km (${miles(Math.round(r.km_incluidos / dias))} km/día) · extra ${clp(r.precio_km_extra)}/km` : 'Kilometraje libre'}</dd></div>
+          <div><dt>Revisión técnica</dt><dd>${vencTxt(v.venc_revision_tecnica, r.fin)}</dd></div>
+          <div><dt>SOAP</dt><dd>${vencTxt(v.venc_soap, r.fin)}</dd></div>
+        </dl>` : `<div class="aviso info">Sin vehículo asignado (categoría ${esc(f.categoria?.nombre || '')}). Asígnalo para confirmar la reserva.</div>`}
+      </div>
+
+      <div class="tarjeta bloque">
+        <h2><span><span class="num">3</span>Cliente y conductores</span>${c?.lista_negra ? '<span class="chip error">Cliente en lista negra</span>' : '<span class="chip ok">Sin observaciones · no está en lista negra</span>'}</h2>
+        ${c?.lista_negra ? `<div class="aviso error"><b>Lista negra:</b> ${esc(c.lista_negra_motivo || '')}</div>` : ''}
+        ${c ? `<dl class="rc-datos">
+          <div><dt>Titular</dt><dd><a href="/clientes/${c.id}">${esc(`${c.nombre} ${c.apellidos || ''}`)}</a></dd></div>
+          <div><dt>${c.documento_tipo === 'rut' ? 'RUT' : c.documento_tipo === 'pasaporte' ? 'Pasaporte' : 'DNI'}</dt><dd class="mono">${docTxt(c.documento_tipo, c.documento)}</dd></div>
+          ${c.tipo === 'empresa' ? `<div><dt>Razón social</dt><dd>${esc(c.razon_social || c.nombre)}</dd></div>` : `<div><dt>Licencia</dt><dd>${c.licencia_clase ? `Clase ${esc(c.licencia_clase)} · ` : ''}vence <span class="mono">${fecha(c.licencia_vence) || '—'}</span>${licCli?.mal ? `<br><span class="chip ${licCli.clase}">${esc(licCli.txt)}</span>` : ''}</dd></div>`}
+          <div><dt>Contacto</dt><dd>${esc(c.telefono || '—')}<br><span class="peq muted">${esc(c.correo || '')}</span></dd></div>
+          <div><dt>Historial</dt><dd>${f.stats?.arriendos ?? 0} ${f.stats?.arriendos === 1 ? 'arriendo' : 'arriendos'} · ${f.stats?.incidentes ?? 0} ${f.stats?.incidentes === 1 ? 'incidente' : 'incidentes'}</dd></div>
+        </dl>
+        <div class="rs-docs">${docHtml || '<p class="muted peq">Sin documentos.</p>'}</div>` : '<p class="muted">Sin cliente</p>'}
+      </div>
+
+      <div class="tarjeta bloque">
+        <h2><span><span class="num">4</span>Historial</span></h2>
+        <div class="rc-timeline">${ev.map((e) => `<div class="${e.pend ? 'pend' : ''}"><span>${e.html}<small>${fechaHora(e.en)}${e.sub ? ` · ${e.sub}` : ''}</small></span></div>`).join('') || '<p class="muted">Sin movimientos.</p>'}</div>
+      </div>
+    </div>
+
+    <div class="rs-ficha-cols">
+      <div class="tarjeta bloque">
+        <h2>Detalle del cobro <span class="chip">${esc(cot.temporada && cot.temporada !== 'Base' ? cot.temporada : 'Tarifa base')}</span></h2>
+        <table class="rc-lineas">${(cot.lineas || []).map((l) => `<tr class="${l.monto < 0 ? 'desc' : ''}"><td>${esc(l.concepto)}<small>${esc(l.detalle || '')}</small></td><td>${clp(l.monto)}</td></tr>`).join('')}
+          <tr class="total"><td>Total <small>IVA incluido</small></td><td>${clp(r.total)}</td></tr></table>
+        ${pagado >= r.total && r.total > 0 ? `<div class="aviso ok rc-entre"><span>Pagado · ${esc([...new Set(arriendo.map((p) => METODO[p.metodo]?.[0] || p.metodo))].join(', '))}${arriendo.some((p) => p.estado === 'simulado') ? ' (simulado)' : ''}</span><span class="monto">${clp(pagado)}</span></div>`
+          : pagado > 0 ? `<div class="aviso info rc-entre"><span>Abonado ${clp(pagado)}</span><span class="monto">Saldo ${clp(r.total - pagado)}</span></div>`
+          : `<div class="aviso neutro rc-entre"><span>Pago pendiente</span><span class="monto">${clp(r.total)}</span></div>`}
+        <a class="btn peq" href="/pagos?reserva=${r.id}" style="align-self:flex-start">Ver pagos y garantías</a>
+      </div>
+
+      <div class="rc-gar">
+        <div class="rc-entre"><span>Garantía · preautorización</span>${gar ? `<span class="rc-proveedor" style="background:#2B2F36;border-color:#4A515C;color:#fff"><i style="background:${METODO[gar.metodo]?.[1] || '#9AA1AD'}"></i>${esc(METODO[gar.metodo]?.[0] || gar.metodo)}</span>` : ''}</div>
+        <div class="monto">${clp(gar?.monto ?? r.garantia)}</div>
+        <div class="rc-gar-barra">${[1, 2, 3, 4].map((i) => `<i class="${i <= garPaso ? 'on' : ''}"></i>`).join('')}</div>
+        <div class="rc-gar-pasos">${['Solicitada', 'Retenida', 'Liberada o capturada', 'Cerrada'].map((t, i) => (i + 1 === garPaso ? `<b>${t}</b>` : `<span>${t}</span>`)).join('')}</div>
+        <div style="font-size:12px;color:#AEB4BE">${gar ? `${gar.tarjeta ? `Tarjeta ···· ${esc(gar.tarjeta)} · ` : ''}${gar.vence_retencion ? `la retención vence el ${fecha(gar.vence_retencion)}` : `estado: ${esc(gar.estado)}`}` : 'Aún no se ha solicitado. Se registra en Pagos y garantías.'}</div>
+      </div>
+
+      <div class="tarjeta bloque">${tarjetaContrato(r, contrato)}</div>
+
+      <div class="tarjeta bloque">
+        <h2>Portal del cliente</h2>
+        <p class="ayuda">Enlace personal para que el cliente vea su reserva, suba sus documentos y descargue su contrato.</p>
+        <div class="rs-portal"><input class="campo" readonly value="${esc(f.url_portal)}" aria-label="Enlace del portal"><button class="btn peq" data-acc="copiar-portal">Copiar</button></div>
+      </div>
+    </div>
+  </div>`;
+  document.title = `${r.folio} · ${empresa || 'Síguelo Rentacar'}`;
+  enlazar(f, contrato);
+}
+
+async function opcionesFirma(c) {
+  const o = await modal({ titulo: `Contrato ${c.folio} listo`, html: '<p>¿Cómo firmará el cliente? Puede firmar ahora en esta pantalla (o en la tablet del mesón) o recibir el enlace en su celular. El enlace vale 7 días.</p>',
+    botones: [{ texto: 'Más tarde' }, { texto: 'Copiar enlace', valor: 'copiar' }, { texto: 'Enviar al cliente', valor: 'enviar' }, { texto: 'Firmar ahora', clase: 'primario', valor: 'aqui' }] });
+  if (o === 'aqui') location.href = `${new URL(c.url_firma).pathname}?volver=/reservas/${id}`;
+  if (o === 'copiar') toast(await copiar(c.url_firma) ? 'Enlace de firma copiado' : c.url_firma, 'ok');
+  if (o === 'enviar') { const s = await api(`contratos/${c.id}/enviar-enlace`, { body: { canal: 'ambos' } }); toast(s.salidas.some((x) => x.estado === 'retenida') ? 'Enlace en la bandeja de salida (retenido por marcha blanca)' : 'Enlace enviado', 'ok'); }
+}
+
+function enlazar(f, contrato) {
+  const r = f.reserva;
+  main.querySelectorAll('[data-acc]').forEach((b) => b.addEventListener('click', async () => {
+    const a = b.dataset.acc;
+    try {
+      if (a === 'editar') { const x = await abrirFormReserva({ reserva: r }); if (x) cargar(); }
+      if (a === 'confirmar') {
+        if (await confirmar('Confirmar reserva', `Se asignará un folio R, el vehículo quedará reservado y se avisará al cliente por correo y WhatsApp${yo.empresa?.marcha_blanca ? ' (en marcha blanca el aviso queda retenido)' : ''}.`, { boton: 'Confirmar reserva' })) {
+          const n = await api(`reservas/${r.id}/estado`, { body: { estado: 'confirmada' } }); toast(`Reserva ${n.folio} confirmada`, 'ok'); cargar();
+        }
+      }
+      if (a === 'cancelar' || a === 'no_show') {
+        const motivo = await modal({ titulo: a === 'cancelar' ? (r.estado === 'cotizacion' ? 'Descartar cotización' : 'Cancelar reserva') : 'El cliente no se presentó',
+          html: `<label class="etiqueta">Motivo${a === 'cancelar' ? ' (obligatorio)' : ''}<textarea class="campo" id="motivo" rows="3" placeholder="${a === 'cancelar' ? 'Ej.: el cliente cambió sus planes' : 'Ej.: no llegó ni respondió llamadas'}"></textarea></label><p class="peq muted">El vehículo queda disponible para otras reservas.</p>`,
+          botones: [{ texto: 'Volver' }, { texto: a === 'cancelar' ? 'Cancelar reserva' : 'Registrar no presentación', clase: 'peligro', accion: (cu) => { const m = cu.querySelector('#motivo').value.trim(); if (a === 'cancelar' && !m) throw new Error('Indica el motivo'); return m || 'El cliente no se presentó'; } }] });
+        if (motivo) { await api(`reservas/${r.id}/estado`, { body: { estado: a === 'cancelar' ? 'cancelada' : 'no_show', motivo } }); toast('Estado actualizado', 'ok'); cargar(); }
+      }
+      if (a === 'contrato') {
+        const c = await api(`reservas/${r.id}/contrato`, { body: {} });
+        toast(`Contrato ${c.folio} listo para firmar`, 'ok');
+        await opcionesFirma(c);
+        cargar();
+      }
+      if (a === 'vista-previa') {
+        const w = window.open('', '_blank');
+        const c = contrato || await api(`reservas/${r.id}/contrato`, { body: {} });
+        if (w) w.location.href = `/api/contratos/${c.id}/pdf`; else location.href = `/api/contratos/${c.id}/pdf`;
+        if (!contrato) cargar();
+      }
+      if (a === 'firmar-aqui' || a === 'copiar-firma') {
+        const e = await api(`contratos/${contrato.id}/enlace`, { body: {} });
+        if (a === 'firmar-aqui') location.href = `${new URL(e.url_firma).pathname}?volver=/reservas/${r.id}`;
+        else toast(await copiar(e.url_firma) ? 'Enlace de firma copiado (vale 7 días)' : e.url_firma, 'ok');
+      }
+      if (a === 'enviar-enlace') {
+        const s = await api(`contratos/${contrato.id}/enviar-enlace`, { body: { canal: 'ambos' } });
+        toast(s.salidas.some((x) => x.estado === 'retenida') ? 'Enlace en la bandeja de salida (retenido por marcha blanca)' : 'Enlace enviado al cliente', 'ok'); cargar();
+      }
+      if (a === 'copiar-portal') toast(await copiar(f.url_portal) ? 'Enlace del portal copiado' : f.url_portal, 'ok');
+    } catch (e) { toastError(e); }
+  }));
+}
+
+cargar().catch((e) => { main.innerHTML = `<div class="aviso error">${esc(e.message)}</div><a href="/reservas">Volver a reservas</a>`; });
+</script>
+</body>
+</html>

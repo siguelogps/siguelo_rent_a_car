@@ -1,0 +1,202 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cliente</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/reservas.css">
+</head>
+<body>
+<main><p class="rc-cargando">Cargando cliente…</p></main>
+<input type="file" id="archivo" accept="image/*,application/pdf" hidden>
+<script type="module">
+import { iniciarPagina, api, esc, clp, pat, fecha, fechaHora, chipEstado, puede, modal, confirmar, toast, toastError, leerForm, reducirImagen, validarRut, rut } from '/comun.js';
+import { docEtiqueta, docTxt, estadoLicencia, TIPOS_DOC, NOMBRE_DOC } from '/js/reservas-util.js';
+import { abrirFormCliente } from '/js/reservas-clientes.js';
+
+const yo = await iniciarPagina({ activo: 'clientes', titulo: 'Clientes' });
+const main = document.querySelector('main');
+const id = Number(location.pathname.split('/').pop());
+const editar = puede('clientes', 'editar');
+const puedeNegra = editar && ['administrador', 'counter', 'superadmin'].includes(yo.usuario.rol);
+const INC = { reportado: 'Reportado', presupuestado: 'Presupuestado', cobrado_cliente: 'Cobrado al cliente', en_seguro: 'En seguro', pagado: 'Pagado', cerrado: 'Cerrado', anulado: 'Anulado' };
+const MUL = { asignada: 'Asignada', sin_contrato: 'Sin contrato', revisar: 'Por revisar', notificada: 'Notificada', cobrada: 'Cobrada', pagada: 'Pagada', condonada: 'Condonada' };
+const ACT = { cliente_creado: 'Cliente creado', cliente_editado: 'Datos editados', cliente_lista_negra_agregado: 'Agregado a lista negra', cliente_lista_negra_quitado: 'Quitado de lista negra',
+  cliente_documento_subido: 'Documento subido', cliente_documento_borrado: 'Documento eliminado', conductor_agregado: 'Conductor adicional agregado', conductor_editado: 'Conductor editado', conductor_eliminado: 'Conductor quitado' };
+let F = null;
+
+async function cargar() { F = await api(`clientes/${id}`); pintar(); }
+
+const leerArchivo = (file) => (file.type === 'application/pdf'
+  ? new Promise((ok, mal) => { const r = new FileReader(); r.onload = () => ok(r.result); r.onerror = mal; r.readAsDataURL(file); })
+  : reducirImagen(file, 1800, 0.85));
+function elegirArchivo() {
+  return new Promise((ok) => { const inp = document.getElementById('archivo'); inp.value = ''; inp.onchange = () => ok(inp.files[0] || null); inp.click(); });
+}
+async function subir(tipo, conductorId = null) {
+  const file = await elegirArchivo();
+  if (!file) return;
+  if (file.size > 20 * 1024 * 1024) return toast('El archivo es demasiado grande (máx. 20 MB)', 'error');
+  try {
+    toast('Subiendo…');
+    await api(`clientes/${id}/documentos`, { body: { tipo, conductor_id: conductorId, dataUrl: await leerArchivo(file), nombre: file.type === 'application/pdf' ? file.name : null } });
+    toast('Documento guardado', 'ok'); cargar();
+  } catch (e) { toastError(e); }
+}
+
+function pintar() {
+  const { cliente: c, conductores, documentos, reservas, incidentes, multas, stats } = F;
+  const nombre = `${c.nombre} ${c.apellidos || ''}`.trim();
+  const ini = nombre.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
+  const lic = c.tipo === 'empresa' ? null : estadoLicencia(c.licencia_vence, stats.proxima_fin);
+  const docsCli = documentos.filter((d) => d.entidad === 'cliente');
+  const slots = c.tipo === 'empresa' ? ['otro'] : c.documento_tipo === 'rut' ? ['cedula_frente', 'cedula_reverso', 'licencia', 'licencia_reverso'] : ['pasaporte', 'licencia', 'licencia_reverso', 'otro'];
+  const enSlot = new Set(slots.map((t) => docsCli.find((d) => d.tipo === t)?.id).filter(Boolean));
+  const extras = docsCli.filter((d) => !enSlot.has(d.id));
+  const slot = (tipo, d) => `<div class="rs-slot">
+      ${d ? `<a class="img" href="/api/archivos/${d.id}" target="_blank" rel="noopener">${/^image\//.test(d.mime) ? `<img src="/api/archivos/${d.id}" alt="${esc(TIPOS_DOC[tipo] || tipo)}" loading="lazy">` : '<span class="chip">PDF</span>'}</a>`
+        : `<div class="img vacio">${editar ? `<button class="btn peq" data-subir="${tipo}">Subir o tomar foto</button>` : 'sin documento'}</div>`}
+      <div class="pie"><div><b class="peq">${esc(TIPOS_DOC[tipo] || d?.nombre || 'Documento')}</b><small>${d ? `${fecha(d.creado_en)}${d.subido_por_nombre ? ` · ${esc(d.subido_por_nombre)}` : ' · portal'}` : 'falta'}</small></div>
+      ${d && editar ? `<button class="btn-icono" data-borrar="${d.id}" aria-label="Eliminar documento" title="Eliminar">✕</button>` : d ? '<span class="chip ok">✓</span>' : '<span class="chip aviso">Falta</span>'}</div></div>`;
+
+  main.innerHTML = `
+  <a href="/clientes" class="peq muted rs-volver">‹ Clientes</a>
+  <div class="pagina-cab">
+    <div class="rc-fila" style="gap:14px;flex-wrap:nowrap"><span class="rs-avatar${c.tipo === 'empresa' ? ' empresa' : ''}">${esc(ini)}</span>
+      <div><div class="rc-fila"><h1>${esc(nombre)}</h1>${c.lista_negra ? '<span class="chip error">Lista negra</span>' : ''}<span class="chip">${c.tipo === 'empresa' ? 'Empresa' : 'Persona'}</span></div>
+      <p class="mono">${docEtiqueta(c.documento_tipo, c.documento)}${c.nacionalidad && c.tipo !== 'empresa' ? ` <span style="font-family:var(--sans)">· ${esc(c.nacionalidad)}</span>` : ''}</p></div></div>
+    <div class="acciones">
+      ${puede('reservas', 'editar') && !c.lista_negra ? `<a class="btn" href="/reservas?nueva=1&cliente_id=${c.id}">+ Nueva reserva</a>` : ''}
+      ${puedeNegra ? `<button class="btn ${c.lista_negra ? '' : 'peligro'}" id="negra">${c.lista_negra ? 'Quitar de lista negra' : 'Agregar a lista negra'}</button>` : ''}
+      ${editar ? '<button class="btn primario" id="editar">Editar datos</button>' : ''}
+    </div>
+  </div>
+  ${c.lista_negra ? `<div class="rs-negra"><span style="font-size:22px">⚠</span><div><b>Cliente en lista negra · no se le puede reservar</b>${esc(c.lista_negra_motivo || '')}<div class="peq" style="margin-top:4px">Desde el ${fechaHora(c.lista_negra_en)}${c.lista_negra_por_nombre ? ` · por ${esc(c.lista_negra_por_nombre)}` : ''}</div></div></div>` : ''}
+  ${lic?.mal ? `<div class="aviso ${lic.clase === 'error' ? 'error' : 'info'}"><b>Licencia:</b> ${esc(lic.txt)}${stats.proxima_fin && lic.clase !== 'error' ? ` (su reserva vigente termina el ${fecha(stats.proxima_fin)})` : ''}.</div>` : ''}
+
+  <div class="kpis">
+    <div class="kpi"><span>Arriendos</span><b>${stats.arriendos}</b><small>${reservas.length} reservas en total</small></div>
+    <div class="kpi"><span>Total arrendado</span><b class="monto" style="font-size:24px">${clp(stats.total_facturado)}</b><small>arriendos realizados</small></div>
+    <div class="kpi"><span>Incidentes</span><b${stats.incidentes ? ' style="color:var(--red)"' : ''}>${stats.incidentes}</b><small>daños, accidentes u otros</small></div>
+    <div class="kpi"><span>Multas</span><b>${stats.multas}</b><small>asociadas a sus arriendos</small></div>
+  </div>
+
+  <div class="columnas">
+    <div class="rs-ficha-cols">
+      <div class="tarjeta bloque">
+        <h2>Datos del cliente</h2>
+        <dl class="rc-datos">
+          <div><dt>${NOMBRE_DOC[c.documento_tipo]}</dt><dd class="mono">${docTxt(c.documento_tipo, c.documento)}</dd></div>
+          ${c.tipo === 'empresa' ? `<div><dt>Razón social</dt><dd>${esc(c.razon_social || '—')}</dd></div><div><dt>Giro</dt><dd>${esc(c.giro || '—')}</dd></div>`
+            : `<div><dt>Fecha de nacimiento</dt><dd class="mono">${fecha(c.fecha_nacimiento) || '—'}</dd></div><div><dt>Nacionalidad</dt><dd>${esc(c.nacionalidad || '—')}</dd></div>`}
+          <div><dt>Teléfono</dt><dd>${c.telefono ? `<a href="https://wa.me/${esc(c.telefono.replace(/\D/g, ''))}" target="_blank" rel="noopener">${esc(c.telefono)}</a>` : '—'}</dd></div>
+          <div><dt>Correo</dt><dd>${c.correo ? `<a href="mailto:${esc(c.correo)}">${esc(c.correo)}</a>` : '—'}</dd></div>
+          <div><dt>Dirección</dt><dd>${esc([c.direccion, c.comuna, c.ciudad, c.pais].filter(Boolean).filter((x, i, a) => a.indexOf(x) === i).join(', ') || '—')}</dd></div>
+          ${c.tipo === 'empresa' ? '' : `<div><dt>Licencia</dt><dd>${c.licencia_clase ? `Clase ${esc(c.licencia_clase)}` : '—'}${c.licencia_numero ? ` · <span class="mono">${esc(c.licencia_numero)}</span>` : ''}<br><span class="peq ${lic?.mal ? '' : 'muted'}">${esc(lic?.txt || '')}${c.licencia_pais && c.licencia_pais !== 'Chile' ? ` · ${esc(c.licencia_pais)}` : ''}</span></dd></div>`}
+          <div><dt>Cliente desde</dt><dd class="mono">${fecha(c.creado_en)}</dd></div>
+        </dl>
+        ${c.notas ? `<div class="aviso neutro">${esc(c.notas)}</div>` : ''}
+      </div>
+
+      <div class="tarjeta bloque">
+        <h2>Documentos <span class="peq muted" style="font-weight:400">Foto con la cámara del celular o archivo (JPG, PNG o PDF)</span></h2>
+        <div class="rs-docs-slots">${slots.map((t) => slot(t, docsCli.find((d) => d.tipo === t))).join('')}${extras.map((d) => slot(d.tipo, d)).join('')}</div>
+        ${editar ? `<div class="rc-fila"><select class="campo" id="tipo-doc" aria-label="Tipo de documento">${Object.entries(TIPOS_DOC).map(([k, t]) => `<option value="${k}">${t}</option>`).join('')}</select><button class="btn peq" id="subir-otro">Subir otro documento</button></div>` : ''}
+      </div>
+
+      <div class="tarjeta bloque">
+        <h2>Conductores adicionales ${editar ? '<button class="btn peq" id="nuevo-cond">+ Agregar conductor</button>' : ''}</h2>
+        ${conductores.map((x) => {
+          const l = estadoLicencia(x.licencia_vence, stats.proxima_fin);
+          const ld = documentos.find((d) => d.entidad === 'conductor' && Number(d.entidad_id) === Number(x.id) && d.tipo === 'licencia');
+          return `<div class="rs-cond"><div><b>${esc(x.nombre)}</b><small class="mono">${x.documento ? docEtiqueta(x.documento_tipo, x.documento) : 'sin documento'}${x.fecha_nacimiento ? ` · nac. ${fecha(x.fecha_nacimiento)}` : ''}</small>
+            <small>Licencia ${x.licencia_clase ? `clase ${esc(x.licencia_clase)}` : ''}${x.licencia_numero ? ` · ${esc(x.licencia_numero)}` : ''}</small></div>
+            <span class="chip ${l.clase}">${esc(l.txt)}</span>
+            ${ld ? `<a class="chip ok" href="/api/archivos/${ld.id}" target="_blank" rel="noopener">Ver licencia</a>` : editar ? `<button class="btn peq" data-lic="${x.id}">Subir licencia</button>` : '<span class="chip aviso">Falta licencia</span>'}
+            ${editar ? `<button class="btn peq" data-edcond="${x.id}">Editar</button><button class="btn-icono" data-delcond="${x.id}" aria-label="Quitar conductor" title="Quitar">✕</button>` : ''}</div>`;
+        }).join('') || '<p class="muted peq">Sin conductores adicionales. Se agregan aquí y luego se eligen en cada reserva (se cobra el extra «Conductor adicional»).</p>'}
+      </div>
+
+      <div class="tarjeta">
+        <div class="bloque" style="padding-bottom:6px"><h2>Historial de reservas</h2></div>
+        <div class="tabla-env"><table class="tabla"><thead><tr><th>Folio</th><th>Estado</th><th>Vehículo</th><th>Período</th><th style="text-align:right">Total</th></tr></thead>
+          <tbody>${reservas.map((r) => `<tr class="clic" data-res="${r.id}"><td class="folio">${esc(r.folio)}</td><td>${r.atrasada ? chipEstado('atrasada', 'Atrasada') : chipEstado(r.estado)}</td>
+            <td>${r.patente ? `${pat(r.patente)} <span class="peq muted">${esc(r.marca)} ${esc(r.modelo)}</span>` : '<span class="muted">sin asignar</span>'}</td>
+            <td class="mono">${fecha(r.inicio)} → ${fecha(r.fin)}</td><td class="monto" style="text-align:right">${clp(r.total)}</td></tr>`).join('') || '<tr><td colspan="5" class="vacio">Aún no tiene reservas.</td></tr>'}</tbody></table></div>
+      </div>
+    </div>
+
+    <div class="rs-ficha-cols">
+      <div class="tarjeta bloque">
+        <h2>Incidentes</h2>
+        <div class="rc-danos">${incidentes.map((i) => `<a class="rc-alerta-venc" href="/incidentes/${i.id}" style="text-decoration:none"><span class="ic rojo">!</span><div><b>${esc(i.folio)} · ${esc(INC[i.estado] || i.estado)}</b><small>${i.patente ? `${esc(i.patente)} · ` : ''}${esc(i.descripcion || i.tipo)}${i.monto_cliente ? ` · ${clp(i.monto_cliente)}` : ''}</small></div></a>`).join('') || '<p class="muted peq">Sin incidentes.</p>'}</div>
+      </div>
+      <div class="tarjeta bloque">
+        <h2>Multas y partes</h2>
+        <div class="rc-danos">${multas.map((m) => `<div class="rc-alerta-venc"><span class="ic ambar">$</span><div><b>${clp(m.monto)} · ${esc(MUL[m.estado] || m.estado)}</b><small>${fecha(m.fecha_infraccion)} · ${esc(m.patente)}${m.folio ? ` · ${esc(m.folio)}` : ''} · ${esc(m.motivo || '')}</small></div></div>`).join('') || '<p class="muted peq">Sin multas registradas.</p>'}</div>
+      </div>
+      <div class="tarjeta bloque">
+        <h2>Actividad</h2>
+        <div class="rc-timeline">${F.bitacora.map((b) => `<div><span><b>${esc(ACT[b.accion] || b.accion.replace(/_/g, ' '))}</b>${b.detalle?.motivo ? ` · ${esc(b.detalle.motivo)}` : ''}<small>${fechaHora(b.creado_en)}${b.usuario ? ` · ${esc(b.usuario)}` : ''}</small></span></div>`).join('') || '<p class="muted peq">Sin actividad registrada.</p>'}</div>
+      </div>
+    </div>
+  </div>`;
+  document.title = `${nombre} · Clientes`;
+  enlazar();
+}
+
+function formConductor(x = {}) {
+  const dt = x.documento_tipo || 'rut';
+  return `<div class="rs-form-cliente"><div class="campos">
+    <label style="flex:2 1 240px">Nombre completo<input class="campo" name="nombre" value="${esc(x.nombre || '')}" required></label>
+    <label>Documento<select class="campo" name="documento_tipo"><option value="rut"${dt === 'rut' ? ' selected' : ''}>RUT</option><option value="pasaporte"${dt === 'pasaporte' ? ' selected' : ''}>Pasaporte</option><option value="dni"${dt === 'dni' ? ' selected' : ''}>DNI</option></select></label>
+    <label>Número<input class="campo mono" name="documento" value="${esc(dt === 'rut' && x.documento ? rut(x.documento) : x.documento || '')}"></label></div>
+    <div class="campos"><label>Fecha de nacimiento<input class="campo" type="date" name="fecha_nacimiento" value="${esc(x.fecha_nacimiento || '')}"></label>
+    <label>Licencia N°<input class="campo mono" name="licencia_numero" value="${esc(x.licencia_numero || '')}"></label>
+    <label>Clase<input class="campo" name="licencia_clase" value="${esc(x.licencia_clase || 'B')}"></label>
+    <label>Vence<input class="campo" type="date" name="licencia_vence" value="${esc(x.licencia_vence || '')}"></label></div></div>`;
+}
+async function editarConductor(x = null) {
+  const r = await modal({ titulo: x ? 'Editar conductor adicional' : 'Agregar conductor adicional', html: formConductor(x || {}), ancho: true,
+    botones: [{ texto: 'Cancelar' }, { texto: 'Guardar', clase: 'primario', accion: async (cu) => {
+      const d = leerForm(cu);
+      if (!d.nombre) throw new Error('Falta el nombre');
+      if (d.documento && d.documento_tipo === 'rut' && !validarRut(d.documento)) throw new Error('El RUT no es válido: revisa el dígito verificador');
+      return x ? api(`clientes/${id}/conductores/${x.id}`, { method: 'PATCH', body: d }) : api(`clientes/${id}/conductores`, { body: d });
+    } }] });
+  if (r) { toast('Conductor guardado', 'ok'); cargar(); }
+}
+
+function enlazar() {
+  const c = F.cliente;
+  main.querySelector('#editar')?.addEventListener('click', async () => { if (await abrirFormCliente(c)) cargar(); });
+  main.querySelector('#negra')?.addEventListener('click', async () => {
+    const agregar = !c.lista_negra;
+    const ok = await modal({ titulo: agregar ? 'Agregar a lista negra' : 'Quitar de lista negra',
+      html: `<p>${agregar ? 'El cliente no podrá hacer nuevas reservas ni en el mesón ni en el portal.' : 'El cliente podrá volver a reservar.'}</p><label class="etiqueta">Motivo (obligatorio, queda en la bitácora)<textarea class="campo" id="motivo" rows="3" placeholder="${agregar ? 'Ej.: devolvió el vehículo con daños sin informar (R-1029)' : 'Ej.: pagó el deducible pendiente'}"></textarea></label>`,
+      botones: [{ texto: 'Cancelar' }, { texto: agregar ? 'Agregar a lista negra' : 'Quitar de lista negra', clase: agregar ? 'peligro' : 'primario', accion: async (cu) => {
+        const motivo = cu.querySelector('#motivo').value.trim();
+        if (!motivo) throw new Error('Indica el motivo');
+        return api(`clientes/${id}/lista-negra`, { body: { lista_negra: agregar, motivo } });
+      } }] });
+    if (ok) { toast(agregar ? 'Cliente agregado a lista negra' : 'Cliente quitado de lista negra', 'ok'); cargar(); }
+  });
+  main.querySelectorAll('[data-subir]').forEach((b) => { b.onclick = () => subir(b.dataset.subir); });
+  main.querySelector('#subir-otro')?.addEventListener('click', () => subir(main.querySelector('#tipo-doc').value));
+  main.querySelectorAll('[data-borrar]').forEach((b) => { b.onclick = async () => {
+    if (!(await confirmar('Eliminar documento', 'El archivo se borrará del almacenamiento. ¿Continuar?', { boton: 'Eliminar', peligro: true }))) return;
+    try { await api(`clientes/${id}/documentos/${b.dataset.borrar}`, { method: 'DELETE' }); toast('Documento eliminado', 'ok'); cargar(); } catch (e) { toastError(e); }
+  }; });
+  main.querySelector('#nuevo-cond')?.addEventListener('click', () => editarConductor());
+  main.querySelectorAll('[data-edcond]').forEach((b) => { b.onclick = () => editarConductor(F.conductores.find((x) => String(x.id) === b.dataset.edcond)); });
+  main.querySelectorAll('[data-lic]').forEach((b) => { b.onclick = () => subir('licencia', Number(b.dataset.lic)); });
+  main.querySelectorAll('[data-delcond]').forEach((b) => { b.onclick = async () => {
+    if (!(await confirmar('Quitar conductor', 'Se quitará este conductor adicional del cliente.', { boton: 'Quitar', peligro: true }))) return;
+    try { await api(`clientes/${id}/conductores/${b.dataset.delcond}`, { method: 'DELETE' }); toast('Conductor quitado', 'ok'); cargar(); } catch (e) { toastError(e); }
+  }; });
+  main.querySelectorAll('[data-res]').forEach((tr) => { tr.onclick = () => { location.href = `/reservas/${tr.dataset.res}`; }; });
+}
+
+cargar().catch((e) => { main.innerHTML = `<div class="aviso error">${esc(e.message)}</div><a href="/clientes">Volver a clientes</a>`; });
+</script>
+</body>
+</html>

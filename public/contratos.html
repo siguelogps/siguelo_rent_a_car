@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Contratos</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/reservas.css">
+</head>
+<body>
+<main>
+  <div class="pagina-cab">
+    <div><h1>Contratos</h1><p>Contratos de arriendo con firma electrónica y código QR de verificación. Se generan desde la ficha de cada reserva.</p></div>
+  </div>
+  <div class="tarjeta">
+    <div class="bloque" style="padding-bottom:12px">
+      <div class="filtros-fila" id="filtros"></div>
+      <div class="rc-fila">
+        <input class="campo" id="q" placeholder="Folio, reserva, cliente, patente o código" style="flex:1 1 240px" autocomplete="off" aria-label="Buscar contratos">
+        <label class="rs-et-in">Desde<input class="campo" type="date" id="desde"></label>
+        <label class="rs-et-in">hasta<input class="campo" type="date" id="hasta"></label>
+      </div>
+    </div>
+    <div class="tabla-env"><table class="tabla" id="tabla"><tbody><tr><td class="rc-cargando">Cargando…</td></tr></tbody></table></div>
+  </div>
+</main>
+<script type="module">
+import { iniciarPagina, api, esc, pat, fecha, fechaHora, chipEstado, toastError } from '/comun.js';
+await iniciarPagina({ activo: 'contratos', titulo: 'Contratos' });
+const $ = (i) => document.getElementById(i);
+const st = { estado: new URLSearchParams(location.search).get('estado') || '' };
+const CHIP = { pendiente_firma: '<span class="chip aviso">Pendiente de firma</span>', firmado: '<span class="chip ok">Firmado</span>', anulado: '<span class="chip error">Anulado</span>' };
+async function cargar() {
+  const qs = new URLSearchParams(Object.entries({ estado: st.estado, q: $('q').value.trim(), desde: $('desde').value, hasta: $('hasta').value }).filter(([, v]) => v));
+  try {
+    const { contratos, totales } = await api(`contratos?${qs}`);
+    $('filtros').innerHTML = [['', 'Todos', totales.total], ['pendiente_firma', 'Pendientes de firma', totales.pendiente_firma], ['firmado', 'Firmados', totales.firmado], ['anulado', 'Anulados', totales.anulado]]
+      .map(([k, t, n]) => `<button type="button" class="filtro" data-f="${k}" aria-pressed="${st.estado === k}">${t} <span class="n">${n}</span></button>`).join('');
+    $('tabla').innerHTML = `<thead><tr><th>Contrato</th><th>Estado</th><th>Reserva</th><th>Cliente</th><th>Vehículo</th><th>Período</th><th>Firma</th><th></th></tr></thead>
+      <tbody>${contratos.map((c) => `<tr class="clic" data-id="${c.id}"><td class="folio">${esc(c.folio)}</td><td>${CHIP[c.estado]}</td>
+        <td><a href="/reservas/${c.reserva_id}" class="folio">${esc(c.reserva_folio)}</a> ${chipEstado(c.reserva_estado)}</td><td><b>${esc(c.cliente)}</b></td>
+        <td>${c.patente ? pat(c.patente) : ''} <span class="peq muted">${esc(c.marca || '')} ${esc(c.modelo || '')}</span></td>
+        <td class="mono">${fecha(c.inicio)} → ${fecha(c.fin)}</td>
+        <td>${c.firmado_en ? `${esc(c.firmante_nombre || '')}<div class="peq muted mono">${fechaHora(c.firmado_en)}</div>` : `<span class="muted peq">generado ${fecha(c.creado_en)}</span>`}</td>
+        <td>${c.pdf_archivo_id ? `<a class="btn peq" href="/api/contratos/${c.id}/pdf?descargar=1">PDF</a>` : ''}</td></tr>`).join('') || '<tr><td colspan="8" class="vacio">No hay contratos con estos filtros.</td></tr>'}</tbody>`;
+  } catch (e) { toastError(e); }
+}
+$('filtros').onclick = (e) => { const b = e.target.closest('[data-f]'); if (b) { st.estado = b.dataset.f; cargar(); } };
+let t = null; $('q').oninput = () => { clearTimeout(t); t = setTimeout(cargar, 250); };
+$('desde').onchange = cargar; $('hasta').onchange = cargar;
+$('tabla').onclick = (e) => { if (e.target.closest('a')) return; const tr = e.target.closest('tr[data-id]'); if (tr) location.href = `/contratos/${tr.dataset.id}`; };
+cargar();
+</script>
+</body>
+</html>

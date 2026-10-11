@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reportes</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css">
+<style>
+  .rp-rango { display: inline-flex; gap: 6px; align-items: center; }
+  .rp-rango .campo { width: 150px; }
+  .rp-h2-der { display: inline-flex; gap: 8px; align-items: center; font-weight: 400; }
+  .rp-barras { height: 200px; gap: 4px; }
+  .rp-barras .barra i { min-height: 2px; }
+  .rp-barras .barra i.top { background: var(--marca-ambar); }
+  .rp-barras .barra i.cero { background: var(--line); }
+  .rp-pie-barras { gap: 4px; }
+  .rp-calor-env { overflow-x: auto; }
+  .rp-calor { min-width: 640px; }
+  .rp-calor i { cursor: default; }
+  .rp-calor .cab { font-size: 10px; text-align: center; color: var(--muted); }
+  .tabla td.der, .tabla th.der { text-align: right; }
+  .rp-vacio { padding: 18px; text-align: center; color: var(--muted); font-size: 13px; }
+  .rp-kpi-mono { font-family: var(--mono); font-size: 22px !important; }
+  .rp-kpi-mas { color: var(--green) !important; font-weight: 500; }
+  .rp-dev .rc-ocup { grid-template-columns: 140px minmax(0, 1fr) 52px; }
+  @media (max-width: 860px) {
+    .pagina-cab .acciones { margin-left: 0; }
+    .rp-col-lat { grid-template-columns: minmax(0, 1fr) !important; }
+    .rc-ocup { grid-template-columns: 110px minmax(0, 1fr) 46px; }
+  }
+</style>
+</head>
+<body>
+<main>
+  <div class="pagina-cab">
+    <div><h1>Reportes</h1><p id="sub">Cargando…</p></div>
+    <div class="acciones">
+      <div class="segmentado" id="seg" role="group" aria-label="Período">
+        <button type="button" data-p="semana">Semana</button><button type="button" data-p="mes">Mes</button><button type="button" data-p="trimestre">Trimestre</button><button type="button" data-p="anio">Año</button><button type="button" data-p="personalizado">Rango</button>
+      </div>
+      <select class="campo" id="ref" aria-label="Período"></select>
+      <span class="rp-rango" id="rango" hidden><input class="campo" type="date" id="desde" aria-label="Desde"><span class="muted">al</span><input class="campo" type="date" id="hasta" aria-label="Hasta"></span>
+      <select class="campo" id="suc" aria-label="Sucursal"><option value="">Todas las sucursales</option></select>
+      <button type="button" class="btn primario" id="xlsx">Exportar Excel</button>
+    </div>
+  </div>
+
+  <div class="kpis" id="kpis"></div>
+
+  <div class="columnas-2">
+    <div class="tarjeta bloque">
+      <h2><span id="t-ingreso">Ingreso por día</span> <span class="rp-h2-der"><span class="peq muted">miles de $</span><button type="button" class="btn peq" data-xlsx="ingreso-diario" title="Exportar a Excel">Excel</button></span></h2>
+      <div class="barras-v rp-barras" id="ingreso"></div>
+      <div class="barras-pie rp-pie-barras" id="ingreso-pie"></div>
+    </div>
+    <div class="tarjeta bloque">
+      <h2>Ocupación por categoría <button type="button" class="btn peq" data-xlsx="ocupacion-categoria" title="Exportar a Excel">Excel</button></h2>
+      <div class="rc-graf" id="ocup"></div>
+      <div class="rc-leyenda"><span><i style="background:var(--marca);border-color:var(--marca-ambar)"></i>Arrendado</span><span><i style="background:#F5C98A;border-color:#D97706"></i>Mantención</span><span><i style="background:var(--line-2);border-color:#C4C9D1"></i>Ocioso</span></div>
+    </div>
+  </div>
+
+  <div class="tarjeta bloque">
+    <h2><span id="t-calor">Ocupación por vehículo y día</span> <span class="rp-h2-der"><span class="rc-leyenda"><span><i style="background:var(--line-2);border:0"></i>Ocioso</span><span><i style="background:var(--marca);border:0"></i>Arrendado</span><span><i style="background:repeating-linear-gradient(135deg,#FEF3E2 0 3px,#F5C98A 3px 6px);border:0"></i>Mantención</span></span><button type="button" class="btn peq" data-xlsx="ocupacion-vehiculos" title="Exportar a Excel">Excel</button></span></h2>
+    <div class="rp-calor-env"><div class="rc-calor rp-calor" id="calor"></div></div>
+  </div>
+
+  <div class="columnas-2 rp-col-lat" style="grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)">
+    <div class="tarjeta">
+      <div class="bloque" style="padding-bottom:6px"><h2>Ingreso por vehículo <button type="button" class="btn peq" data-xlsx="ingreso-vehiculo" title="Exportar a Excel">Excel</button></h2></div>
+      <div class="tabla-env"><table class="tabla" id="porveh">
+        <thead><tr><th>Vehículo</th><th>Días arrendado</th><th>Días ociosos</th><th class="der">Ingreso</th><th class="der">Por día disp.</th><th class="der">Mantención</th></tr></thead><tbody></tbody>
+      </table></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:18px;min-width:0">
+      <div class="tarjeta">
+        <div class="bloque" style="padding-bottom:6px"><h2>Daños por cliente <span class="rp-h2-der"><span class="peq muted">últimos 12 meses</span><button type="button" class="btn peq" data-xlsx="danos-cliente" title="Exportar a Excel">Excel</button></span></h2></div>
+        <div class="tabla-env"><table class="tabla" id="danos">
+          <thead><tr><th>Cliente</th><th>Arriendos</th><th>Incidentes</th><th class="der">Cobrado</th></tr></thead><tbody></tbody>
+        </table></div>
+      </div>
+      <div class="tarjeta bloque rp-dev">
+        <h2>Cumplimiento de devoluciones <span class="rp-h2-der"><button type="button" class="btn peq" id="ver-dev">Detalle</button><button type="button" class="btn peq" data-xlsx="devoluciones" title="Exportar a Excel">Excel</button></span></h2>
+        <div id="dev"></div>
+        <p class="peq muted" id="dev-nota"></p>
+      </div>
+    </div>
+  </div>
+</main>
+<script type="module">
+import { iniciarPagina, api, esc, clp, fecha, hora, fechaHora, pat, rut, descargar, modal, toastError } from '/comun.js';
+const yo = await iniciarPagina({ activo: 'reportes', titulo: 'Reportes' });
+
+const MESES = ['enero', 'febrero', 'marzo', 'abril', 'mayo', 'junio', 'julio', 'agosto', 'septiembre', 'octubre', 'noviembre', 'diciembre'];
+const cap = (s) => s.charAt(0).toUpperCase() + s.slice(1);
+const hoy = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(new Date());
+const iso = (d) => d.toISOString().slice(0, 10);
+const U = (s) => new Date(`${s}T00:00:00Z`);
+const pct = (x) => (x == null ? '—' : `${Math.round(x * 100)} %`);
+const dm = (s) => `${s.slice(8, 10)}-${s.slice(5, 7)}`;
+
+// Estado en la URL (para compartir o recargar)
+const qs = new URLSearchParams(location.search);
+const F = { periodo: qs.get('periodo') || 'mes', ref: qs.get('ref') || '', desde: qs.get('desde') || '', hasta: qs.get('hasta') || '', sucursal_id: qs.get('sucursal_id') || '' };
+
+const sucSel = document.getElementById('suc');
+sucSel.innerHTML += (yo.sucursales || []).map((s) => `<option value="${s.id}">${esc(s.nombre)}</option>`).join('');
+sucSel.value = F.sucursal_id;
+
+function opcionesPeriodo(p) {
+  const d = U(hoy), a = d.getUTCFullYear(), m = d.getUTCMonth();
+  if (p === 'mes') return Array.from({ length: 13 }, (_, i) => { const x = new Date(Date.UTC(a, m - i, 1)); return [iso(x), `${cap(MESES[x.getUTCMonth()])} ${x.getUTCFullYear()}`]; });
+  if (p === 'semana') {
+    const lunes = new Date(d.getTime() - ((d.getUTCDay() + 6) % 7) * 864e5);
+    return Array.from({ length: 12 }, (_, i) => { const x = new Date(lunes.getTime() - i * 7 * 864e5), y = new Date(x.getTime() + 6 * 864e5); return [iso(x), `Semana del ${dm(iso(x))} al ${fecha(iso(y))}`]; });
+  }
+  if (p === 'trimestre') return Array.from({ length: 6 }, (_, i) => { const t = Math.floor(m / 3) - i, x = new Date(Date.UTC(a, t * 3, 1)); const q = ((t % 4) + 4) % 4; return [iso(x), `${q + 1}.º trimestre ${x.getUTCFullYear()}`]; });
+  if (p === 'anio') return Array.from({ length: 4 }, (_, i) => [`${a - i}-01-01`, `Año ${a - i}`]);
+  return [];
+}
+function pintarControles() {
+  document.querySelectorAll('#seg button').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.p === F.periodo)));
+  const refSel = document.getElementById('ref'), rango = document.getElementById('rango');
+  const ops = opcionesPeriodo(F.periodo);
+  refSel.hidden = F.periodo === 'personalizado'; rango.hidden = F.periodo !== 'personalizado';
+  refSel.innerHTML = ops.map(([v, t]) => `<option value="${v}">${esc(t)}</option>`).join('');
+  if (F.ref && ops.some(([v]) => v === F.ref)) refSel.value = F.ref; else F.ref = ops[0]?.[0] || '';
+  if (F.periodo === 'personalizado') {
+    if (!F.desde) F.desde = iso(new Date(U(hoy).getTime() - 29 * 864e5));
+    if (!F.hasta) F.hasta = hoy;
+    document.getElementById('desde').value = F.desde; document.getElementById('hasta').value = F.hasta;
+  }
+}
+const consulta = () => {
+  const p = new URLSearchParams({ periodo: F.periodo });
+  if (F.periodo === 'personalizado') { p.set('desde', F.desde); p.set('hasta', F.hasta); } else if (F.ref) p.set('ref', F.ref);
+  if (F.sucursal_id) p.set('sucursal_id', F.sucursal_id);
+  return p.toString();
+};
+
+document.getElementById('seg').onclick = (ev) => { const b = ev.target.closest('button'); if (!b) return; F.periodo = b.dataset.p; F.ref = ''; pintarControles(); cargar(); };
+document.getElementById('ref').onchange = (ev) => { F.ref = ev.target.value; cargar(); };
+for (const id of ['desde', 'hasta']) document.getElementById(id).onchange = (ev) => { F[id] = ev.target.value; if (F.desde && F.hasta) cargar(); };
+sucSel.onchange = () => { F.sucursal_id = sucSel.value; cargar(); };
+let REP = null;
+const nombreArchivo = (n) => `${n}-${REP?.periodo.desde || ''}-al-${REP?.periodo.hasta || ''}.xlsx`;
+document.getElementById('xlsx').onclick = () => descargar(`/api/reportes/completo.xlsx?${consulta()}`, nombreArchivo('reportes')).catch(toastError);
+document.querySelectorAll('[data-xlsx]').forEach((b) => b.onclick = () => descargar(`/api/reportes/${b.dataset.xlsx}.xlsx?${consulta()}`, nombreArchivo(b.dataset.xlsx)).catch(toastError));
+
+async function cargar() {
+  history.replaceState(null, '', `?${consulta()}`);
+  document.getElementById('sub').textContent = 'Calculando…';
+  try { REP = await api(`reportes?${consulta()}`); } catch (e) { toastError(e); return; }
+  pintar(REP);
+}
+
+function pintar(r) {
+  const k = r.kpis;
+  const suc = sucSel.value ? sucSel.selectedOptions[0].textContent.toLowerCase().replace(/^/, 'sucursal ') : 'todas las sucursales';
+  document.getElementById('sub').textContent = `${r.periodo.etiqueta} · ${suc} · ${r.vehiculos} vehículos`;
+  const nombreIngreso = { semana: 'Ingreso de la semana', mes: 'Ingreso del mes', trimestre: 'Ingreso del trimestre', anio: 'Ingreso del año' }[r.periodo.periodo] || 'Ingreso del período';
+  const dif = k.ocupacion_dif_pts;
+  document.getElementById('kpis').innerHTML = `
+    <div class="kpi"><span>Ocupación</span><b>${pct(k.ocupacion)}</b><small class="${dif > 0 ? 'rp-kpi-mas' : dif < 0 ? 'mal' : ''}">${dif == null ? 'sin datos del período anterior' : `${dif > 0 ? '+' : dif < 0 ? '−' : '±'}${Math.abs(dif)} pts vs. ${esc(k.anterior_etiqueta)}`}</small></div>
+    <div class="kpi"><span>${nombreIngreso}</span><b class="mono rp-kpi-mono">${clp(k.ingreso)}</b><small>arriendos${k.ingreso_cargos ? ` + ${clp(k.ingreso_cargos)} en cargos` : ' + cargos'}</small></div>
+    <div class="kpi"><span>Ingreso por día disponible</span><b class="mono rp-kpi-mono">${clp(k.ingreso_por_dia_disponible)}</b><small>${k.dias_disponibles.toLocaleString('es-CL')} días disponibles</small></div>
+    <div class="kpi"><span>Días ociosos</span><b>${k.dias_ociosos.toLocaleString('es-CL')}</b><small class="${k.peor_ocioso ? 'mal' : ''}">${k.peor_ocioso ? `${esc(k.peor_ocioso.patente.replace(/^([A-Z]{4})(\d{2})$/, '$1-$2'))} suma ${k.peor_ocioso.dias}` : 'sin días ociosos'}</small></div>
+    <div class="kpi"><span>Costo de mantención</span><b class="mono rp-kpi-mono">${clp(k.costo_mantencion)}</b><small>${k.ordenes_trabajo} ${k.ordenes_trabajo === 1 ? 'orden' : 'órdenes'} de trabajo</small></div>
+    <div class="kpi"><span>Devoluciones a tiempo</span><b>${pct(k.devoluciones_a_tiempo)}</b><small>${k.devoluciones_total ? `${k.atrasos} ${k.atrasos === 1 ? 'atraso' : 'atrasos'} de ${k.devoluciones_total}` : 'sin devoluciones en el período'}</small></div>`;
+
+  // Ingreso: por día (≤ 62 días), por semana (≤ 120) o por mes
+  const dias = r.ingreso_diario;
+  let grupos;
+  if (dias.length <= 62) grupos = dias.map((d) => ({ et: String(Number(d.dia.slice(8, 10))), tit: fecha(d.dia), v: d.ingreso }));
+  else if (dias.length <= 120) { grupos = []; for (let i = 0; i < dias.length; i += 7) { const s = dias.slice(i, i + 7); grupos.push({ et: dm(s[0].dia), tit: `${fecha(s[0].dia)} al ${fecha(s.at(-1).dia)}`, v: s.reduce((a, b) => a + b.ingreso, 0) }); } }
+  else { const m = new Map(); for (const d of dias) { const kk = d.dia.slice(0, 7); m.set(kk, (m.get(kk) || 0) + d.ingreso); } grupos = [...m].map(([kk, v]) => ({ et: cap(MESES[Number(kk.slice(5)) - 1]).slice(0, 3), tit: `${cap(MESES[Number(kk.slice(5)) - 1])} ${kk.slice(0, 4)}`, v })); }
+  document.getElementById('t-ingreso').textContent = dias.length <= 62 ? 'Ingreso por día' : dias.length <= 120 ? 'Ingreso por semana' : 'Ingreso por mes';
+  const max = Math.max(1, ...grupos.map((g) => g.v));
+  const top = new Set([...grupos].map((g, i) => [g.v, i]).filter(([v]) => v > 0).sort((a, b) => b[0] - a[0]).slice(0, Math.min(3, Math.ceil(grupos.length / 10))).map(([, i]) => i));
+  document.getElementById('ingreso').innerHTML = grupos.map((g, i) => `<div class="barra" title="${esc(g.tit)}: ${clp(g.v)}"><i class="${g.v ? (top.has(i) ? 'top' : '') : 'cero'}" style="height:${Math.max(1, (g.v / max) * 100)}%"></i></div>`).join('');
+  const paso = grupos.length > 20 ? 3 : grupos.length > 12 ? 2 : 1;
+  document.getElementById('ingreso-pie').innerHTML = grupos.map((g, i) => `<span>${i % paso === 0 ? esc(g.et) : ''}</span>`).join('');
+
+  document.getElementById('ocup').innerHTML = r.por_categoria.map((c) => `<div class="rc-ocup" title="${c.dias_arrendado} días arrendado · ${c.dias_mantencion} en mantención · ${c.dias_ociosos} ociosos"><span>${esc(c.categoria)}</span><div class="b"><i style="width:${(c.pct_arrendado * 100).toFixed(1)}%;background:var(--marca)"></i><i style="width:${(c.pct_mantencion * 100).toFixed(1)}%;background:#F5C98A"></i></div><span class="n">${pct(c.ocupacion)}</span></div>`).join('') || '<p class="rp-vacio">Sin vehículos</p>';
+
+  // Mapa de calor
+  const cal = r.calor, nc = cal.columnas.length;
+  document.getElementById('t-calor').textContent = cal.unidad === 'dia' ? 'Ocupación por vehículo y día' : 'Ocupación por vehículo y semana';
+  const grid = document.getElementById('calor');
+  grid.style.gridTemplateColumns = `110px repeat(${nc}, minmax(0, 1fr))`;
+  const salto = nc > 40 ? 4 : nc > 16 ? 2 : 1;
+  const nivel = (c) => (c.man >= 0.5 ? 'm' : c.arr <= 0.02 ? '' : c.arr < 0.34 ? 'l1' : c.arr < 0.67 ? 'l2' : 'l3');
+  grid.innerHTML = `<span></span>${cal.columnas.map((c, i) => `<span class="cab">${i % salto === 0 ? (cal.unidad === 'dia' ? Number(c.desde.slice(8, 10)) : dm(c.desde)) : ''}</span>`).join('')}`
+    + cal.filas.map((f) => `<span class="lbl">${esc(f.patente.replace(/^([A-Z]{4})(\d{2})$/, '$1-$2'))}</span>${f.celdas.map((c, i) => `<i class="${nivel(c)}" title="${esc(f.patente)} · ${cal.unidad === 'dia' ? fecha(cal.columnas[i].desde) : `${fecha(cal.columnas[i].desde)} al ${fecha(cal.columnas[i].hasta)}`}: ${c.man >= 0.5 ? 'mantención' : `${Math.round(c.arr * 100)} % arrendado`}"></i>`).join('')}`).join('');
+
+  document.querySelector('#porveh tbody').innerHTML = r.por_vehiculo.map((v) => `<tr><td>${pat(v.patente)} <span class="peq muted">${esc(`${v.marca || ''} ${v.modelo || ''}`)}</span></td>
+    <td class="mono">${Math.round(v.dias_arrendado)}</td><td class="mono" style="${v.dias_ociosos > r.dias * 0.35 ? 'color:var(--red);font-weight:600' : ''}">${Math.round(v.dias_ociosos)}</td>
+    <td class="monto der">${clp(v.ingreso)}</td><td class="monto der">${clp(v.por_dia_disponible)}</td><td class="monto der" style="${v.mantencion_costo ? '' : 'color:var(--muted)'}">${clp(v.mantencion_costo)}</td></tr>`).join('') || '<tr><td colspan="6" class="rp-vacio">Sin vehículos</td></tr>';
+
+  document.querySelector('#danos tbody').innerHTML = r.danos_por_cliente.slice(0, 8).map((d) => `<tr><td>${esc(d.cliente)}<div class="peq muted mono">${d.documento_tipo === 'rut' ? rut(d.documento) : `${d.documento_tipo === 'pasaporte' ? 'Pasaporte' : 'DNI'} ${esc(d.documento)}`}</div></td>
+    <td>${d.arriendos}</td><td><span class="chip ${d.incidentes > 1 ? 'error' : 'aviso'}">${d.incidentes}</span></td><td class="monto der">${clp(d.cobrado)}</td></tr>`).join('') || '<tr><td colspan="4" class="rp-vacio">Sin incidentes con clientes en los últimos 12 meses</td></tr>';
+
+  const dv = r.devoluciones, tot = Math.max(1, dv.total + dv.no_show);
+  const fila = (t, n, color) => `<div class="rc-ocup"><span>${t}</span><div class="b"><i style="width:${(n / tot) * 100}%;background:${color}"></i></div><span class="n">${n}</span></div>`;
+  document.getElementById('dev').innerHTML = fila('A tiempo', dv.a_tiempo, 'var(--green)') + fila('Atraso &lt; 3 h', dv.atraso_leve, '#D97706') + fila('Atraso ≥ 3 h', dv.atraso_grave, 'var(--red)') + fila('No se presentó', dv.no_show, 'var(--ink)');
+  document.getElementById('dev-nota').textContent = `A tiempo = dentro de la tolerancia de ${dv.tolerancia_min} minutos sobre la hora pactada.${dv.detalle.some((d) => d.pendiente) ? ' Incluye arriendos atrasados que aún no se devuelven.' : ''}`;
+}
+
+document.getElementById('ver-dev').onclick = () => {
+  if (!REP) return;
+  const dv = REP.devoluciones;
+  const CL = { a_tiempo: ['A tiempo', 'ok'], atraso_leve: ['Atraso < 3 h', 'aviso'], atraso_grave: ['Atraso ≥ 3 h', 'error'] };
+  const filas = dv.detalle.filter((d) => d.clase !== 'a_tiempo').map((d) => `<tr><td class="folio">${esc(d.folio)}</td><td>${d.patente ? pat(d.patente) : ''}</td><td>${esc(d.cliente)}</td><td class="mono peq">${fechaHora(d.fin)}</td><td class="mono peq">${d.devolucion_real ? fechaHora(d.devolucion_real) : '<b style="color:var(--red)">sin devolver</b>'}</td><td class="mono">${Math.floor(d.atraso_min / 60)} h ${d.atraso_min % 60} min</td><td><span class="chip ${CL[d.clase][1]}">${CL[d.clase][0]}</span></td></tr>`)
+    .concat(dv.no_shows.map((d) => `<tr><td class="folio">${esc(d.folio)}</td><td>${d.patente ? pat(d.patente) : ''}</td><td>${esc(d.cliente)}</td><td class="mono peq">retiro ${fechaHora(d.inicio)}</td><td>—</td><td>—</td><td><span class="chip st-noshow">No se presentó</span></td></tr>`));
+  modal({ titulo: 'Atrasos y no presentados', ancho: true, html: filas.length ? `<div class="tabla-env"><table class="tabla"><thead><tr><th>Folio</th><th>Patente</th><th>Cliente</th><th>Pactada</th><th>Real</th><th>Atraso</th><th></th></tr></thead><tbody>${filas.join('')}</tbody></table></div>` : '<p class="rc-vacio">Todas las devoluciones del período fueron a tiempo.</p>' });
+};
+
+pintarControles();
+cargar();
+</script>
+</body>
+</html>

@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Mi reserva</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/portal.css">
+</head>
+<body class="pt">
+<header class="pt-cab"><div class="pt-cab-in" id="cab"></div></header>
+<main class="pt-cuerpo" id="app"><p class="rc-cargando">Cargando tu reserva…</p></main>
+<footer class="pt-pie"><a href="https://www.siguelogps.cl" target="_blank" rel="noopener">con tecnología <img src="/img/logo-siguelo.png" alt="Síguelo GPS"></a></footer>
+<script type="module">
+import { esc, clp, fecha, hora, rut, reducirImagen, chipEstado, toast } from '/comun.js';
+
+const TOKEN = decodeURIComponent(location.pathname.split('/').filter(Boolean)[1] || '');
+const app = document.getElementById('app');
+const base = `/api/portal/r/${encodeURIComponent(TOKEN)}`;
+async function pedir(ruta = '', body) {
+  const r = await fetch(base + ruta, { method: body ? 'POST' : 'GET', headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.error || 'No pudimos completar la solicitud.');
+  return j;
+}
+const fechaLarga = (d) => new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', weekday: 'long', day: 'numeric', month: 'long' }).format(new Date(d));
+const MENSAJE = {
+  cotizacion: 'Recibimos tu reserva. La confirmaremos al completar el pago (en línea o en el mesón).',
+  confirmada: 'Tu reserva está confirmada. Sube tus documentos para que el retiro sea más rápido.',
+  en_curso: 'Tu arriendo está en curso. ¡Buen viaje!',
+  devuelta: 'Recibimos el vehículo. Estamos revisando la devolución.',
+  cerrada: 'Tu arriendo está cerrado. Gracias por preferirnos.',
+  cancelada: 'Esta reserva fue cancelada.',
+  no_show: 'No registramos el retiro de esta reserva.'
+};
+const PROV = { webpay: 'Webpay', mercadopago: 'Mercado Pago' };
+const ESTADO_PAGO = { pagado: 'Pagado', capturado: 'Pagado', autorizado: 'Autorizado', simulado: 'Pagado (prueba)', pendiente: 'Pendiente', rechazado: 'Rechazado', anulado: 'Anulado', reembolsado: 'Reembolsado', retenido: 'Retenido', liberado: 'Liberado' };
+
+function marca(e) {
+  const c = /^#[0-9a-f]{6}$/i.test(e.color) ? e.color : '#0F5F58';
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+  document.documentElement.style.setProperty('--pt-color', c);
+  document.documentElement.style.setProperty('--pt-texto', (r * 299 + g * 587 + b * 114) / 1000 > 160 ? '#15181D' : '#fff');
+  document.documentElement.style.setProperty('--pt-color-suave', `rgba(${r},${g},${b},.09)`);
+  const ini = e.nombre.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
+  document.getElementById('cab').innerHTML = `${e.logo ? `<img class="pt-logo" src="/api/logo/${encodeURIComponent(e.slug)}" alt="${esc(e.nombre)}">` : `<span class="pt-logo-txt">${esc(ini)}</span>`}
+    <div class="pt-marca"><b>${esc(e.nombre)}</b><span>Mi reserva</span></div>
+    <div class="pt-cab-der">${e.telefono ? `<a href="tel:${esc(e.telefono.replace(/\s/g, ''))}" class="tel-txt">${esc(e.telefono)}</a>` : ''}<a href="/reservar/${encodeURIComponent(e.slug)}">Nueva reserva</a></div>`;
+  document.title = `Mi reserva · ${e.nombre}`;
+}
+
+async function cargar() {
+  let d;
+  try { d = await pedir(); } catch (e) { app.innerHTML = `<div class="tarjeta pt-ok"><h2>No encontramos esta reserva</h2><p class="muted">${esc(e.message)}</p></div>`; return; }
+  marca(d.empresa);
+  const r = d.reserva, docs = d.documentos;
+  const faltan = docs.requeridos.filter((t) => !docs.subidos[t]);
+  app.innerHTML = `
+    ${new URLSearchParams(location.search).get('pago') ? `<p class="aviso ${r.estado === 'confirmada' ? 'ok' : 'info'}">${r.estado === 'confirmada' ? 'Pago recibido: tu reserva está confirmada.' : 'Estamos esperando la confirmación del pago. Si ya pagaste, actualiza en unos minutos.'}</p>` : ''}
+    <div class="pt-estado"><h1>Reserva <span class="mono">${esc(r.folio)}</span></h1>${chipEstado(r.estado)}</div>
+    <p class="muted" style="margin-top:-10px">${esc(MENSAJE[r.estado] || '')}</p>
+    <div class="pt-dos">
+      <div style="display:flex;flex-direction:column;gap:18px;min-width:0">
+        <section class="tarjeta"><div class="bloque">
+          <h2>Retiro y devolución</h2>
+          <div class="rc-tramo">
+            <div class="lugar"><span>Retiro · ${esc(d.sucursal_retiro?.nombre || '')}</span><b>${fecha(r.inicio)} ${hora(r.inicio)}</b><span>${esc(fechaLarga(r.inicio))}</span>${d.sucursal_retiro?.direccion ? `<span>${esc(d.sucursal_retiro.direccion)}${d.sucursal_retiro.comuna ? `, ${esc(d.sucursal_retiro.comuna)}` : ''}</span>` : ''}</div>
+            <div class="flecha">→</div>
+            <div class="lugar"><span>Devolución · ${esc(d.sucursal_devolucion?.nombre || '')}</span><b>${fecha(r.fin)} ${hora(r.fin)}</b><span>${esc(fechaLarga(r.fin))}</span>${d.sucursal_devolucion?.direccion ? `<span>${esc(d.sucursal_devolucion.direccion)}${d.sucursal_devolucion.comuna ? `, ${esc(d.sucursal_devolucion.comuna)}` : ''}</span>` : ''}</div>
+          </div>
+          <dl class="rc-datos">
+            <div><dt>Vehículo</dt><dd>${esc(d.categoria?.nombre || '')}${d.vehiculo ? ` · <span class="pat">${esc(d.vehiculo.patente.replace(/^([A-Z]{4})(\d{2})$/, '$1-$2'))}</span>` : ''}<div class="peq muted">${d.vehiculo ? esc(`${d.vehiculo.marca} ${d.vehiculo.modelo}`) : esc(d.categoria?.ejemplo || '')}</div></dd></div>
+            <div><dt>Titular</dt><dd>${esc(`${d.cliente?.nombre || ''} ${d.cliente?.apellidos || ''}`)}<div class="peq muted mono">${d.cliente ? (d.cliente.documento_tipo === 'rut' ? rut(d.cliente.documento) : esc(d.cliente.documento)) : ''}</div></dd></div>
+            <div><dt>Kilometraje</dt><dd>${r.km_incluidos ? `${r.km_incluidos.toLocaleString('es-CL')} km incluidos` : 'Libre'}</dd></div>
+            <div><dt>Garantía</dt><dd class="monto">${clp(r.garantia)}</dd></div>
+          </dl>
+        </div></section>
+
+        ${docs.puede_subir || Object.keys(docs.subidos).length ? `<section class="tarjeta"><div class="bloque">
+          <h2>Tus documentos ${faltan.length ? `<span class="chip aviso">Faltan ${faltan.length}</span>` : '<span class="chip ok">Completos</span>'}</h2>
+          <p class="ayuda">Sube una foto legible de cada documento. Así el retiro en el mesón toma solo unos minutos.</p>
+          <div class="pt-docs">${docs.requeridos.map((t) => `<div class="pt-doc${docs.subidos[t] ? ' ok' : ''}">
+            <b>${esc(docs.nombres[t])}</b>
+            <small>${docs.subidos[t] ? `Recibido el ${fecha(docs.subidos[t])} ${hora(docs.subidos[t])}` : 'Pendiente'}</small>
+            ${docs.puede_subir ? `<label class="btn peq ${docs.subidos[t] ? '' : 'pt-primario'}">${docs.subidos[t] ? 'Reemplazar' : 'Subir foto'}<input type="file" accept="image/*,application/pdf" data-tipo="${t}"></label>` : ''}
+          </div>`).join('')}</div>
+        </div></section>` : ''}
+
+        ${d.contrato ? `<section class="tarjeta"><div class="bloque"><h2>Contrato de arriendo</h2>
+          ${d.contrato.pdf ? `<div class="rc-doc"><span class="mini"></span><div><b>Contrato ${esc(d.contrato.folio)}</b><small>Firmado el ${fecha(d.contrato.firmado_en)} ${hora(d.contrato.firmado_en)}</small></div>
+            <a class="btn peq" href="${base}/contrato.pdf" target="_blank" rel="noopener">Ver</a><a class="btn peq" href="${base}/contrato.pdf?descargar=1">Descargar PDF</a></div>`
+          : `<p class="muted">El contrato ${esc(d.contrato.folio)} se firma al retirar el vehículo.</p>`}
+        </div></section>` : ''}
+
+        ${d.liquidacion ? `<section class="tarjeta"><div class="bloque"><h2>Liquidación del arriendo <span class="folio">${esc(d.liquidacion.folio)}</span></h2>
+          <table class="rc-lineas">${d.liquidacion.lineas.map((l) => `<tr><td>${esc(l.concepto)}<small>${esc(l.calculo || '')}</small></td><td>${clp(l.monto)}</td></tr>`).join('') || '<tr><td>Sin cargos adicionales</td><td>$0</td></tr>'}
+            <tr class="total"><td>Cargos adicionales</td><td>${clp(d.liquidacion.total_cargos)}</td></tr></table>
+          <div class="rc-resumen-gar">
+            <div><span>Garantía</span><b class="monto">${clp(d.liquidacion.garantia_retenida)}</b></div><div class="op">−</div>
+            <div><span>Cobrado</span><b class="monto">${clp(d.liquidacion.garantia_capturada)}</b></div><div class="op">=</div>
+            <div class="res"><span>Liberado</span><b class="monto">${clp(d.liquidacion.garantia_liberada)}</b></div>
+          </div>
+          ${d.liquidacion.saldo_por_cobrar ? `<p class="aviso info">Saldo por pagar: <b class="monto">${clp(d.liquidacion.saldo_por_cobrar)}</b>. Te contactaremos para coordinar el pago.</p>` : ''}
+        </div></section>` : ''}
+      </div>
+
+      <aside class="pt-resumen tarjeta pt-fin"><div class="bloque">
+        <h2>Detalle del precio</h2>
+        <table class="rc-lineas">${r.lineas.map((l) => `<tr class="${l.monto < 0 ? 'desc' : ''}"><td>${esc(l.concepto)}<small>${esc(l.detalle || '')}</small></td><td>${clp(l.monto)}</td></tr>`).join('')}
+          <tr class="total"><td>Total</td><td>${clp(r.total)}</td></tr></table>
+        ${d.pagos.length ? `<div style="display:flex;flex-direction:column;gap:6px">${d.pagos.map((p) => `<div class="pt-pagolin"><div><b>${p.concepto === 'arriendo' ? 'Pago del arriendo' : p.concepto === 'garantia' ? 'Garantía' : esc(p.concepto)}</b><small>${esc(PROV[p.metodo] || p.metodo)} · ${fecha(p.creado_en)}</small></div><div class="der"><span class="monto">${clp(p.monto)}</span><span class="chip ${['pagado', 'capturado', 'simulado', 'autorizado'].includes(p.estado) ? 'ok' : ''}">${esc(ESTADO_PAGO[p.estado] || p.estado)}</span></div></div>`).join('')}</div>` : ''}
+        ${d.saldo > 0 ? `<div class="pt-saldo"><div><span>Pendiente de pago</span><b class="monto">${clp(d.saldo)}</b></div>
+          ${d.puede_pagar ? `<div class="rc-fila">${d.proveedores.map((p) => `<button type="button" class="btn primario" data-pagar="${p}">Pagar con ${esc(PROV[p] || p)}</button>`).join('')}</div>` : ''}</div>
+          ${d.pago_simulado && d.puede_pagar ? '<p class="pt-nota">Modo de prueba: el pago en línea es simulado.</p>' : ''}` : ''}
+        <p class="pt-nota">¿Dudas? Escríbenos a ${esc(d.empresa.correo || '')}${d.empresa.telefono ? ` o llama al ${esc(d.empresa.telefono)}` : ''}.</p>
+      </div></aside>
+    </div>`;
+
+  app.querySelectorAll('input[type="file"][data-tipo]').forEach((inp) => inp.onchange = async () => {
+    const f = inp.files[0];
+    if (!f) return;
+    const lbl = inp.closest('label');
+    lbl.firstChild.textContent = 'Subiendo…';
+    try {
+      const dataUrl = f.type === 'application/pdf'
+        ? await new Promise((ok, mal) => { const fr = new FileReader(); fr.onload = () => ok(fr.result); fr.onerror = mal; fr.readAsDataURL(f); })
+        : await reducirImagen(f, 1800, 0.85);
+      await pedir('/documentos', { tipo: inp.dataset.tipo, dataUrl });
+      toast('Documento recibido', 'ok');
+      cargar();
+    } catch (e) { toast(e.message, 'error'); lbl.firstChild.textContent = 'Reintentar'; }
+  });
+  app.querySelectorAll('[data-pagar]').forEach((b) => b.onclick = async () => {
+    b.disabled = true;
+    try {
+      const p = await pedir('/pagar', { proveedor: b.dataset.pagar });
+      if (p.redirigir?.url) {
+        const red = p.redirigir, f = document.createElement('form');
+        f.method = (red.metodo || 'GET').toUpperCase() === 'POST' ? 'post' : 'get'; f.action = red.url;
+        for (const [k, v] of Object.entries(red.campos || {})) f.append(Object.assign(document.createElement('input'), { type: 'hidden', name: k, value: v }));
+        document.body.append(f); f.submit(); return;
+      }
+      toast('Pago registrado', 'ok');
+      cargar();
+    } catch (e) { b.disabled = false; toast(e.message, 'error'); }
+  });
+}
+cargar();
+</script>
+</body>
+</html>

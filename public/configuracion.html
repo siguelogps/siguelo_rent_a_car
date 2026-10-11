@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Configuración</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/config.css">
+</head>
+<body>
+<main>
+  <div class="pagina-cab"><div><h1>Configuración</h1><p id="sub"></p></div></div>
+  <nav class="cf-tabs" id="tabs" aria-label="Secciones de configuración"></nav>
+  <section class="cf-panel" id="panel"><p class="rc-cargando">Cargando…</p></section>
+</main>
+<script type="module">
+import { iniciarPagina, api, esc, clp, fecha, hora, fechaHora, rut, validarRut, modal, confirmar, toast, toastError, leerForm, puede, chipEstado, ICONOS } from '/comun.js';
+const yo = await iniciarPagina({ activo: 'configuracion', titulo: 'Configuración' });
+const esAdmin = ['administrador', 'superadmin'].includes(yo.usuario.rol);
+const panel = document.getElementById('panel');
+
+const TABS = [
+  ['empresa', 'Empresa', 'configuracion'], ['sucursales', 'Sucursales', 'configuracion'], ['usuarios', 'Usuarios y permisos', 'usuarios'],
+  ['plantillas', 'Plantillas', 'configuracion'], ['integraciones', 'Integraciones', 'integraciones'], ['salidas', 'Bandeja de salida', 'configuracion'],
+  ['bitacora', 'Bitácora', 'configuracion'], ['portal', 'Portal de reservas', 'configuracion'], ['mi-clave', 'Mi clave', null]
+].filter(([, , m]) => !m || puede(m));
+document.getElementById('sub').textContent = yo.empresa ? `${yo.empresa.nombre} · empresa, usuarios, integraciones y portal de reservas` : '';
+
+function pintarTabs(actual, retenidas = null) {
+  document.getElementById('tabs').innerHTML = TABS.map(([k, t]) => `<a href="#${k}"${k === actual ? ' aria-current="page"' : ''}>${t}${k === 'salidas' && retenidas ? ` <span class="n">${retenidas}</span>` : ''}</a>`).join('');
+}
+let retenidas = null;
+api('salidas?estado=retenida').then((l) => { retenidas = l.length; pintarTabs(actual()); }).catch(() => {});
+const actual = () => { const h = location.hash.slice(1); return TABS.some(([k]) => k === h) ? h : TABS[0][0]; };
+addEventListener('hashchange', mostrar);
+async function mostrar() {
+  const t = actual();
+  pintarTabs(t, retenidas);
+  panel.innerHTML = '<p class="rc-cargando">Cargando…</p>';
+  try { await ({ empresa, sucursales, usuarios, plantillas, integraciones, salidas, bitacora, portal, 'mi-clave': miClave })[t](); }
+  catch (e) { panel.innerHTML = `<p class="aviso error">${esc(e.message)}</p>`; }
+}
+const NUM = (v) => (v === '' || v == null ? null : Number(v));
+const copiar = async (txt) => { try { await navigator.clipboard.writeText(txt); toast('Copiado', 'ok'); } catch { toast('No se pudo copiar: selecciona el texto y cópialo', 'error'); } };
+
+// ═════════ Empresa ═════════
+async function empresa() {
+  const e = await api('empresa');
+  const aj = e.ajustes || {};
+  const ed = puede('configuracion', 'editar');
+  const dis = ed ? '' : ' disabled';
+  const ini = e.nombre.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
+  const campo = (k, t, extra = '') => `<label class="etiqueta">${t}<input class="campo" name="${k}" value="${esc(k === 'rut' && e.rut ? rut(e.rut) : e[k] ?? '')}"${dis} ${extra}></label>`;
+  const ajuste = (k, t, suf, ayuda = '') => `<label class="etiqueta" title="${esc(ayuda)}">${t}<span class="cf-sufijo"><input class="campo" type="number" min="0" name="${k}" value="${esc(aj[k] ?? '')}"${dis}><em>${suf}</em></span></label>`;
+  panel.innerHTML = `
+    <div class="cf-marcha ${e.marcha_blanca ? '' : 'off'}" id="mb">
+      <div><h2>Marcha blanca ${e.marcha_blanca ? '<span class="chip rc-marcha">● Activa</span>' : '<span class="chip ok">Desactivada · operación real</span>'}</h2>
+        <p class="peq" style="margin-top:4px">${e.marcha_blanca ? 'Mientras esté activa puedes usar todo el sistema con datos reales sin que nada salga hacia los clientes. Queda retenido:' : 'El sistema opera de verdad: con las integraciones activas salen:'}</p>
+        <ul><li>Correos y mensajes de WhatsApp (quedan en la Bandeja de salida)</li><li>Cobros con Webpay y Mercado Pago (se registran como «simulado»)</li><li>Boletas y facturas electrónicas ante el SII</li><li>Inmovilización remota de vehículos por la plataforma GPS</li></ul></div>
+      <label class="switch" title="${esAdmin ? 'Activar o desactivar la marcha blanca' : 'Solo un administrador puede cambiar la marcha blanca'}"><input type="checkbox" id="mb-sw"${e.marcha_blanca ? ' checked' : ''}${esAdmin ? '' : ' disabled'} aria-label="Marcha blanca"><span></span></label>
+    </div>
+    <div class="columnas-2">
+      <form class="tarjeta bloque" id="f-datos">
+        <h2>Datos de la empresa</h2>
+        <div class="cf-form">
+          ${campo('nombre', 'Nombre comercial', 'required')}${campo('rut', 'RUT', `placeholder="76.543.210-3"`)}
+          ${campo('razon_social', 'Razón social')}${campo('giro', 'Giro')}
+          ${campo('acteco', 'Código de actividad (SII)')}${campo('telefono', 'Teléfono')}
+          ${campo('direccion', 'Dirección')}${campo('comuna', 'Comuna')}
+          ${campo('ciudad', 'Ciudad')}${campo('correo', 'Correo de contacto', 'type="email"')}
+          <label class="etiqueta ancho">Sitio web<input class="campo" name="sitio_web" value="${esc(e.sitio_web ?? '')}" placeholder="https://"${dis}></label>
+        </div>
+        ${ed ? '<div class="cf-pie"><button class="btn primario" type="submit">Guardar datos</button></div>' : ''}
+      </form>
+      <div style="display:flex;flex-direction:column;gap:18px;min-width:0">
+        <div class="tarjeta bloque">
+          <h2>Logo y color</h2>
+          <div class="cf-logo">
+            <div class="cf-logo-prev" id="logo-prev">${e.logo_clave ? `<img src="/api/logo/${esc(e.slug)}?v=${esc(e.logo_clave)}" alt="Logo">` : `<span style="background:${esc(e.color || '#0F5F58')}">${esc(ini)}</span>`}</div>
+            <div style="display:flex;flex-direction:column;gap:8px">
+              ${ed ? '<label class="btn cf-archivo">Subir logo (PNG o JPG)<input type="file" accept="image/png,image/jpeg,image/webp" id="logo-in"></label>' : ''}
+              <span class="cf-ayuda">Aparece en contratos, correos y el portal de reservas.</span>
+            </div>
+          </div>
+          <div class="cf-color"><input type="color" id="color" value="${esc(/^#[0-9a-f]{6}$/i.test(e.color || '') ? e.color : '#0F5F58')}"${dis}><input class="campo mono" id="color-txt" value="${esc(e.color || '#0F5F58')}" style="width:110px"${dis}>${ed ? '<button class="btn" id="color-ok" type="button">Guardar color</button>' : ''}<span class="cf-ayuda">Color de marca del portal de reservas</span></div>
+        </div>
+        <form class="tarjeta bloque" id="f-aj">
+          <h2>Ajustes de operación</h2>
+          <div class="cf-form">
+            ${ajuste('tolerancia_min', 'Tolerancia de atraso', 'min', 'Minutos de gracia antes de cobrar un día adicional')}${ajuste('edad_minima', 'Edad mínima del conductor', 'años')}
+            ${ajuste('precio_litro', 'Precio litro de combustible', '$')}${ajuste('cargo_servicio_combustible', 'Cargo servicio de combustible', '$')}
+            ${ajuste('lavado', 'Lavado especial', '$')}${ajuste('triangulo', 'Triángulo / accesorio faltante', '$')}
+            ${ajuste('garantia_dias_retencion', 'Días de retención de garantía', 'días')}${ajuste('valor_uf', 'Valor UF', '$')}
+            <label class="etiqueta ancho">Pago en el portal de reservas<select class="campo" name="portal_pago"${dis}>${[['obligatorio', 'Obligatorio: se paga en línea al reservar'], ['opcional', 'Opcional: el cliente elige pagar en línea o en el mesón'], ['mostrador', 'Mesón: no se cobra en línea']].map(([v, t]) => `<option value="${v}"${(aj.portal_pago || 'opcional') === v ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
+          </div>
+          ${ed ? '<div class="cf-pie"><button class="btn primario" type="submit">Guardar ajustes</button></div>' : ''}
+        </form>
+      </div>
+    </div>`;
+  const fd = panel.querySelector('#f-datos');
+  fd.onsubmit = async (ev) => {
+    ev.preventDefault();
+    const d = leerForm(fd);
+    if (d.rut && !validarRut(d.rut)) { fd.rut.focus(); return toast('El RUT no es válido (revisa el dígito verificador)', 'error'); }
+    try { await api('empresa', { method: 'PATCH', body: d }); toast('Datos guardados', 'ok'); if (d.rut) fd.rut.value = rut(d.rut); } catch (e2) { toastError(e2); }
+  };
+  fd.rut?.addEventListener('blur', () => { if (fd.rut.value && validarRut(fd.rut.value)) fd.rut.value = rut(fd.rut.value); });
+  const fa = panel.querySelector('#f-aj');
+  fa.onsubmit = async (ev) => {
+    ev.preventDefault();
+    const d = leerForm(fa), ajustes = {};
+    for (const [k, v] of Object.entries(d)) ajustes[k] = k === 'portal_pago' ? v : NUM(v);
+    try { await api('empresa', { method: 'PATCH', body: { ajustes } }); toast('Ajustes guardados', 'ok'); } catch (e2) { toastError(e2); }
+  };
+  const col = panel.querySelector('#color'), colTxt = panel.querySelector('#color-txt');
+  col.oninput = () => { colTxt.value = col.value; };
+  colTxt.oninput = () => { if (/^#[0-9a-f]{6}$/i.test(colTxt.value)) col.value = colTxt.value; };
+  panel.querySelector('#color-ok')?.addEventListener('click', async () => {
+    if (!/^#[0-9a-f]{6}$/i.test(colTxt.value)) return toast('Usa un color en formato #RRGGBB', 'error');
+    try { await api('empresa', { method: 'PATCH', body: { color: colTxt.value } }); toast('Color guardado', 'ok'); } catch (e2) { toastError(e2); }
+  });
+  panel.querySelector('#logo-in')?.addEventListener('change', async (ev) => {
+    const f = ev.target.files[0]; if (!f) return;
+    try {
+      const dataUrl = await logoDataUrl(f);
+      const r = await api('empresa', { method: 'PATCH', body: { logo: dataUrl } });
+      panel.querySelector('#logo-prev').innerHTML = `<img src="/api/logo/${esc(r.slug)}?v=${esc(r.logo_clave)}" alt="Logo">`;
+      toast('Logo actualizado', 'ok');
+    } catch (e2) { toastError(e2); }
+  });
+  panel.querySelector('#mb-sw')?.addEventListener('change', async (ev) => {
+    const activar = ev.target.checked;
+    const ok = await confirmar(activar ? 'Activar marcha blanca' : 'Desactivar marcha blanca',
+      activar ? 'Los correos, WhatsApp, cobros, documentos tributarios e inmovilizaciones quedarán retenidos o simulados.' : 'Desde ahora, con las integraciones activas, <b>saldrán correos y WhatsApp a los clientes, se harán cobros reales, se emitirán boletas y facturas ante el SII</b> y se podrán inmovilizar vehículos. ¿Continuar?',
+      { boton: activar ? 'Activar' : 'Desactivar marcha blanca', peligro: !activar });
+    if (!ok) { ev.target.checked = !activar; return; }
+    try { await api('empresa', { method: 'PATCH', body: { marcha_blanca: activar } }); toast(activar ? 'Marcha blanca activada' : 'Marcha blanca desactivada', 'ok'); setTimeout(() => location.reload(), 600); }
+    catch (e2) { ev.target.checked = !activar; toastError(e2); }
+  });
+}
+// Logo: PNG se mantiene PNG (transparencia), máximo 600 px
+function logoDataUrl(f) {
+  return new Promise((ok, mal) => {
+    const img = new Image();
+    img.onload = () => {
+      const k = Math.min(1, 600 / Math.max(img.width, img.height));
+      const c = document.createElement('canvas'); c.width = Math.round(img.width * k); c.height = Math.round(img.height * k);
+      const g = c.getContext('2d');
+      if (f.type !== 'image/png') { g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height); }
+      g.drawImage(img, 0, 0, c.width, c.height);
+      URL.revokeObjectURL(img.src);
+      ok(f.type === 'image/png' ? c.toDataURL('image/png') : c.toDataURL('image/jpeg', 0.9));
+    };
+    img.onerror = () => mal(new Error('No se pudo leer la imagen'));
+    img.src = URL.createObjectURL(f);
+  });
+}
+
+// ═════════ Sucursales ═════════
+async function sucursales() {
+  const lista = await api('configuracion/sucursales');
+  const ed = puede('configuracion', 'editar');
+  panel.innerHTML = `<div class="tarjeta"><div class="bloque" style="padding-bottom:8px"><h2>Sucursales ${ed ? '<button class="btn primario peq" id="nueva">+ Nueva sucursal</button>' : ''}</h2></div>
+    <div class="tabla-env"><table class="tabla"><thead><tr><th>Sucursal</th><th>Dirección</th><th>Horario</th><th>Vehículos</th><th>Usuarios</th><th>Estado</th><th></th></tr></thead><tbody>
+    ${lista.map((s) => `<tr><td><b>${esc(s.nombre)}</b>${s.telefono ? `<div class="peq muted">${esc(s.telefono)}</div>` : ''}</td><td>${esc(s.direccion || '')}<div class="peq muted">${esc([s.comuna, s.ciudad].filter(Boolean).join(', '))}</div></td>
+      <td class="peq">${esc(s.horario || '—')}</td><td class="mono">${s.vehiculos}</td><td class="mono">${s.usuarios}</td><td>${s.activa ? '<span class="chip ok">Activa</span>' : '<span class="chip">Inactiva</span>'}</td>
+      <td style="text-align:right">${ed ? `<button class="btn peq" data-ed="${s.id}">Editar</button>` : ''}</td></tr>`).join('')}</tbody></table></div></div>`;
+  const form = (s = {}) => `<div class="cf-form">
+    <label class="etiqueta ancho">Nombre<input class="campo" name="nombre" value="${esc(s.nombre || '')}" required></label>
+    <label class="etiqueta ancho">Dirección<input class="campo" name="direccion" value="${esc(s.direccion || '')}"></label>
+    <label class="etiqueta">Comuna<input class="campo" name="comuna" value="${esc(s.comuna || '')}"></label>
+    <label class="etiqueta">Ciudad<input class="campo" name="ciudad" value="${esc(s.ciudad || '')}"></label>
+    <label class="etiqueta">Teléfono<input class="campo" name="telefono" value="${esc(s.telefono || '')}"></label>
+    <label class="etiqueta">Horario<input class="campo" name="horario" value="${esc(s.horario || '')}" placeholder="Lun a sáb 08:30 a 19:30"></label>
+    <label class="etiqueta">Latitud<input class="campo mono" name="lat" value="${esc(s.lat ?? '')}" placeholder="-33.4206"></label>
+    <label class="etiqueta">Longitud<input class="campo mono" name="lng" value="${esc(s.lng ?? '')}" placeholder="-70.6075"></label>
+    <label class="pt-chk ancho" style="display:flex;gap:8px;align-items:center"><input type="checkbox" name="activa"${s.activa === false ? '' : ' checked'}> Sucursal activa (aparece en reservas y en el portal)</label></div>`;
+  const abrir = (s) => modal({ titulo: s ? `Editar ${s.nombre}` : 'Nueva sucursal', html: form(s), botones: [{ texto: 'Cancelar' }, { texto: 'Guardar', clase: 'primario', accion: async (c) => {
+    const d = leerForm(c);
+    await api(s ? `configuracion/sucursales/${s.id}` : 'configuracion/sucursales', { method: s ? 'PATCH' : 'POST', body: d });
+    toast('Sucursal guardada', 'ok'); sucursales();
+  } }] });
+  panel.querySelector('#nueva')?.addEventListener('click', () => abrir(null));
+  panel.querySelectorAll('[data-ed]').forEach((b) => b.onclick = () => abrir(lista.find((s) => s.id === Number(b.dataset.ed))));
+}
+
+// ═════════ Usuarios y permisos ═════════
+async function usuarios() {
+  const [lista, perm] = await Promise.all([api('configuracion/usuarios'), api('configuracion/permisos')]);
+  const ed = puede('usuarios', 'editar');
+  const sucs = yo.sucursales || [];
+  panel.innerHTML = `<div class="tarjeta"><div class="bloque" style="padding-bottom:8px"><h2>Usuarios ${ed ? '<button class="btn primario peq" id="nuevo">+ Nuevo usuario</button>' : ''}</h2></div>
+    <div class="tabla-env"><table class="tabla"><thead><tr><th>Usuario</th><th>Rol</th><th>Sucursal</th><th>Último acceso</th><th>Estado</th><th></th></tr></thead><tbody>
+    ${lista.map((u) => `<tr><td><b>${esc(u.nombre)}</b>${u.id === yo.usuario.id ? ' <span class="chip marca">tú</span>' : ''}<div class="peq muted">${esc(u.correo)}</div></td><td>${esc(u.rol_nombre)}</td><td>${esc(u.sucursal || '—')}</td>
+      <td class="mono peq">${u.ultimo_acceso ? fechaHora(u.ultimo_acceso) : 'nunca'}</td><td>${u.activo ? '<span class="chip ok">Activo</span>' : '<span class="chip">Inactivo</span>'}</td>
+      <td style="text-align:right;white-space:nowrap">${ed ? `<button class="btn peq" data-ed="${u.id}">Editar</button> <button class="btn peq" data-clave="${u.id}">Restablecer clave</button>` : ''}</td></tr>`).join('')}</tbody></table></div></div>
+    <div class="tarjeta"><div class="bloque" style="padding-bottom:8px"><h2>Permisos por rol <span class="peq muted" style="font-weight:400">solo lectura</span></h2><p class="ayuda">Lo que puede hacer cada rol en cada módulo. «Editar» incluye ver.</p></div>
+    <div class="tabla-env"><table class="tabla cf-matriz"><thead><tr><th>Módulo</th>${Object.values(perm.roles).map((r) => `<th>${esc(r)}</th>`).join('')}</tr></thead><tbody>
+    ${Object.entries(perm.modulos).map(([m, n]) => `<tr><td>${esc(n)}</td>${Object.keys(perm.roles).map((r) => { const v = perm.matriz[r][m]; return `<td><span class="cf-nivel ${v || 'no'}">${v === 'editar' ? 'Editar' : v === 'ver' ? 'Ver' : '—'}</span></td>`; }).join('')}</tr>`).join('')}</tbody></table></div></div>`;
+  const ROL_OPS = (sel) => Object.entries(perm.roles).map(([k, v]) => `<option value="${k}"${k === sel ? ' selected' : ''}>${esc(v)}</option>`).join('');
+  const SUC_OPS = (sel) => `<option value="">Todas / sin sucursal</option>${sucs.map((s) => `<option value="${s.id}"${s.id === sel ? ' selected' : ''}>${esc(s.nombre)}</option>`).join('')}`;
+  const mostrarClave = (titulo, u, clave) => modal({ titulo, html: `<p>Clave temporal de <b>${esc(u.nombre)}</b> (${esc(u.correo)}). Entrégala por un canal seguro; no se volverá a mostrar.</p><div class="cf-clave">${esc(clave)}</div>`,
+    botones: [{ texto: 'Copiar', accion: async () => { await copiar(clave); return false; } }, { texto: 'Listo', clase: 'primario' }] });
+  panel.querySelector('#nuevo')?.addEventListener('click', () => modal({ titulo: 'Nuevo usuario', html: `<div class="cf-form">
+      <label class="etiqueta ancho">Nombre<input class="campo" name="nombre" required></label><label class="etiqueta ancho">Correo<input class="campo" type="email" name="correo" required></label>
+      <label class="etiqueta">Rol<select class="campo" name="rol">${ROL_OPS('counter')}</select></label><label class="etiqueta">Sucursal<select class="campo" name="sucursal_id">${SUC_OPS(null)}</select></label>
+      <label class="etiqueta">Teléfono<input class="campo" name="telefono"></label></div><p class="cf-ayuda">Se genera una clave temporal que el usuario puede cambiar en Configuración › Mi clave.</p>`,
+  botones: [{ texto: 'Cancelar' }, { texto: 'Crear usuario', clase: 'primario', accion: async (c) => {
+    const r = await api('configuracion/usuarios', { body: leerForm(c) });
+    setTimeout(() => mostrarClave('Usuario creado', r.usuario, r.clave_temporal), 50);
+    usuarios();
+  } }] }));
+  panel.querySelectorAll('[data-ed]').forEach((b) => b.onclick = () => {
+    const u = lista.find((x) => x.id === Number(b.dataset.ed)), propio = u.id === yo.usuario.id;
+    modal({ titulo: `Editar ${u.nombre}`, html: `<div class="cf-form">
+      <label class="etiqueta ancho">Nombre<input class="campo" name="nombre" value="${esc(u.nombre)}"></label>
+      <label class="etiqueta">Rol<select class="campo" name="rol"${propio ? ' disabled title="No puedes cambiar tu propio rol"' : ''}>${ROL_OPS(u.rol)}</select></label>
+      <label class="etiqueta">Sucursal<select class="campo" name="sucursal_id">${SUC_OPS(u.sucursal_id)}</select></label>
+      <label class="etiqueta">Teléfono<input class="campo" name="telefono" value="${esc(u.telefono || '')}"></label>
+      <label class="etiqueta">Estado<select class="campo" name="activo"${propio ? ' disabled' : ''}><option value="1"${u.activo ? ' selected' : ''}>Activo</option><option value="0"${u.activo ? '' : ' selected'}>Inactivo (no puede ingresar)</option></select></label></div>`,
+    botones: [{ texto: 'Cancelar' }, { texto: 'Guardar', clase: 'primario', accion: async (c) => {
+      const d = leerForm(c);
+      const body = { nombre: d.nombre, sucursal_id: d.sucursal_id || null, telefono: d.telefono };
+      if (!propio) { body.rol = d.rol; body.activo = d.activo === '1'; }
+      await api(`configuracion/usuarios/${u.id}`, { method: 'PATCH', body }); toast('Usuario guardado', 'ok'); usuarios();
+    } }] });
+  });
+  panel.querySelectorAll('[data-clave]').forEach((b) => b.onclick = async () => {
+    const u = lista.find((x) => x.id === Number(b.dataset.clave));
+    if (!await confirmar('Restablecer clave', `Se generará una clave temporal nueva para <b>${esc(u.nombre)}</b> y se cerrarán sus sesiones abiertas.`, { boton: 'Restablecer' })) return;
+    try { const r = await api(`configuracion/usuarios/${u.id}/clave`, { body: {} }); mostrarClave('Clave restablecida', u, r.clave_temporal); } catch (e) { toastError(e); }
+  });
+}
+
+// ═════════ Plantillas ═════════
+const TIPOS_PL = { contrato: 'Contratos', correo: 'Correos', whatsapp: 'WhatsApp' };
+let plSel = null;
+async function plantillas() {
+  const { plantillas: lista, variables } = await api('configuracion/plantillas');
+  const ed = puede('configuracion', 'editar');
+  if (!plSel || !lista.some((p) => p.id === plSel)) plSel = lista[0]?.id;
+  panel.innerHTML = `<div class="cf-plantillas">
+    <div class="tarjeta cf-pl-lista">${Object.entries(TIPOS_PL).map(([t, n]) => { const ps = lista.filter((p) => p.tipo === t); return ps.length ? `<div class="grupo">${n}</div>${ps.map((p) => `<button type="button" class="item${p.id === plSel ? ' sel' : ''}" data-pl="${p.id}"><div class="item-txt"><b>${esc(p.nombre)}</b><small>${esc(p.clave)} · editada ${fecha(p.actualizado_en)}</small></div>${p.activa ? '' : '<span class="chip">Inactiva</span>'}</button>`).join('')}` : ''; }).join('')}</div>
+    <div class="tarjeta bloque" id="editor"></div></div>`;
+  panel.querySelectorAll('[data-pl]').forEach((b) => b.onclick = () => { plSel = Number(b.dataset.pl); plantillas(); });
+  const p = lista.find((x) => x.id === plSel);
+  if (!p) { panel.querySelector('#editor').innerHTML = '<p class="rc-vacio">No hay plantillas</p>'; return; }
+  const ed$ = panel.querySelector('#editor');
+  ed$.innerHTML = `<h2>${esc(p.nombre)} <span class="chip">${esc(TIPOS_PL[p.tipo])}</span></h2>
+    <div class="cf-form">
+      <label class="etiqueta">Nombre<input class="campo" name="nombre" value="${esc(p.nombre)}"${ed ? '' : ' disabled'}></label>
+      <label class="etiqueta">Estado<select class="campo" name="activa"${ed ? '' : ' disabled'}><option value="1"${p.activa ? ' selected' : ''}>Activa</option><option value="0"${p.activa ? '' : ' selected'}>Inactiva (no se envía)</option></select></label>
+      ${p.tipo === 'correo' ? `<label class="etiqueta ancho">Asunto<input class="campo" name="asunto" value="${esc(p.asunto || '')}"${ed ? '' : ' disabled'}></label>` : ''}
+      <label class="etiqueta ancho">Texto<textarea class="campo cf-cuerpo" name="cuerpo" rows="${p.tipo === 'contrato' ? 20 : 10}"${ed ? '' : ' disabled'}>${esc(p.cuerpo)}</textarea></label>
+    </div>
+    <div><div class="cf-ayuda" style="margin-bottom:6px">Variables: toca una para insertarla donde está el cursor.</div><div class="cf-vars">${variables.map((v) => `<button type="button" data-var="${esc(v)}">{{${esc(v)}}}</button>`).join('')}</div></div>
+    <div class="cf-pie">
+      ${ed && p.tiene_defecto ? '<button type="button" class="btn peligro" id="pl-rest">Restaurar texto por defecto</button>' : ''}
+      <button type="button" class="btn" id="pl-vista">Vista previa</button>
+      ${ed ? '<button type="button" class="btn primario" id="pl-guardar">Guardar</button>' : ''}
+    </div>`;
+  let ultimo = ed$.querySelector('[name="cuerpo"]');
+  ed$.querySelectorAll('textarea, input[name="asunto"]').forEach((x) => x.addEventListener('focus', () => { ultimo = x; }));
+  ed$.querySelectorAll('[data-var]').forEach((b) => b.onclick = () => {
+    if (!ed) return;
+    const t = ultimo, ins = `{{${b.dataset.var}}}`, i = t.selectionStart ?? t.value.length, j = t.selectionEnd ?? i;
+    t.value = t.value.slice(0, i) + ins + t.value.slice(j); t.focus(); t.selectionStart = t.selectionEnd = i + ins.length;
+  });
+  ed$.querySelector('#pl-vista').onclick = async () => {
+    const d = leerForm(ed$);
+    try {
+      const v = await api('configuracion/plantillas/vista-previa', { body: { asunto: d.asunto, cuerpo: d.cuerpo } });
+      modal({ titulo: 'Vista previa con datos de ejemplo', ancho: p.tipo === 'contrato', html: `${p.tipo === 'correo' ? `<p><span class="muted">Asunto:</span> <b>${esc(v.asunto)}</b></p>` : ''}<div class="cf-vista${p.tipo === 'whatsapp' ? ' wa' : ''}">${esc(v.cuerpo)}</div>` });
+    } catch (e) { toastError(e); }
+  };
+  ed$.querySelector('#pl-guardar')?.addEventListener('click', async () => {
+    const d = leerForm(ed$);
+    try { await api(`configuracion/plantillas/${p.id}`, { method: 'PUT', body: { nombre: d.nombre, asunto: d.asunto ?? null, cuerpo: d.cuerpo, activa: d.activa === '1' } }); toast('Plantilla guardada', 'ok'); plantillas(); } catch (e) { toastError(e); }
+  });
+  ed$.querySelector('#pl-rest')?.addEventListener('click', async () => {
+    if (!await confirmar('Restaurar plantilla', 'Se reemplazará el texto actual por el texto por defecto de Síguelo Rentacar.', { boton: 'Restaurar', peligro: true })) return;
+    try { await api(`configuracion/plantillas/${p.id}/restaurar`, { body: {} }); toast('Plantilla restaurada', 'ok'); plantillas(); } catch (e) { toastError(e); }
+  });
+}
+
+// ═════════ Integraciones ═════════
+const IC_INT = {
+  gps: ICONOS.gps, dashboard_siguelo: ICONOS.tag_multas, webpay: ICONOS.pagos, mercadopago: ICONOS.pagos, simpleapi: ICONOS.facturacion,
+  whatsapp: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1.3-3.9A8 8 0 1 1 8 19z"/><path d="M9 9c0 3 3 6 6 6l1-1.5-2-1-1 1c-1-.5-2-1.5-2.5-2.5l1-1-1-2z"/></svg>',
+  correo: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>',
+  almacenamiento: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>'
+};
+async function integraciones() {
+  const { marcha_blanca, integraciones: lista } = await api('integraciones');
+  const ed = puede('integraciones', 'editar');
+  panel.innerHTML = `${marcha_blanca ? `<div class="cf-marcha-banner">● <span><b>Marcha blanca activa.</b> Puedes configurar, probar y activar las integraciones: mientras siga activa no sale ningún correo, WhatsApp, cobro, boleta o inmovilización. ${esAdmin ? '<a href="#empresa">Desactivarla en Empresa</a>' : 'Solo un administrador puede desactivarla.'}</span></div>` : ''}
+    ${ed ? '' : '<p class="aviso neutro">Puedes ver y probar las conexiones. Solo un administrador puede cambiar los datos o activarlas.</p>'}
+    <div class="cf-integraciones">${lista.map((i) => tarjetaInt(i, ed)).join('')}</div>`;
+  for (const i of lista) conectarInt(i, ed);
+}
+function campoInt(i, f, ed) {
+  const v = i.config[f.clave] ?? '';
+  const dis = ed ? '' : ' disabled';
+  const ancho = /url|endpoint|remitente|geocerca|cliente/.test(f.clave) ? ' ancho' : '';
+  if (f.opciones) return `<label class="etiqueta${ancho}">${esc(f.etiqueta)}<select class="campo" name="${f.clave}"${dis}>${f.opciones.map((o) => `<option${String(v) === o ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`;
+  if (f.tipo === 'archivo') return `<div class="etiqueta ancho">${esc(f.etiqueta)}<div class="rc-fila"><input type="hidden" name="${f.clave}" value="${esc(v)}"><span class="chip ${v ? 'ok' : ''}" data-arch="${f.clave}">${v ? `Archivo cargado (#${esc(v)})` : 'Sin archivo'}</span>${ed ? `<label class="btn peq cf-archivo">Subir archivo<input type="file" data-subir="${f.clave}"></label>` : ''}</div></div>`;
+  // En pantalla nunca se nombra al proveedor de la plataforma GPS: su servidor por defecto se muestra genérico y no se reenvía si no se edita.
+  const oculto = /wialon/i.test(String(v));
+  const ej = /wialon/i.test(f.ejemplo || '') ? '' : (f.ejemplo || '');
+  return `<label class="etiqueta${ancho}">${esc(f.etiqueta)}<input class="campo${f.secreto ? ' mono' : ''}" name="${f.clave}" type="${f.secreto ? 'password' : f.tipo === 'numero' ? 'number' : 'text'}" value="${oculto ? '' : esc(v)}" placeholder="${oculto ? 'Servidor estándar de la plataforma GPS' : esc(ej)}"${oculto ? ' data-oculto' : ''} autocomplete="off"${dis}></label>`;
+}
+function tarjetaInt(i, ed) {
+  const pr = i.estado_prueba || '';
+  const okPr = pr.startsWith('ok');
+  return `<article class="tarjeta cf-int${i.activa ? ' on' : ''}" id="int-${i.tipo}">
+    <div class="cf-int-cab"><span class="ic">${IC_INT[i.tipo] || ICONOS.configuracion}</span><div><h3>${esc(i.nombre)}</h3><p>${esc(i.descripcion)}</p></div>
+      <div class="der"><label class="cf-switch-et"${ed ? '' : ' aria-disabled="true" title="Solo un administrador puede activar o desactivar integraciones"'}><span>${i.activa ? 'Activa' : 'Apagada'}</span><span class="switch"><input type="checkbox" data-activar${i.activa ? ' checked' : ''}${ed ? '' : ' disabled'} aria-label="Activar ${esc(i.nombre)}"><span></span></span></label></div></div>
+    <div class="cf-int-estados">${i.configurada ? '<span class="chip ok">Datos completos</span>' : '<span class="chip aviso">Faltan datos</span>'}${i.activa && !i.configurada ? '<span class="chip error">Activa sin datos: no genera acciones</span>' : ''}</div>
+    <details${i.configurada ? '' : ' open'}><summary>Datos de conexión</summary>
+      <form class="campos-int">${i.campos.map((f) => campoInt(i, f, ed)).join('')}</form></details>
+    <div class="cf-prueba ${pr ? (okPr ? 'ok' : 'error') : ''}" data-prueba>${pr ? `${okPr ? '✓' : '✕'} <span>${esc(pr.replace(/^(ok|error):\s*/, ''))}${i.probado_en ? ` · probado el ${fechaHora(i.probado_en)}` : ''}</span>` : '<span class="muted">Sin pruebas de conexión</span>'}</div>
+    <div class="cf-int-pie"><button type="button" class="btn peq" data-probar>Probar conexión</button>${ed ? '<button type="button" class="btn primario peq" data-guardar>Guardar datos</button>' : ''}</div>
+  </article>`;
+}
+function conectarInt(i, ed) {
+  const card = document.getElementById(`int-${i.tipo}`);
+  const form = card.querySelector('form');
+  card.querySelector('[data-guardar]')?.addEventListener('click', async () => {
+    const d = leerForm(form);
+    form.querySelectorAll('[data-oculto]').forEach((x) => { if (!x.value.trim()) delete d[x.name]; });
+    try { const n = await api(`integraciones/${i.tipo}`, { method: 'PUT', body: d }); toast(`${i.nombre}: datos guardados`, 'ok'); reemplazarInt(n, ed); } catch (e) { toastError(e); }
+  });
+  card.querySelector('[data-probar]').onclick = async (ev) => {
+    const b = ev.target; b.disabled = true; b.textContent = 'Probando…';
+    try {
+      const r = await api(`integraciones/${i.tipo}/probar`, { body: {} });
+      const box = card.querySelector('[data-prueba]');
+      box.className = `cf-prueba ${r.ok ? 'ok' : 'error'}`; box.innerHTML = `${r.ok ? '✓' : '✕'} <span>${esc(r.mensaje)} · recién</span>`;
+    } catch (e) { toastError(e); }
+    b.disabled = false; b.textContent = 'Probar conexión';
+  };
+  card.querySelector('[data-activar]').onchange = async (ev) => {
+    const activa = ev.target.checked;
+    try { const n = await api(`integraciones/${i.tipo}/activar`, { body: { activa } }); toast(`${i.nombre}: ${activa ? 'activada' : 'desactivada'}`, 'ok'); reemplazarInt(n, ed); }
+    catch (e) { ev.target.checked = !activa; toastError(e); }
+  };
+  card.querySelectorAll('[data-subir]').forEach((inp) => inp.onchange = async () => {
+    const f = inp.files[0]; if (!f) return;
+    try {
+      const b64 = await new Promise((ok, mal) => { const fr = new FileReader(); fr.onload = () => ok(String(fr.result).split(',')[1]); fr.onerror = mal; fr.readAsDataURL(f); });
+      const a = await api('archivos', { body: { entidad: 'integracion', tipo: inp.dataset.subir, nombre: f.name, dataUrl: `data:${f.type || 'application/octet-stream'};base64,${b64}` } });
+      form.querySelector(`[name="${inp.dataset.subir}"]`).value = String(a.id);
+      const chip = card.querySelector(`[data-arch="${inp.dataset.subir}"]`); chip.className = 'chip ok'; chip.textContent = `${f.name} (#${a.id}) · falta guardar`;
+      toast('Archivo subido. Presiona «Guardar datos».', 'ok');
+    } catch (e) { toastError(e); }
+  });
+}
+function reemplazarInt(n, ed) {
+  const vieja = document.getElementById(`int-${n.tipo}`);
+  const tmp = document.createElement('div'); tmp.innerHTML = tarjetaInt(n, ed);
+  vieja.replaceWith(tmp.firstElementChild); conectarInt(n, ed);
+}
+
+// ═════════ Bandeja de salida ═════════
+let salFiltro = 'retenida';
+async function salidas() {
+  const lista = await api(`salidas${salFiltro ? `?estado=${salFiltro}` : ''}`);
+  const ed = puede('configuracion', 'editar');
+  const EST = { retenida: ['Retenida', 'aviso'], enviada: ['Enviada', 'ok'], error: ['Error', 'error'], descartada: ['Descartada', ''], pendiente: ['Pendiente', 'info'] };
+  panel.innerHTML = `<div class="filtros-fila">${[['retenida', 'Retenidas'], ['enviada', 'Enviadas'], ['error', 'Con error'], ['descartada', 'Descartadas'], ['', 'Todas']].map(([k, t]) => `<button type="button" class="filtro" data-f="${k}" aria-pressed="${salFiltro === k}">${t}</button>`).join('')}</div>
+    <div class="tarjeta"><div class="tabla-env"><table class="tabla"><thead><tr><th>Fecha</th><th>Canal</th><th>Destino</th><th>Mensaje</th><th>Estado</th><th></th></tr></thead><tbody>
+    ${lista.map((s) => `<tr><td class="mono peq">${fechaHora(s.creado_en)}</td><td><span class="chip ${s.canal === 'whatsapp' ? 'ok' : 'info'}">${s.canal === 'whatsapp' ? 'WhatsApp' : 'Correo'}</span></td><td class="peq">${esc(s.destino)}</td>
+      <td style="max-width:420px"><b class="peq">${esc(s.asunto || '')}</b><div class="peq muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:420px">${esc(s.cuerpo)}</div></td>
+      <td><span class="chip ${EST[s.estado]?.[1] || ''}">${EST[s.estado]?.[0] || esc(s.estado)}</span>${s.error ? `<div class="peq muted" style="max-width:220px">${esc(s.error)}</div>` : ''}</td>
+      <td style="text-align:right;white-space:nowrap"><button class="btn peq" data-ver="${s.id}">Ver</button>${ed && s.estado !== 'enviada' ? ` <button class="btn peq" data-reenviar="${s.id}">Reenviar</button>${s.estado !== 'descartada' ? ` <button class="btn peq peligro" data-desc="${s.id}">Descartar</button>` : ''}` : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="rc-vacio">No hay mensajes en esta bandeja</td></tr>'}
+    </tbody></table></div></div>`;
+  panel.querySelectorAll('[data-f]').forEach((b) => b.onclick = () => { salFiltro = b.dataset.f; salidas(); });
+  panel.querySelectorAll('[data-ver]').forEach((b) => b.onclick = async () => {
+    try {
+      const s = await api(`configuracion/salidas/${b.dataset.ver}`);
+      modal({ titulo: s.canal === 'whatsapp' ? `WhatsApp a ${s.destino}` : `Correo a ${s.destino}`, html: `${s.asunto ? `<p><span class="muted">Asunto:</span> <b>${esc(s.asunto)}</b></p>` : ''}<div class="cf-vista${s.canal === 'whatsapp' ? ' wa' : ''}">${esc(s.cuerpo)}</div>
+        <p class="peq muted">Creado el ${fechaHora(s.creado_en)}${s.enviado_en ? ` · enviado el ${fechaHora(s.enviado_en)}` : ''}${s.error ? ` · ${esc(s.error)}` : ''}${(s.adjuntos || []).length ? ` · ${s.adjuntos.length} adjunto(s)` : ''}</p>` });
+    } catch (e) { toastError(e); }
+  });
+  panel.querySelectorAll('[data-reenviar]').forEach((b) => b.onclick = async () => {
+    try { const r = await api(`salidas/${b.dataset.reenviar}/reenviar`, { body: {} }); toast(r.estado === 'enviada' ? 'Mensaje enviado' : `Sigue ${r.estado}: ${r.error || ''}`, r.estado === 'enviada' ? 'ok' : 'error'); salidas(); } catch (e) { toastError(e); }
+  });
+  panel.querySelectorAll('[data-desc]').forEach((b) => b.onclick = async () => {
+    if (!await confirmar('Descartar mensaje', 'El mensaje no se enviará.', { boton: 'Descartar', peligro: true })) return;
+    try { await api(`salidas/${b.dataset.desc}/descartar`, { body: {} }); salidas(); } catch (e) { toastError(e); }
+  });
+}
+
+// ═════════ Bitácora ═════════
+const BF = { pagina: 1 };
+const ACCION = (a) => (a || '').replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+async function bitacora() {
+  const p = new URLSearchParams(Object.entries(BF).filter(([, v]) => v !== '' && v != null));
+  const r = await api(`configuracion/bitacora?${p}`);
+  const op = (lista, sel, f = (x) => [x, ACCION(x)]) => lista.map((x) => { const [v, t] = f(x); return `<option value="${esc(v)}"${String(sel ?? '') === String(v) ? ' selected' : ''}>${esc(t)}</option>`; }).join('');
+  panel.innerHTML = `<form class="filtros-fila" id="bf">
+      <select class="campo" name="usuario_id"><option value="">Todos los usuarios</option>${op(r.opciones.usuarios, BF.usuario_id, (u) => [u.id, u.nombre])}</select>
+      <select class="campo" name="accion"><option value="">Todas las acciones</option>${op(r.opciones.acciones, BF.accion)}</select>
+      <select class="campo" name="entidad"><option value="">Todas las entidades</option>${op(r.opciones.entidades, BF.entidad)}</select>
+      <input class="campo" type="date" name="desde" value="${esc(BF.desde || '')}" aria-label="Desde"><input class="campo" type="date" name="hasta" value="${esc(BF.hasta || '')}" aria-label="Hasta">
+      <button class="btn" type="button" id="bf-limpiar">Limpiar</button></form>
+    <div class="tarjeta"><div class="tabla-env"><table class="tabla"><thead><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Entidad</th><th>Detalle</th><th>IP</th></tr></thead><tbody>
+    ${r.filas.map((b) => `<tr><td class="mono peq" style="white-space:nowrap">${fechaHora(b.creado_en)}</td><td>${b.usuario ? esc(b.usuario) : '<span class="muted">Sistema / portal</span>'}</td><td>${esc(ACCION(b.accion))}</td>
+      <td class="peq">${esc(b.entidad || '')}${b.entidad_id ? ` <span class="mono">#${b.entidad_id}</span>` : ''}</td><td><div class="cf-detalle-json" title="${esc(JSON.stringify(b.detalle))}">${Object.keys(b.detalle || {}).length ? esc(JSON.stringify(b.detalle)) : ''}</div></td><td class="mono peq">${esc(b.ip || '')}</td></tr>`).join('') || '<tr><td colspan="6" class="rc-vacio">Sin registros con estos filtros</td></tr>'}
+    </tbody></table></div>
+    <div class="cf-paginas"><span class="muted">${r.total.toLocaleString('es-CL')} registros · página ${r.pagina} de ${r.paginas}</span><button class="btn peq" id="bp-ant"${r.pagina <= 1 ? ' disabled' : ''}>← Anterior</button><button class="btn peq" id="bp-sig"${r.pagina >= r.paginas ? ' disabled' : ''}>Siguiente →</button></div></div>`;
+  const f = panel.querySelector('#bf');
+  f.onchange = () => { Object.assign(BF, leerForm(f), { pagina: 1 }); bitacora(); };
+  panel.querySelector('#bf-limpiar').onclick = () => { for (const k of Object.keys(BF)) delete BF[k]; BF.pagina = 1; bitacora(); };
+  panel.querySelector('#bp-ant').onclick = () => { BF.pagina = r.pagina - 1; bitacora(); };
+  panel.querySelector('#bp-sig').onclick = () => { BF.pagina = r.pagina + 1; bitacora(); };
+}
+
+// ═════════ Portal de reservas ═════════
+async function portal() {
+  const e = await api('empresa');
+  const ed = puede('configuracion', 'editar');
+  const url = `${location.origin}/reservar/${e.slug}`;
+  const snippet = `<script src="${location.origin}/embed.js" data-rentacar="${e.slug}"><\/script>`;
+  const modo = e.ajustes?.portal_pago || 'opcional';
+  panel.innerHTML = `<div class="columnas-2">
+    <div class="tarjeta bloque"><h2>Enlace del portal</h2>
+      <p class="ayuda">Comparte este enlace en tu sitio, Instagram o Google: tus clientes reservan y pagan en línea con los precios y la disponibilidad reales.</p>
+      <div class="cf-enlace"><input class="campo" value="${esc(url)}" readonly id="pt-url"><button class="btn" id="pt-copiar">Copiar</button><a class="btn" href="${esc(url)}" target="_blank" rel="noopener">Abrir</a></div>
+      <h2 style="margin-top:6px">Insertar en tu sitio web</h2>
+      <p class="ayuda">Pega este código en la página de tu sitio donde quieras el buscador de reservas. Se adapta al ancho y ajusta su alto solo.</p>
+      <div class="cf-snippet" id="pt-snip">${esc(snippet)}<button class="btn peq" id="pt-copiar-snip">Copiar</button></div>
+      <p class="cf-ayuda">Opcional: <span class="mono">data-codigo="PRIMAVERA10"</span> precarga un código de descuento y <span class="mono">data-alto-minimo="700"</span> fija el alto inicial.</p>
+    </div>
+    <div class="tarjeta bloque"><h2>Pago al reservar</h2>
+      <div class="pt-pagos" style="display:flex;flex-direction:column;gap:8px">${[['obligatorio', 'Obligatorio', 'El cliente paga el total en línea al reservar; la reserva queda confirmada.'], ['opcional', 'Opcional', 'El cliente elige pagar en línea (confirmada) o en el mesón (queda como cotización por confirmar).'], ['mostrador', 'Solo en el mesón', 'No se cobra en línea; las reservas llegan como cotización para confirmar.']]
+        .map(([v, t, d]) => `<label class="rc-alerta-venc" style="cursor:pointer"><input type="radio" name="portal_pago" value="${v}"${modo === v ? ' checked' : ''}${ed ? '' : ' disabled'}><div><b>${t}</b><small>${d}</small></div></label>`).join('')}</div>
+      <p class="cf-ayuda">Los clientes en lista negra pueden reservar, pero su reserva llega como cotización con una nota para revisarla, sin cobro en línea. ${yo.empresa?.marcha_blanca ? 'En marcha blanca los pagos en línea quedan simulados.' : ''}</p>
+      ${ed ? '<div class="cf-pie"><button class="btn primario" id="pt-guardar">Guardar</button></div>' : ''}
+    </div></div>
+    <div class="tarjeta bloque"><h2>Vista previa <span class="peq muted" style="font-weight:400">así se ve incrustado en tu sitio</span></h2>
+      <div class="cf-vista-portal"><iframe id="pt-iframe" src="/embed/${encodeURIComponent(e.slug)}" title="Vista previa del portal de reservas"></iframe></div></div>`;
+  panel.querySelector('#pt-copiar').onclick = () => copiar(url);
+  panel.querySelector('#pt-copiar-snip').onclick = () => copiar(snippet);
+  panel.querySelector('#pt-guardar')?.addEventListener('click', async () => {
+    const v = panel.querySelector('input[name="portal_pago"]:checked')?.value;
+    try { await api('empresa', { method: 'PATCH', body: { ajustes: { portal_pago: v } } }); toast('Guardado', 'ok'); panel.querySelector('#pt-iframe').src += ''; } catch (err) { toastError(err); }
+  });
+  const ifr = panel.querySelector('#pt-iframe');
+  addEventListener('message', (ev) => { if (ev.source === ifr.contentWindow && ev.data?.tipo === 'siguelo-rentacar-altura') ifr.style.height = `${Math.max(560, ev.data.altura)}px`; });
+}
+
+// ═════════ Mi clave ═════════
+async function miClave() {
+  panel.innerHTML = `<form class="tarjeta bloque" id="fc" style="max-width:520px"><h2>Cambiar mi clave</h2>
+    <p class="ayuda">${esc(yo.usuario.nombre)} · ${esc(yo.usuario.correo)}</p>
+    <label class="etiqueta">Clave actual<input class="campo" type="password" name="actual" autocomplete="current-password" required></label>
+    <label class="etiqueta">Nueva clave (mínimo 8 caracteres)<input class="campo" type="password" name="nueva" autocomplete="new-password" minlength="8" required></label>
+    <label class="etiqueta">Repite la nueva clave<input class="campo" type="password" name="repite" autocomplete="new-password" required></label>
+    <div class="cf-pie"><button class="btn primario" type="submit">Cambiar clave</button></div></form>`;
+  const f = panel.querySelector('#fc');
+  f.onsubmit = async (ev) => {
+    ev.preventDefault();
+    const d = leerForm(f);
+    if (d.nueva !== d.repite) return toast('Las claves nuevas no coinciden', 'error');
+    try { await api('configuracion/mi-clave', { body: { actual: d.actual, nueva: d.nueva } }); f.reset(); toast('Clave cambiada. Se cerraron tus otras sesiones.', 'ok'); } catch (e) { toastError(e); }
+  };
+}
+
+mostrar();
+</script>
+</body>
+</html>

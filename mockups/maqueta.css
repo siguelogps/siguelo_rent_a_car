@@ -1,0 +1,17 @@
+/* Solo para las maquetas (Etapa 0): marcos de celular y lienzo de presentación. */
+.lienzo { background: #E9EBEF; min-height: 100vh; padding: 28px 36px 40px; display: flex; flex-direction: column; gap: 18px; }
+.lienzo-cab { display: flex; align-items: center; gap: 16px; }
+.lienzo-cab img { height: 30px; }
+.lienzo-cab h1 { font-size: 20px; font-weight: 600; }
+.lienzo-cab p { color: var(--muted); font-size: 13px; }
+.telefonos { display: flex; gap: 34px; justify-content: center; align-items: flex-start; }
+.tel-env { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.tel-env > p { font-size: 13px; font-weight: 600; color: var(--ink-2); display: flex; gap: 8px; align-items: center; }
+.tel-env > p span { font: 600 12px var(--mono); background: var(--marca); border-radius: 6px; padding: 2px 7px; }
+.tel { width: 390px; height: 844px; border-radius: 46px; background: #111; padding: 12px; box-shadow: 0 24px 50px rgba(20,24,30,.28); }
+.tel-pantalla { width: 100%; height: 100%; border-radius: 36px; overflow: hidden; background: var(--bg); position: relative; display: flex; flex-direction: column; }
+.tel-estado { height: 40px; flex-shrink: 0; background: var(--ink); color: #fff; display: flex; align-items: center; justify-content: space-between; padding: 0 26px; font: 600 13px var(--sans); }
+.tel-estado::after { content: ''; position: absolute; left: 50%; top: 9px; transform: translateX(-50%); width: 110px; height: 26px; border-radius: 14px; background: #000; }
+.tel-scroll { flex: 1; overflow: hidden; display: flex; flex-direction: column; }
+/* En la captura de página completa el menú ocupa todo el alto */
+.app .menu { position: relative; height: auto; min-height: 100vh; }

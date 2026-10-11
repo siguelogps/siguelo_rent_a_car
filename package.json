@@ -1,0 +1,14 @@
+{
+  "name": "siguelo-rentacar",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Síguelo Rentacar: administración de arriendo de vehículos (producto de Síguelo GPS)",
+  "scripts": {
+    "capturas": "node scripts/capturas.js"
+  },
+  "engines": { "node": ">=20" },
+  "dependencies": {
+    "@fontsource/ibm-plex-mono": "^5.0.0",
+    "@fontsource/ibm-plex-sans": "^5.0.0"
+  }
+}

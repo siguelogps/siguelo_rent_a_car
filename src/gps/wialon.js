@@ -24,7 +24,9 @@ let fetchImpl = (...a) => fetch(...a);
 export function _usarFetch(fn) { fetchImpl = fn || ((...a) => fetch(...a)); sesiones.clear(); zonasCache.clear(); }
 
 export const urlApi = (url) => {
-  const base = String(url || 'https://hst-api.wialon.com').trim().replace(/\/+$/, '');
+  // La API es la misma para la plataforma y la versión Lite; una URL guardada que no sea http(s) (p. ej. un dato que
+  // rellenó el navegador) se ignora.
+  const base = (/^https?:\/\//i.test(String(url || '').trim()) ? String(url).trim() : 'https://hst-api.wialon.com').replace(/\/+$/, '');
   return /\/wialon\/ajax\.html$/i.test(base) ? base : `${base}/wialon/ajax.html`;
 };
 
@@ -271,7 +273,7 @@ registrarLectorEnVivo(async (empresaId, v) => {
 
 // Prueba de conexión (Configuración › Integraciones › Probar)
 registrarProbador('gps', async (config, empresaId) => {
-  if (!config.token) throw new Error('Falta el token de acceso');
+  if (!config.token) throw new Error('Falta conectar con el usuario y la clave de la plataforma GPS');
   const c = new ClienteGps(config);
   const items = await c.buscarUnidades(BANDERAS.BASE);
   let extra = '';

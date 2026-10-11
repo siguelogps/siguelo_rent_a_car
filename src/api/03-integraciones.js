@@ -3,7 +3,8 @@
 import express from 'express';
 import { q } from '../db.js';
 import { requiere, ErrorHttp } from '../auth.js';
-import { TIPOS, leerPublica, guardar, activar, leer, registrarPrueba, marchaBlanca } from '../integraciones/index.js';
+import { TIPOS, leerPublica, guardar, activar, leer, registrarPrueba, marchaBlanca, HOST_SESION_GPS } from '../integraciones/index.js';
+import { config as configApp } from '../config.js';
 import { probador } from '../integraciones/probadores.js';
 import { procesar } from '../salidas.js';
 import { registrar } from '../bitacora.js';
@@ -42,6 +43,30 @@ r.post('/integraciones/:tipo/probar', requiere('integraciones', 'ver'), async (r
     await registrarPrueba(req.empresaId, req.params.tipo, `error: ${e.message}`);
     res.json({ ok: false, mensaje: e.message });
   }
+});
+
+// Plataforma GPS: ingreso con usuario y clave en la página de la propia plataforma (OAuth). Vuelve a
+// /integracion-gps con el token, que se guarda cifrado; la clave nunca pasa por este sistema.
+r.get('/integraciones/gps/ingreso', requiere('integraciones', 'editar'), async (req, res) => {
+  const cuenta = req.query.cuenta === 'lite' ? 'lite' : 'hosting';
+  const volver = `${configApp.urlBase}/integracion-gps`;
+  const url = `${HOST_SESION_GPS[cuenta]}/login.html?client_id=SigueloRentacar&access_type=-1&activation_time=0&duration=0&flags=0x1&redirect_uri=${encodeURIComponent(volver)}`;
+  res.json({ url, cuenta });
+});
+
+r.post('/integraciones/gps/token', requiere('integraciones', 'editar'), async (req, res) => {
+  const token = String(req.body.token || '').trim();
+  if (!/^[A-Za-z0-9]{20,200}$/.test(token)) throw new ErrorHttp(400, 'La plataforma GPS no devolvió un token válido. Vuelve a intentarlo.');
+  const cuenta = req.body.cuenta === 'lite' ? 'lite' : 'hosting';
+  await guardar(req.empresaId, 'gps', { token, cuenta, usuario: String(req.body.usuario || '').slice(0, 120) }, req.usuario.id);
+  await registrar(req, 'integracion_gps_conectada', 'integracion', null, { cuenta, usuario: req.body.usuario || null });
+  const fn = probador('gps');
+  let prueba = null;
+  if (fn) {
+    try { prueba = { ok: true, mensaje: await fn((await leer(req.empresaId, 'gps')).config, req.empresaId) }; await registrarPrueba(req.empresaId, 'gps', `ok: ${prueba.mensaje}`); }
+    catch (e) { prueba = { ok: false, mensaje: e.message }; await registrarPrueba(req.empresaId, 'gps', `error: ${e.message}`); }
+  }
+  res.json({ integracion: await leerPublica(req.empresaId, 'gps'), prueba });
 });
 
 // Bandeja de salida (correos y WhatsApp, incluidos los retenidos por marcha blanca)

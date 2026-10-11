@@ -98,3 +98,12 @@
   .cf-marcha ul { grid-template-columns: minmax(0, 1fr); }
   .cf-marcha .switch { transform-origin: left center; }
 }
+/* Integraciones: secretos enmascarados sin type=password (evita que el navegador ofrezca claves guardadas) */
+.cf-secreto { -webkit-text-security: disc; text-security: disc; font-family: var(--mono); }
+.cf-dato-lectura { min-height: 38px; display: flex; align-items: center; padding: 0 10px; border-radius: 8px; background: var(--soft); border: 1px solid var(--line); color: var(--ink); font-weight: 500; }
+.cf-avanzado { flex: 1 1 100%; border-top: 1px dashed var(--line); padding-top: 8px; }
+.cf-avanzado > summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--muted); }
+.cf-avanzado > .campos { margin-top: 10px; }
+.cf-conectar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 0 18px 10px; }
+.cf-conectar small { flex: 1 1 100%; }
+.campos-int .etiqueta small { font-size: 11px; }

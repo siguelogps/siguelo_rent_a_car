@@ -7,28 +7,28 @@ import { cifrar, descifrar } from '../cifrado.js';
 // Definición de cada integración: campos que se piden en pantalla. «secreto» = no se devuelve al navegador.
 export const TIPOS = {
   gps: {
-    nombre: 'Plataforma GPS', descripcion: 'Posición en vivo, km y combustible reales, geocercas, alertas e inmovilización.',
+    nombre: 'Plataforma GPS', descripcion: 'Posición en vivo, km y combustible reales, geocercas, alertas e inmovilización. Se conecta con el usuario y la clave de la plataforma GPS (los mismos del dashboard Síguelo).',
     acciones: true,
     campos: [
-      { clave: 'url', etiqueta: 'URL del servidor', ejemplo: 'https://hst-api.wialon.com', defecto: 'https://hst-api.wialon.com' },
-      { clave: 'token', etiqueta: 'Token de acceso', secreto: true },
-      { clave: 'recurso', etiqueta: 'Recurso con geocercas (opcional)' },
+      { clave: 'cuenta', etiqueta: 'Plataforma', opciones: ['hosting', 'lite'], nombres: { hosting: 'Plataforma GPS Síguelo', lite: 'Plataforma GPS Síguelo Lite' }, defecto: 'hosting' },
+      { clave: 'usuario', etiqueta: 'Usuario conectado', soloLectura: true, ayuda: 'Se completa al conectar con usuario y clave.' },
+      { clave: 'token', etiqueta: 'Token de acceso', secreto: true, avanzado: true, ayuda: 'Se obtiene solo al conectar con usuario y clave. Pégalo aquí solo si te lo entregó soporte.' },
       { clave: 'geocerca_permitida', etiqueta: 'Geocerca de zona permitida (nombre)', ejemplo: 'Chile continental' },
       { clave: 'velocidad_maxima', etiqueta: 'Velocidad máxima (km/h)', tipo: 'numero', defecto: 120 },
       { clave: 'horario_desde', etiqueta: 'Horario permitido desde', defecto: '06:00' },
       { clave: 'horario_hasta', etiqueta: 'Horario permitido hasta', defecto: '23:00' },
-      { clave: 'comando_inmovilizar', etiqueta: 'Comando de inmovilización', defecto: 'Bloquear motor' },
-      { clave: 'comando_liberar', etiqueta: 'Comando de liberación', defecto: 'Desbloquear motor' }
+      { clave: 'recurso', etiqueta: 'Recurso con geocercas (opcional)', avanzado: true },
+      { clave: 'comando_inmovilizar', etiqueta: 'Comando de inmovilización', defecto: 'Bloquear motor', avanzado: true },
+      { clave: 'comando_liberar', etiqueta: 'Comando de liberación', defecto: 'Desbloquear motor', avanzado: true }
     ]
   },
   dashboard_siguelo: {
-    nombre: 'TAG y multas · Dashboard Síguelo', descripcion: 'Trae las pasadas TAG (pórticos) y las multas del registro MTT que calcula el dashboard de Síguelo, y las asigna al contrato vigente.',
+    nombre: 'TAG y multas · Dashboard Síguelo', descripcion: 'Trae las pasadas TAG (pórticos) y las multas del registro MTT que calcula el dashboard de Síguelo, y las asigna al contrato vigente. Usa la misma conexión de la plataforma GPS: no hay que ingresar nada más.',
     acciones: true,
     campos: [
-      { clave: 'url', etiqueta: 'URL del dashboard', defecto: 'https://dashboard.siguelogps.cl' },
-      { clave: 'cliente', etiqueta: 'Cliente en el dashboard (usuario de la plataforma GPS)' },
-      { clave: 'api_key', etiqueta: 'Clave de integración', secreto: true },
-      { clave: 'sincronizar_cada_horas', etiqueta: 'Sincronizar cada (horas)', tipo: 'numero', defecto: 24 }
+      { clave: 'sincronizar_cada_horas', etiqueta: 'Sincronizar cada (horas)', tipo: 'numero', defecto: 24 },
+      { clave: 'url', etiqueta: 'Dirección del dashboard', defecto: 'https://dashboard.siguelogps.com', avanzado: true },
+      { clave: 'api_key', etiqueta: 'Clave de integración (opcional)', secreto: true, opcional: true, avanzado: true, ayuda: 'Solo si soporte Síguelo te entregó una clave; si no, se usa la conexión de la plataforma GPS.' }
     ]
   },
   webpay: {
@@ -111,6 +111,13 @@ export async function leer(empresaId, tipo) {
   const r = await uno('SELECT activa, config_cifrada, estado_prueba, probado_en, actualizado_en FROM integraciones WHERE empresa_id = $1 AND tipo = $2', [empresaId, tipo]);
   const defecto = Object.fromEntries((TIPOS[tipo]?.campos || []).filter((f) => f.defecto !== undefined).map((f) => [f.clave, f.defecto]));
   const v = { activa: !!r?.activa, config: { ...defecto, ...(r ? descifrar(r.config_cifrada) : {}) }, estado_prueba: r?.estado_prueba || null, probado_en: r?.probado_en || null, en: Date.now() };
+  if (tipo === 'dashboard_siguelo') {
+    // El dashboard reconoce al cliente con el mismo token de la plataforma GPS: se reutiliza la conexión GPS.
+    const gps = await leer(empresaId, 'gps');
+    v.config.token_plataforma = gps.config.token || null;
+    v.config.cuenta_plataforma = gps.config.cuenta || 'hosting';
+    v.config.usuario_plataforma = gps.config.usuario || null;
+  }
   cache.set(k, v);
   return v;
 }
@@ -120,10 +127,17 @@ export async function leerPublica(empresaId, tipo) {
   const v = await leer(empresaId, tipo);
   const config = { ...v.config };
   for (const f of TIPOS[tipo].campos) if (f.secreto && config[f.clave]) config[f.clave] = '••••••••';
+  if ('token_plataforma' in config) { config.conexion_plataforma = !!config.token_plataforma; delete config.token_plataforma; }
   return { tipo, ...TIPOS[tipo], activa: v.activa, config, configurada: tieneDatos(tipo, v.config), estado_prueba: v.estado_prueba, probado_en: v.probado_en };
 }
 
-const tieneDatos = (tipo, c) => TIPOS[tipo].campos.filter((f) => f.secreto).every((f) => c[f.clave]);
+const tieneDatos = (tipo, c) => {
+  if (tipo === 'dashboard_siguelo') return !!c.url && !!(c.api_key || c.token_plataforma);
+  return TIPOS[tipo].campos.filter((f) => f.secreto && !f.opcional).every((f) => c[f.clave]);
+};
+
+// Página de ingreso de la plataforma GPS (OAuth): la persona pone su usuario y clave allí y vuelve con un token.
+export const HOST_SESION_GPS = { hosting: 'https://plataforma.siguelogps.com', lite: 'https://lite.wialon.com' };
 
 export async function guardar(empresaId, tipo, cambios, usuarioId) {
   if (!TIPOS[tipo]) throw new Error('Integración desconocida');

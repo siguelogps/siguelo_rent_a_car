@@ -46,12 +46,12 @@ export class ErrorDashboard extends Error {
 
 export async function llamar(config, ruta, params = {}, timeout = 30000) {
   if (!config?.url) throw new ErrorDashboard('Falta la URL del dashboard', 0);
-  if (!config?.api_key) throw new ErrorDashboard('Falta la clave de integración del dashboard', 0);
+  if (!config?.api_key && !config?.token_plataforma) throw new ErrorDashboard('Conecta primero la plataforma GPS (Configuración › Integraciones): el dashboard usa esa misma conexión', 0);
   const u = new URL(`${String(config.url).replace(/\/+$/, '')}/api/integracion/v1/${ruta}`);
   for (const [k, v] of Object.entries(params)) if (v != null && v !== '') u.searchParams.set(k, v);
   let r;
   try {
-    r = await fetchImpl(u.toString(), { headers: { 'X-Api-Key': config.api_key, Accept: 'application/json' }, signal: AbortSignal.timeout(timeout) });
+    r = await fetchImpl(u.toString(), { headers: { ...(config.api_key ? { 'X-Api-Key': config.api_key } : { 'X-Token-Plataforma': config.token_plataforma, 'X-Cuenta-Plataforma': config.cuenta_plataforma || 'hosting' }), Accept: 'application/json' }, signal: AbortSignal.timeout(timeout) });
   } catch (e) {
     throw new ErrorDashboard(e.name === 'TimeoutError' ? `El dashboard no respondió en ${Math.round(timeout / 1000)} s` : `No se pudo conectar con el dashboard (${e.message})`);
   }
@@ -173,7 +173,7 @@ export async function sincronizarTodo() {
   const filas = await q(`SELECT i.empresa_id FROM integraciones i JOIN empresas e ON e.id = i.empresa_id WHERE i.tipo = 'dashboard_siguelo' AND i.activa AND e.activa`);
   for (const { empresa_id: id } of filas) {
     const { activa, config } = await leer(id, 'dashboard_siguelo');
-    if (!activa || !config.api_key || !config.url) continue;
+    if (!activa || !(config.api_key || config.token_plataforma) || !config.url) continue;
     const ult = await ultimaSincronizacion(id);
     const cada = Math.max(1, Number(config.sincronizar_cada_horas) || 24) * 3600e3;
     if (ult && ult.estado === 'ok' && Date.now() - new Date(ult.creado_en) < cada - 5 * 60e3) continue;
@@ -185,7 +185,8 @@ registrarTarea('dashboard_tag_multas', 3600e3, sincronizarTodo);
 
 registrarProbador('dashboard_siguelo', async (config) => {
   const j = await salud(config);
-  const aviso = config.cliente && j.cliente && String(j.cliente).toLowerCase() !== String(config.cliente).toLowerCase() ? ` (ojo: el dashboard responde como «${j.cliente}», no «${config.cliente}»)` : '';
+  const esperado = config.usuario_plataforma || config.cliente;
+  const aviso = esperado && j.cliente && String(j.cliente).toLowerCase() !== String(esperado).toLowerCase() ? ` (ojo: el dashboard responde como «${j.cliente}», no «${esperado}»)` : '';
   const permisos = Array.isArray(j.permisos) ? j.permisos.join(', ') : j.permisos && typeof j.permisos === 'object' ? Object.keys(j.permisos).filter((k) => j.permisos[k]).join(', ') : j.permisos;
   return `Conectado: ${j.cliente || 'cliente sin nombre'} · ${j.vehiculos ?? 0} vehículos${j.clave ? ` · clave «${j.clave}»` : ''}${permisos ? ` · permisos: ${permisos}` : ''}${aviso}`;
 });

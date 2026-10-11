@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Conectando la plataforma GPS</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css">
+</head>
+<body>
+<div class="login">
+  <div class="caja">
+    <img src="/img/logo-siguelo.png" alt="Síguelo GPS" style="height:32px;align-self:flex-start">
+    <h1 style="font-size:18px">Plataforma GPS</h1>
+    <p id="estado" class="muted">Guardando la conexión…</p>
+    <a class="btn primario" href="/configuracion#integraciones" id="volver" hidden>Volver a Integraciones</a>
+  </div>
+</div>
+<script type="module">
+// Vuelta del ingreso con usuario y clave de la plataforma GPS: trae ?access_token=…&user_name=… (la clave nunca llega aquí).
+import { api } from '/comun.js';
+const p = new URLSearchParams(location.search);
+const estado = document.getElementById('estado'), volver = document.getElementById('volver');
+const fin = (msg, ok) => {
+  estado.textContent = msg; estado.className = ok ? '' : 'aviso error'; volver.hidden = false;
+  try { window.opener?.postMessage({ tipo: 'gps-conectado', ok, mensaje: msg }, location.origin); } catch { /* sin ventana de origen */ }
+  if (ok && window.opener) setTimeout(() => window.close(), 1200);
+};
+history.replaceState(null, '', location.pathname); // el token no queda en el historial
+let cuenta = 'hosting';
+try { cuenta = localStorage.getItem('rc_gps_cuenta') || 'hosting'; } catch { /* sin almacenamiento */ }
+if (!p.get('access_token')) fin(p.get('error') ? `La plataforma GPS no autorizó el acceso (${p.get('error')}).` : 'No se recibió la autorización de la plataforma GPS. Vuelve a intentarlo.', false);
+else {
+  try {
+    const r = await api('integraciones/gps/token', { body: { token: p.get('access_token'), usuario: p.get('user_name') || '', cuenta } });
+    fin(r.prueba?.ok ? `Conectado como «${p.get('user_name') || 'usuario'}». ${r.prueba.mensaje}` : `Se guardó la conexión de «${p.get('user_name') || 'usuario'}», pero la prueba falló: ${r.prueba?.mensaje || 'sin detalle'}`, !!r.prueba?.ok);
+  } catch (e) { fin(e.message, false); }
+}
+</script>
+</body>
+</html>

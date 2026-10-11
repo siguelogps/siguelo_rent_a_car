@@ -288,6 +288,12 @@ const IC_INT = {
   correo: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>',
   almacenamiento: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>'
 };
+// Vuelta de la ventana de ingreso de la plataforma GPS
+addEventListener('message', (ev) => {
+  if (ev.origin !== location.origin || ev.data?.tipo !== 'gps-conectado') return;
+  toast(ev.data.mensaje, ev.data.ok ? 'ok' : 'error');
+  if (location.hash.startsWith('#integraciones')) integraciones();
+});
 async function integraciones() {
   const { marcha_blanca, integraciones: lista } = await api('integraciones');
   const ed = puede('integraciones', 'editar');
@@ -296,16 +302,37 @@ async function integraciones() {
     <div class="cf-integraciones">${lista.map((i) => tarjetaInt(i, ed)).join('')}</div>`;
   for (const i of lista) conectarInt(i, ed);
 }
+// Los campos de integraciones no deben ofrecer los datos de acceso guardados en el navegador: sin type="password"
+// (los secretos se enmascaran con CSS) y con autocompletado apagado para el navegador y los gestores de claves.
+const SIN_AUTORRELLENO = ' autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other"';
 function campoInt(i, f, ed) {
   const v = i.config[f.clave] ?? '';
   const dis = ed ? '' : ' disabled';
   const ancho = /url|endpoint|remitente|geocerca|cliente/.test(f.clave) ? ' ancho' : '';
-  if (f.opciones) return `<label class="etiqueta${ancho}">${esc(f.etiqueta)}<select class="campo" name="${f.clave}"${dis}>${f.opciones.map((o) => `<option${String(v) === o ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`;
+  const ayuda = f.ayuda ? `<small class="muted">${esc(f.ayuda)}</small>` : '';
+  if (f.soloLectura) return `<div class="etiqueta${ancho}">${esc(f.etiqueta)}<div class="cf-dato-lectura">${v ? esc(v) : '<span class="muted">Sin conectar</span>'}</div>${ayuda}</div>`;
+  if (f.opciones) return `<label class="etiqueta${ancho}">${esc(f.etiqueta)}<select class="campo" name="${f.clave}"${dis}${SIN_AUTORRELLENO}>${f.opciones.map((o) => `<option value="${esc(o)}"${String(v) === o ? ' selected' : ''}>${esc(f.nombres?.[o] || o)}</option>`).join('')}</select>${ayuda}</label>`;
   if (f.tipo === 'archivo') return `<div class="etiqueta ancho">${esc(f.etiqueta)}<div class="rc-fila"><input type="hidden" name="${f.clave}" value="${esc(v)}"><span class="chip ${v ? 'ok' : ''}" data-arch="${f.clave}">${v ? `Archivo cargado (#${esc(v)})` : 'Sin archivo'}</span>${ed ? `<label class="btn peq cf-archivo">Subir archivo<input type="file" data-subir="${f.clave}"></label>` : ''}</div></div>`;
-  // En pantalla nunca se nombra al proveedor de la plataforma GPS: su servidor por defecto se muestra genérico y no se reenvía si no se edita.
+  // En pantalla nunca se nombra al proveedor de la plataforma GPS.
   const oculto = /wialon/i.test(String(v));
   const ej = /wialon/i.test(f.ejemplo || '') ? '' : (f.ejemplo || '');
-  return `<label class="etiqueta${ancho}">${esc(f.etiqueta)}<input class="campo${f.secreto ? ' mono' : ''}" name="${f.clave}" type="${f.secreto ? 'password' : f.tipo === 'numero' ? 'number' : 'text'}" value="${oculto ? '' : esc(v)}" placeholder="${oculto ? 'Servidor estándar de la plataforma GPS' : esc(ej)}"${oculto ? ' data-oculto' : ''} autocomplete="off"${dis}></label>`;
+  const tipo = f.tipo === 'numero' ? 'number' : 'text';
+  return `<label class="etiqueta${ancho}">${esc(f.etiqueta)}<input class="campo${f.secreto ? ' mono cf-secreto' : ''}" name="${f.clave}" type="${tipo}" value="${oculto ? '' : esc(v)}" placeholder="${oculto ? 'Servidor estándar de la plataforma GPS' : esc(ej)}"${oculto ? ' data-oculto' : ''}${SIN_AUTORRELLENO}${dis}>${ayuda}</label>`;
+}
+function camposInt(i, ed) {
+  const normales = i.campos.filter((f) => !f.avanzado), avanzados = i.campos.filter((f) => f.avanzado);
+  return `${normales.map((f) => campoInt(i, f, ed)).join('')}${avanzados.length ? `<details class="cf-avanzado ancho"><summary>Opciones avanzadas</summary><div class="campos">${avanzados.map((f) => campoInt(i, f, ed)).join('')}</div></details>` : ''}`;
+}
+function extraInt(i, ed) {
+  if (i.tipo === 'gps') {
+    return `<div class="cf-conectar">${i.config.usuario ? `<span class="chip ok">Conectado como «${esc(i.config.usuario)}»</span>` : '<span class="chip aviso">Sin conectar</span>'}
+      ${ed ? `<button type="button" class="btn primario peq" data-conectar-gps>${i.config.usuario ? 'Volver a conectar' : 'Conectar con usuario y clave'}</button>` : ''}
+      <small class="muted">Se abre la página de ingreso de la plataforma GPS (la misma del dashboard Síguelo). Tu clave no pasa por este sistema.</small></div>`;
+  }
+  if (i.tipo === 'dashboard_siguelo') {
+    return `<div class="cf-conectar">${i.config.conexion_plataforma ? `<span class="chip ok">Usa la conexión de la plataforma GPS${i.config.usuario_plataforma ? ` («${esc(i.config.usuario_plataforma)}»)` : ''}</span>` : '<span class="chip aviso">Conecta primero la plataforma GPS</span> <a href="#int-gps" class="peq">Ir a Plataforma GPS</a>'}</div>`;
+  }
+  return '';
 }
 function tarjetaInt(i, ed) {
   const pr = i.estado_prueba || '';
@@ -314,8 +341,9 @@ function tarjetaInt(i, ed) {
     <div class="cf-int-cab"><span class="ic">${IC_INT[i.tipo] || ICONOS.configuracion}</span><div><h3>${esc(i.nombre)}</h3><p>${esc(i.descripcion)}</p></div>
       <div class="der"><label class="cf-switch-et"${ed ? '' : ' aria-disabled="true" title="Solo un administrador puede activar o desactivar integraciones"'}><span>${i.activa ? 'Activa' : 'Apagada'}</span><span class="switch"><input type="checkbox" data-activar${i.activa ? ' checked' : ''}${ed ? '' : ' disabled'} aria-label="Activar ${esc(i.nombre)}"><span></span></span></label></div></div>
     <div class="cf-int-estados">${i.configurada ? '<span class="chip ok">Datos completos</span>' : '<span class="chip aviso">Faltan datos</span>'}${i.activa && !i.configurada ? '<span class="chip error">Activa sin datos: no genera acciones</span>' : ''}</div>
+    ${extraInt(i, ed)}
     <details${i.configurada ? '' : ' open'}><summary>Datos de conexión</summary>
-      <form class="campos-int">${i.campos.map((f) => campoInt(i, f, ed)).join('')}</form></details>
+      <form class="campos-int" autocomplete="off" data-lpignore="true" onsubmit="return false">${camposInt(i, ed)}</form></details>
     <div class="cf-prueba ${pr ? (okPr ? 'ok' : 'error') : ''}" data-prueba>${pr ? `${okPr ? '✓' : '✕'} <span>${esc(pr.replace(/^(ok|error):\s*/, ''))}${i.probado_en ? ` · probado el ${fechaHora(i.probado_en)}` : ''}</span>` : '<span class="muted">Sin pruebas de conexión</span>'}</div>
     <div class="cf-int-pie"><button type="button" class="btn peq" data-probar>Probar conexión</button>${ed ? '<button type="button" class="btn primario peq" data-guardar>Guardar datos</button>' : ''}</div>
   </article>`;
@@ -323,6 +351,15 @@ function tarjetaInt(i, ed) {
 function conectarInt(i, ed) {
   const card = document.getElementById(`int-${i.tipo}`);
   const form = card.querySelector('form');
+  card.querySelector('[data-conectar-gps]')?.addEventListener('click', async () => {
+    const cuenta = form.querySelector('[name=cuenta]')?.value || 'hosting';
+    try {
+      const { url } = await api(`integraciones/gps/ingreso?cuenta=${cuenta}`);
+      try { localStorage.setItem('rc_gps_cuenta', cuenta); } catch { /* sin almacenamiento */ }
+      const v = window.open(url, 'rc_gps', 'width=520,height=720');
+      if (!v) location.href = url; // ventana bloqueada: se va en la misma pestaña y vuelve a /integracion-gps
+    } catch (e) { toastError(e); }
+  });
   card.querySelector('[data-guardar]')?.addEventListener('click', async () => {
     const d = leerForm(form);
     form.querySelectorAll('[data-oculto]').forEach((x) => { if (!x.value.trim()) delete d[x.name]; });

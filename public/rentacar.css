@@ -266,3 +266,4 @@ img.rc-empresa-logo { object-fit: contain; background: #fff; border: 1px solid v
 a.rc-marcha { text-decoration: none; }
 .rc-vacio { padding: 32px; text-align: center; color: var(--muted); }
 .rc-cargando { padding: 32px; text-align: center; color: var(--muted); }
+@media (max-width: 860px) { .app:not(.menu-abierto) .menu { box-shadow: none; } }

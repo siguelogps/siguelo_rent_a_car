@@ -1,10 +1,11 @@
 // Configuración (/configuracion): sucursales, usuarios y permisos, plantillas, bitácora, detalle de la bandeja de salida,
 // cambio de clave propia y (superadmin) estado de las empresas. Los datos de la empresa y la marcha blanca van por
 // PATCH /api/empresa (01-empresas.js); las integraciones por /api/integraciones (03-integraciones.js).
+import { verificarLimite } from '../planes.js';
 import crypto from 'node:crypto';
 import express from 'express';
 import { q, uno } from '../db.js';
-import { requiere, soloSuperadmin, ErrorHttp, hashClave, verificarClave, leerCookie } from '../auth.js';
+import { requiere, soloSiguelo, ErrorHttp, hashClave, verificarClave, leerCookie } from '../auth.js';
 import { hashSha256 } from '../cifrado.js';
 import { registrar } from '../bitacora.js';
 import { ROLES, MODULOS, nivel } from '../permisos.js';
@@ -27,7 +28,7 @@ export function claveTemporal(largo = 10) {
 
 // ── Permisos (solo lectura) ──
 r.get('/configuracion/permisos', requiere(null, 'ver', { sinEmpresa: true }), (_req, res) => {
-  const roles = Object.fromEntries(Object.entries(ROLES).filter(([k]) => k !== 'superadmin'));
+  const roles = Object.fromEntries(Object.entries(ROLES).filter(([k]) => k !== 'superadmin' && k !== 'soporte'));
   res.json({ roles, modulos: MODULOS, matriz: Object.fromEntries(Object.keys(roles).map((rol) => [rol, Object.fromEntries(Object.keys(MODULOS).map((m) => [m, nivel(rol, m)]))])) });
 });
 
@@ -67,6 +68,7 @@ r.get('/configuracion/sucursales', requiere('configuracion', 'ver'), async (req,
 
 r.post('/configuracion/sucursales', requiere('configuracion', 'editar'), async (req, res) => {
   const o = leerSucursal(req.body || {});
+  await verificarLimite(req.empresaId, 'sucursales');
   const [s] = await q(`INSERT INTO sucursales (empresa_id, nombre, direccion, comuna, ciudad, telefono, horario, lat, lng, activa)
                        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING *`,
   [req.empresaId, o.nombre, o.direccion, o.comuna, o.ciudad, o.telefono, o.horario, o.lat, o.lng, o.activa ?? true]);
@@ -108,6 +110,7 @@ r.post('/configuracion/usuarios', requiere('usuarios', 'editar'), async (req, re
   const b = req.body || {};
   const nombre = texto(b.nombre, 100), correo = String(b.correo || '').trim().toLowerCase();
   if (!nombre) throw new ErrorHttp(400, 'Escribe el nombre', { campo: 'nombre' });
+  await verificarLimite(req.empresaId, 'usuarios');
   if (!correoValido(correo)) throw new ErrorHttp(400, 'El correo no es válido', { campo: 'correo' });
   if (!ROLES_ASIGNABLES.includes(b.rol)) throw new ErrorHttp(400, 'Elige un rol', { campo: 'rol' });
   if (await uno('SELECT 1 FROM usuarios WHERE lower(correo) = $1', [correo])) throw new ErrorHttp(400, 'Ya existe un usuario con ese correo', { campo: 'correo' });
@@ -249,14 +252,19 @@ r.get('/configuracion/bitacora', requiere('configuracion', 'ver'), async (req, r
 });
 
 // ── Superadmin: estado y plan de cada empresa ──
-r.patch('/configuracion/empresas/:id', requiere(null, 'ver', { sinEmpresa: true }), soloSuperadmin, async (req, res) => {
+r.patch('/configuracion/empresas/:id', requiere(null, 'ver', { sinEmpresa: true }), soloSiguelo, async (req, res) => {
   const b = req.body || {};
   const sets = [], vals = [req.params.id];
   if ('activa' in b) { vals.push(!!b.activa); sets.push(`activa = $${vals.length}`); }
-  if ('plan' in b) { const plan = texto(b.plan, 30); if (!plan) throw new ErrorHttp(400, 'Plan no válido'); vals.push(plan); sets.push(`plan = $${vals.length}`); }
+  if ('plan' in b) {
+    const plan = texto(b.plan, 30);
+    if (!plan || !(await uno('SELECT 1 AS ok FROM planes WHERE codigo = $1', [plan]))) throw new ErrorHttp(400, 'Plan no válido');
+    vals.push(plan); sets.push(`plan = $${vals.length}`);
+  }
   if (!sets.length) throw new ErrorHttp(400, 'Nada que cambiar');
   const [e] = await q(`UPDATE empresas SET ${sets.join(', ')} WHERE id = $1 RETURNING id, nombre, activa, plan`, vals);
   if (!e) throw new ErrorHttp(404, 'Empresa no encontrada');
+  (await import('../planes.js')).limpiarCachePlanes();
   await registrar({ usuario: req.usuario, empresaId: e.id, ip: req.ip }, 'empresa_estado', 'empresa', e.id, { activa: e.activa, plan: e.plan });
   res.json(e);
 });

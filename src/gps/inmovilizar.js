@@ -23,7 +23,7 @@ async function agregarEvento(id, ev, cambios = {}) {
   const [f] = await q(`UPDATE inmovilizaciones SET eventos = eventos || $2::jsonb${sets.length ? `, ${sets.join(', ')}` : ''} WHERE id = $1 RETURNING *`, [id, JSON.stringify([ev]), ...Object.values(cambios)]);
   return f;
 }
-const puedeConfirmarRol = (rol) => rol === 'administrador' || rol === 'superadmin';
+const puedeConfirmarRol = (rol) => rol === 'administrador' || rol === 'superadmin' || rol === 'soporte';
 
 export async function obtener(empresaId, id) {
   return uno(`SELECT i.*, v.patente, v.gps_unidad_id, v.gps_inmovilizado, us.nombre AS solicitado_nombre, uc.nombre AS confirmado_nombre, r.folio

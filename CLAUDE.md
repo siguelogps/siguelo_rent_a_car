@@ -12,6 +12,7 @@ Node.js ≥ 22 (ESM), Express 5, PostgreSQL (PGlite embebido si no hay `DATABASE
 - Fotos y documentos **no** se guardan en el disco del servidor: usar `guardarArchivo()` / `leerArchivo()` de `src/almacenamiento/index.js`.
 - Marcha blanca: correos, WhatsApp, cobros, DTE e inmovilización no salen mientras `empresas.marcha_blanca` sea true o la integración esté apagada. Usar `puedeActuar(empresaId, tipo)` de `src/integraciones/index.js`; los mensajes van por `encolar()` / `avisar()` de `src/salidas.js` (quedan «retenida»). Los cobros en marcha blanca se registran con estado `simulado`.
 - Integraciones se configuran desde pantalla (tabla `integraciones`, cifrada), nunca en variables de entorno. Solo administradores las activan.
+- Equipo Síguelo (roles `superadmin` y `soporte`, sin empresa): entra al **backoffice** (`/empresas`, `/planes`, `/equipo`) y a un cliente solo con «Ver como» (`POST /api/empresa-activa`). Planes en la tabla `planes` (`src/planes.js`): `requiere()` bloquea los módulos que el plan no incluye y `verificarLimite()` exige los máximos de vehículos, usuarios y sucursales.
 - Commits con mensajes en español.
 
 ## Estructura

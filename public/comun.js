@@ -22,6 +22,9 @@ export const ICONOS = {
   tarifas: I('<path d="M12 2v20"/><path d="M17 6H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>'),
   configuracion: I('<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M2 12h3M19 12h3M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1"/>'),
   empresas: I('<path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M9 21v-5h6v5"/><path d="M9 11h2M13 11h2"/>'),
+  planes: I('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/><path d="M8 13h3M8 16h6"/>'),
+  equipo: I('<circle cx="9" cy="8" r="3.5"/><path d="M2 20a7 7 0 0 1 14 0"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14a5 5 0 0 1 6 5"/>'),
+  ojo: I('<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>', ' width="18" height="18"'),
   plegar: I('<path d="M15 6l-6 6 6 6"/>'),
   menu: I('<path d="M4 7h16M4 12h16M4 17h16"/>'),
   buscar: I('<circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/>', ' width="16" height="16"'),
@@ -184,8 +187,14 @@ let YO = null;
 export const yo = () => YO;
 export const puede = (modulo, accion = 'ver') => { const n = YO?.permisos?.[modulo]; return accion === 'ver' ? !!n : n === 'editar'; };
 
+// Páginas del backoffice Síguelo (sin empresa). Cualquier otra página exige estar dentro de una empresa.
+const BACKOFFICE = [['empresas', 'Empresas', '/empresas'], ['planes', 'Planes', '/planes'], ['equipo', 'Equipo Síguelo', '/equipo']];
+
 export async function iniciarPagina({ activo, titulo = '' } = {}) {
   YO = await api('yo');
+  const enBackoffice = BACKOFFICE.some(([m]) => m === activo);
+  if (YO.modo === 'backoffice' && !enBackoffice) { location.replace('/empresas'); await new Promise(() => {}); }
+  if (YO.modo === 'cliente' && !YO.siguelo && enBackoffice) { location.replace('/inicio'); await new Promise(() => {}); }
   const main = document.querySelector('main') || document.body;
   const iniciales = YO.usuario.nombre.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
   const e = YO.empresa;
@@ -195,12 +204,12 @@ export async function iniciarPagina({ activo, titulo = '' } = {}) {
   app.innerHTML = `
   <nav class="menu" aria-label="Menú principal">
     <div class="menu-marca"><img class="logo" src="/img/logo-siguelo.png" alt="Síguelo GPS"><img class="marca-pin" src="/img/logo-pin.png" alt=""><button type="button" class="btn-plegar" aria-label="Plegar menú">${ICONOS.plegar}</button></div>
-    ${e ? `<div class="rc-empresa" title="${esc(e.nombre)}">${e.logo_clave ? `<img class="rc-empresa-logo" src="/api/logo/${esc(e.slug)}" alt="">` : `<span class="rc-empresa-logo" style="background:${esc(e.color || '#0F5F58')}">${esc(e.nombre.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase())}</span>`}<div><b>${esc(e.nombre)}</b><span>Rent a Car · Plan ${esc((e.plan || 'pro').replace(/^./, (c) => c.toUpperCase()))}</span></div></div>` : ''}
-    ${MENU.map(([g, items]) => {
+    ${e ? `<div class="rc-empresa" title="${esc(e.nombre)}">${e.logo_clave ? `<img class="rc-empresa-logo" src="/api/logo/${esc(e.slug)}" alt="">` : `<span class="rc-empresa-logo" style="background:${esc(e.color || '#0F5F58')}">${esc(e.nombre.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase())}</span>`}<div><b>${esc(e.nombre)}</b><span>Rent a Car · Plan ${esc(YO.plan?.nombre || (e.plan || 'pro').replace(/^./, (c) => c.toUpperCase()))}</span></div></div>` : ''}
+    ${YO.modo === 'backoffice' ? `<div class="menu-grupo">Backoffice Síguelo</div>${BACKOFFICE.filter(([m]) => m !== 'equipo' || YO.usuario.rol === 'superadmin').map(([m, n, href]) => `<a class="item" href="${href}" title="${n}"${m === activo ? ' aria-current="page"' : ''}>${ICONOS[m]}<span>${n}</span></a>`).join('')}`
+    : MENU.map(([g, items]) => {
       const vis = items.filter(([m]) => YO.permisos[m]);
       return vis.length ? `<div class="menu-grupo">${g}</div>${vis.map(([m, n, href]) => `<a class="item" href="${href}" title="${n}"${m === activo ? ' aria-current="page"' : ''}>${ICONOS[m]}<span>${n}</span></a>`).join('')}` : '';
     }).join('')}
-    ${YO.usuario.rol === 'superadmin' ? `<div class="menu-grupo">Síguelo</div><a class="item" href="/empresas"${activo === 'empresas' ? ' aria-current="page"' : ''}>${ICONOS.empresas}<span>Empresas</span></a>` : ''}
     <div class="menu-pie">
       <button type="button" class="menu-usuario" id="rc-usuario"><span class="avatar">${esc(iniciales)}</span><div><b>${esc(YO.usuario.nombre)}</b><span>${esc(YO.usuario.rol_nombre)}</span></div></button>
     </div>
@@ -209,12 +218,12 @@ export async function iniciarPagina({ activo, titulo = '' } = {}) {
     <header class="barra">
       <button type="button" class="btn-icono btn-menu-movil" aria-label="Abrir menú">${ICONOS.menu}</button>
       <span class="titulo">${esc(titulo)}</span>
-      <div class="buscar">${ICONOS.buscar}<input id="rc-buscar" placeholder="Buscar patente, RUT, cliente o folio…" autocomplete="off"><div class="buscar-res" id="rc-buscar-res" hidden></div></div>
+      ${YO.modo === 'backoffice' ? '<span class="chip marca">Backoffice Síguelo</span>' : `<div class="buscar">${ICONOS.buscar}<input id="rc-buscar" placeholder="Buscar patente, RUT, cliente o folio…" autocomplete="off"><div class="buscar-res" id="rc-buscar-res" hidden></div></div>`}
       <div class="acciones">
         ${e?.marcha_blanca ? '<a class="chip rc-marcha" href="/configuracion#integraciones" title="Correos, WhatsApp, cobros y documentos tributarios detenidos hasta desactivarla">● Marcha blanca</a>' : ''}
-        ${YO.empresas?.length ? `<select class="campo" id="rc-empresa" aria-label="Empresa">${YO.empresas.map((x) => `<option value="${x.id}"${x.id === e?.id ? ' selected' : ''}>${esc(x.nombre)}</option>`).join('')}</select>` : ''}
       </div>
     </header>
+    ${YO.ver_como ? `<div class="rc-ver-como" role="status">${ICONOS.ojo}<span>Estás viendo la cuenta de <b>${esc(e?.nombre || '')}</b> como equipo Síguelo. Lo que hagas queda registrado a tu nombre en su bitácora.</span><button type="button" class="btn peq" id="rc-salir-ver-como">Volver al backoffice</button></div>` : ''}
   </div>`;
   main.classList.add('contenido');
   app.querySelector('.principal').appendChild(main);
@@ -224,8 +233,8 @@ export async function iniciarPagina({ activo, titulo = '' } = {}) {
   app.querySelector('.btn-plegar').onclick = () => { app.classList.toggle('plegada'); try { localStorage.setItem('rc_menu_plegado', app.classList.contains('plegada') ? '1' : '0'); } catch { /* sin almacenamiento */ } };
   app.querySelector('.btn-menu-movil').onclick = () => app.classList.toggle('menu-abierto');
   app.querySelector('#rc-usuario').onclick = abrirMiCuenta;
-  app.querySelector('#rc-empresa')?.addEventListener('change', async (ev) => { await api('empresa-activa', { body: { empresa_id: Number(ev.target.value) } }); location.reload(); });
-  activarBuscador(app);
+  app.querySelector('#rc-salir-ver-como')?.addEventListener('click', async () => { const r = await api('empresa-activa', { body: { empresa_id: null } }); location.href = r.destino || '/empresas'; });
+  if (YO.modo !== 'backoffice') activarBuscador(app);
   return YO;
 }
 

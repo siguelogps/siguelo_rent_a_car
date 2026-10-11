@@ -2,6 +2,7 @@
 // El superadmin (equipo Síguelo) tiene todo y además administra las empresas.
 export const ROLES = {
   superadmin: 'Síguelo (superadmin)',
+  soporte: 'Síguelo (soporte)',
   administrador: 'Administrador',
   counter: 'Counter',
   patio: 'Patio',
@@ -25,7 +26,7 @@ const MATRIZ = {
 };
 
 export function nivel(rol, modulo) {
-  if (rol === 'superadmin') return E;
+  if (rol === 'superadmin' || rol === 'soporte') return E; // equipo Síguelo dentro de una empresa («ver como»)
   return MATRIZ[rol]?.[modulo] || null;
 }
 export const puede = (rol, modulo, accion = 'ver') => {
@@ -33,3 +34,6 @@ export const puede = (rol, modulo, accion = 'ver') => {
   return accion === 'ver' ? n === V || n === E : n === E;
 };
 export const permisosDe = (rol) => Object.fromEntries(Object.keys(MODULOS).map((m) => [m, nivel(rol, m)]));
+
+// Equipo Síguelo: superadmin (todo, incluido el equipo y los planes) y soporte (empresas y «ver como»).
+export const esSiguelo = (rol) => rol === 'superadmin' || rol === 'soporte';

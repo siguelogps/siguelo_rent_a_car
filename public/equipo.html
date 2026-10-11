@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Equipo Síguelo</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/config.css"><link rel="stylesheet" href="/css/backoffice.css">
+</head>
+<body>
+<main>
+  <div class="pagina-cab">
+    <div><h1>Equipo Síguelo</h1><p>Personas que administran la plataforma: crean clientes, asignan planes y entran a las cuentas con «Ver como»</p></div>
+    <div class="acciones"><button class="btn primario" id="nuevo">+ Nuevo usuario</button></div>
+  </div>
+  <div class="columnas-2" style="grid-template-columns:minmax(0,2fr) minmax(0,1fr)">
+    <div class="tarjeta"><div class="tabla-env"><table class="tabla">
+      <thead><tr><th>Nombre</th><th>Rol</th><th>Último acceso</th><th>Estado</th><th></th></tr></thead>
+      <tbody id="lista"><tr><td colspan="5" class="rc-cargando">Cargando…</td></tr></tbody>
+    </table></div></div>
+    <div class="tarjeta bloque"><h2>Roles</h2>
+      <p><b>Superadmin</b> · todo: clientes, planes, equipo Síguelo y «Ver como».</p>
+      <p><b>Soporte</b> · crea y administra clientes, cambia su plan y entra a sus cuentas con «Ver como». No edita planes ni el equipo.</p>
+      <p class="cf-ayuda">Dentro de la cuenta de un cliente, el equipo Síguelo actúa con permisos de administrador y todo queda en la bitácora del cliente a su nombre.</p>
+    </div>
+  </div>
+</main>
+<script type="module">
+import { iniciarPagina, api, esc, fechaHora, modal, confirmar, toast, toastError, leerForm } from '/comun.js';
+const yo = await iniciarPagina({ activo: 'equipo', titulo: 'Equipo Síguelo' });
+if (yo.usuario.rol !== 'superadmin') { document.querySelector('main').innerHTML = '<p class="aviso error">Solo un superadmin administra el equipo Síguelo.</p>'; throw new Error('sin permiso'); }
+const ROL = { superadmin: 'Superadmin', soporte: 'Soporte' };
+let L = [];
+const mostrarClave = (titulo, correo, clave) => modal({ titulo, html: `<p>Entrega estos datos a la persona (la clave se muestra solo esta vez):</p><div class="cf-clave" style="font-size:15px;text-align:left">Ingreso: ${esc(location.origin)}/ingresar<br>Correo: ${esc(correo)}<br>Clave temporal: ${esc(clave)}</div><p class="peq muted">Puede cambiarla en «Mi cuenta».</p>` });
+
+async function cargar() {
+  L = await api('backoffice/equipo');
+  document.getElementById('lista').innerHTML = L.map((u) => `<tr>
+    <td><b>${esc(u.nombre)}</b>${u.id === yo.usuario.id ? ' <span class="chip marca">tú</span>' : ''}<div class="peq muted">${esc(u.correo)}</div></td>
+    <td><select class="campo" data-rol="${u.id}"${u.id === yo.usuario.id ? ' disabled' : ''}>${Object.entries(ROL).map(([k, n]) => `<option value="${k}"${k === u.rol ? ' selected' : ''}>${n}</option>`).join('')}</select></td>
+    <td class="peq mono">${u.ultimo_acceso ? fechaHora(u.ultimo_acceso) : '<span class="muted">nunca</span>'}</td>
+    <td>${u.activo ? '<span class="chip ok">Activo</span>' : '<span class="chip">Desactivado</span>'}</td>
+    <td style="text-align:right;white-space:nowrap">${u.id === yo.usuario.id ? '' : `<button class="btn peq" data-clave="${u.id}">Nueva clave</button> <button class="btn peq ${u.activo ? 'peligro' : ''}" data-activo="${u.id}">${u.activo ? 'Desactivar' : 'Activar'}</button>`}</td></tr>`).join('');
+}
+const lista = document.getElementById('lista');
+lista.addEventListener('change', async (ev) => {
+  const s = ev.target.closest('[data-rol]'); if (!s) return;
+  try { await api(`backoffice/equipo/${s.dataset.rol}`, { method: 'PATCH', body: { rol: s.value } }); toast('Rol actualizado', 'ok'); } catch (e) { toastError(e); } cargar();
+});
+lista.addEventListener('click', async (ev) => {
+  const c = ev.target.closest('[data-clave]'), a = ev.target.closest('[data-activo]');
+  try {
+    if (c) { const u = L.find((x) => x.id === Number(c.dataset.clave)); if (!await confirmar('Nueva clave temporal', `Se generará una clave nueva para <b>${esc(u.nombre)}</b> y se cerrarán sus sesiones.`, { boton: 'Generar' })) return; const r = await api(`backoffice/equipo/${u.id}/clave`, { body: {} }); mostrarClave('Clave temporal', u.correo, r.clave_temporal); }
+    if (a) { const u = L.find((x) => x.id === Number(a.dataset.activo)); if (u.activo && !await confirmar('Desactivar usuario', `<b>${esc(u.nombre)}</b> no podrá ingresar y se cerrarán sus sesiones.`, { boton: 'Desactivar', peligro: true })) return; await api(`backoffice/equipo/${u.id}`, { method: 'PATCH', body: { activo: !u.activo } }); toast('Listo', 'ok'); cargar(); }
+  } catch (e) { toastError(e); }
+});
+document.getElementById('nuevo').onclick = () => modal({ titulo: 'Nuevo usuario del equipo Síguelo', html: `<div class="cf-form">
+    <label class="etiqueta ancho">Nombre<input class="campo" name="nombre" required></label>
+    <label class="etiqueta ancho">Correo<input class="campo" type="email" name="correo" required placeholder="nombre@siguelogps.cl"></label>
+    <label class="etiqueta ancho">Rol<select class="campo" name="rol"><option value="soporte">Soporte</option><option value="superadmin">Superadmin</option></select></label></div>
+    <p class="cf-ayuda">Se genera una clave temporal que verás una sola vez.</p>`,
+  botones: [{ texto: 'Cancelar' }, { texto: 'Crear usuario', clase: 'primario', accion: async (c) => {
+    const d = leerForm(c); const r = await api('backoffice/equipo', { body: d });
+    cargar(); setTimeout(() => mostrarClave('Usuario creado', r.usuario.correo, r.clave_temporal), 50);
+  } }] });
+cargar().catch(toastError);
+</script>
+</body>
+</html>

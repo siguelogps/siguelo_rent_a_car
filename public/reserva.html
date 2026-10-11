@@ -16,7 +16,7 @@ const yo = await iniciarPagina({ activo: 'reservas', titulo: 'Reservas' });
 const main = document.querySelector('main');
 const id = Number(location.pathname.split('/').pop());
 const editar = puede('reservas', 'editar'), editarContrato = puede('contratos', 'editar');
-const ROL = { administrador: 'administración', counter: 'counter', patio: 'patio', finanzas: 'finanzas', superadmin: 'Síguelo' };
+const ROL = { administrador: 'administración', counter: 'counter', patio: 'patio', finanzas: 'finanzas', superadmin: 'Síguelo', soporte: 'Síguelo' };
 const METODO = { webpay: ['Webpay Plus', '#E4002B'], mercadopago: ['Mercado Pago', '#00B1EA'], efectivo: ['Efectivo', '#1E7B3A'], transferencia: ['Transferencia', '#1E3A8A'], pos: ['POS', '#581C87'], otro: ['Otro', '#5B6370'] };
 const ACCION = {
   reserva_creada: (d) => [d.estado === 'confirmada' ? 'Reserva creada y confirmada' : 'Cotización creada', d.total ? ` · ${clp(d.total)}` : ''],

@@ -14,7 +14,7 @@
 <script type="module">
 import { iniciarPagina, api, esc, clp, fecha, hora, fechaHora, rut, validarRut, modal, confirmar, toast, toastError, leerForm, puede, chipEstado, ICONOS } from '/comun.js';
 const yo = await iniciarPagina({ activo: 'configuracion', titulo: 'Configuración' });
-const esAdmin = ['administrador', 'superadmin'].includes(yo.usuario.rol);
+const esAdmin = ['administrador', 'superadmin', 'soporte'].includes(yo.usuario.rol);
 const panel = document.getElementById('panel');
 
 const TABS = [

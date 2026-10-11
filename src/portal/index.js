@@ -10,6 +10,7 @@ import { puedeActuar } from '../integraciones/index.js';
 import { avisar } from '../salidas.js';
 import { tokenAleatorio } from '../cifrado.js';
 import { config } from '../config.js';
+import { incluye } from '../planes.js';
 import { validarRut, normalizarRut } from '../util/rut.js';
 import { desdeLocal, clp, fechaHora } from '../util/formato.js';
 
@@ -20,7 +21,8 @@ const MAX_DIAS = 90;
 
 export async function empresaPorSlug(slug) {
   const e = await uno('SELECT * FROM empresas WHERE slug = $1 AND activa', [String(slug || '').toLowerCase()]);
-  if (!e) throw new ErrorHttp(404, 'No encontramos este rentacar.');
+  if (!e) throw new ErrorHttp(404, 'No encontramos este rent a car.');
+  if (!(await incluye(e.id, 'portal'))) throw new ErrorHttp(404, 'Este rent a car no tiene activas las reservas en línea.');
   return e;
 }
 

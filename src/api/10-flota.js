@@ -1,5 +1,6 @@
 // Flota: vehículos (listado con vencimientos y mantención, ficha, alta/edición, cambio de estado, Excel),
 // categorías y propietarios (inversionistas) con su liquidación mensual.
+import { verificarLimite } from '../planes.js';
 import express from 'express';
 import { q, uno } from '../db.js';
 import { requiere, ErrorHttp } from '../auth.js';
@@ -120,6 +121,7 @@ const duplicada = (p) => new ErrorHttp(409, `Ya existe un vehículo con la paten
 r.post('/vehiculos', editar, async (req, res) => {
   const datos = await validarVehiculo(req, limpiar(req.body, TIPOS_VEHICULO));
   if (!datos.patente) throw new ErrorHttp(400, 'Ingresa la patente.', { campo: 'patente' });
+  await verificarLimite(req.empresaId, 'vehiculos');
   if (req.body.estado && ESTADOS_VEHICULO.includes(req.body.estado)) datos.estado = req.body.estado;
   for (const k of Object.keys(datos)) if (datos[k] === null) delete datos[k]; // deja los valores por defecto
   const previo = await uno('SELECT id, activo FROM vehiculos WHERE empresa_id = $1 AND patente = $2', [req.empresaId, datos.patente]);

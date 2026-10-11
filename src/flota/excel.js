@@ -1,4 +1,5 @@
 // Importación y exportación de la flota en Excel (columnas en español). La misma planilla exportada sirve para importar.
+import { verificarLimite } from '../planes.js';
 import ExcelJS from 'exceljs';
 import { q, uno } from '../db.js';
 import { formatearPatente, normalizarPatente } from '../util/patente.js';
@@ -131,6 +132,7 @@ export async function importarFlota(empresaId, buffer) {
         if (cols.length) await q(`UPDATE vehiculos SET ${cols.map((c, j) => `${c} = $${j + 1}`).join(', ')}, activo = true WHERE id = $${cols.length + 1}`, [...cols.map((c) => datos[c]), existe.id]);
         res.actualizadas++;
       } else {
+        await verificarLimite(empresaId, 'vehiculos');
         await q(`INSERT INTO vehiculos (empresa_id, patente${cols.map((c) => `, ${c}`).join('')}) VALUES ($1, $2${cols.map((_, j) => `, $${j + 3}`).join('')})`, [empresaId, patente, ...cols.map((c) => datos[c])]);
         res.nuevas++;
       }

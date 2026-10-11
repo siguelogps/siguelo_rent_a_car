@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Planes</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/config.css"><link rel="stylesheet" href="/css/backoffice.css">
+</head>
+<body>
+<main>
+  <div class="pagina-cab">
+    <div><h1>Planes</h1><p>Qué incluye cada plan que se asigna a los clientes: módulos, límites y precio</p></div>
+    <div class="acciones" id="acc"></div>
+  </div>
+  <div class="bo-planes" id="lista"><p class="rc-cargando">Cargando…</p></div>
+</main>
+<script type="module">
+import { iniciarPagina, api, esc, modal, toast, toastError, leerForm } from '/comun.js';
+import { detallePlan } from '/js/backoffice.js';
+const yo = await iniciarPagina({ activo: 'planes', titulo: 'Planes' });
+const editable = yo.usuario.rol === 'superadmin';
+let D = { planes: [], modulos: {} };
+
+async function cargar() {
+  D = await api('backoffice/planes');
+  document.getElementById('lista').innerHTML = D.planes.map((p) => `<article class="tarjeta bloque bo-plan${p.activo ? '' : ' inactivo'}">
+    <header><h2>${esc(p.nombre)}</h2><span class="rc-fila">${p.activo ? '' : '<span class="chip">Inactivo</span>'}<span class="chip ${p.empresas ? 'marca' : ''}">${p.empresas} ${p.empresas === 1 ? 'cliente' : 'clientes'}</span></span></header>
+    ${detallePlan(p, D.modulos)}
+    ${editable ? `<div class="cf-pie"><button class="btn" data-editar="${esc(p.codigo)}">Editar plan</button></div>` : ''}
+  </article>`).join('');
+}
+
+function formulario(p = null) {
+  const v = (k, d = '') => esc(p?.[k] ?? d);
+  return modal({ titulo: p ? `Editar plan ${p.nombre}` : 'Nuevo plan', ancho: true, html: `
+    <div class="cf-form">
+      <label class="etiqueta">Nombre<input class="campo" name="nombre" value="${v('nombre')}" required></label>
+      <label class="etiqueta">Precio mensual (UF)<input class="campo mono" name="precio_uf" value="${v('precio_uf')}" placeholder="vacío = por definir" inputmode="decimal"></label>
+      <label class="etiqueta ancho">Descripción<textarea class="campo" name="descripcion" rows="2">${v('descripcion')}</textarea></label>
+      <label class="etiqueta">Máximo de vehículos<input class="campo mono" name="max_vehiculos" value="${v('max_vehiculos')}" placeholder="vacío = sin límite" inputmode="numeric"></label>
+      <label class="etiqueta">Máximo de usuarios<input class="campo mono" name="max_usuarios" value="${v('max_usuarios')}" placeholder="vacío = sin límite" inputmode="numeric"></label>
+      <label class="etiqueta">Máximo de sucursales<input class="campo mono" name="max_sucursales" value="${v('max_sucursales')}" placeholder="vacío = sin límite" inputmode="numeric"></label>
+      <label class="etiqueta">Orden<input class="campo mono" name="orden" value="${v('orden', D.planes.length + 1)}" inputmode="numeric"></label>
+    </div>
+    <h3 class="bo-h3">Módulos incluidos</h3>
+    <div class="bo-mods-edit">${Object.entries(D.modulos).map(([k, n]) => `<label><input type="checkbox" data-mod="${k}"${!p || p.modulos.includes(k) ? ' checked' : ''}> ${esc(n)}</label>`).join('')}</div>
+    <label class="cf-check-linea"><input type="checkbox" name="activo"${!p || p.activo ? ' checked' : ''}> Plan disponible para asignar a clientes nuevos</label>
+    <p class="cf-ayuda">Los cambios aplican de inmediato a los clientes con este plan: los módulos que se quiten dejan de verse y los límites se exigen al crear vehículos, usuarios o sucursales.</p>`,
+  botones: [{ texto: 'Cancelar' }, { texto: p ? 'Guardar plan' : 'Crear plan', clase: 'primario', accion: async (c) => {
+    const d = leerForm(c);
+    d.modulos = [...c.querySelectorAll('[data-mod]:checked')].map((x) => x.dataset.mod);
+    if (p) await api(`backoffice/planes/${encodeURIComponent(p.codigo)}`, { method: 'PUT', body: d });
+    else await api('backoffice/planes', { body: d });
+    toast(p ? 'Plan guardado' : 'Plan creado', 'ok'); cargar();
+  } }] });
+}
+
+if (editable) {
+  document.getElementById('acc').innerHTML = '<button class="btn primario" id="nuevo">+ Nuevo plan</button>';
+  document.getElementById('nuevo').onclick = () => formulario();
+  document.getElementById('lista').addEventListener('click', (ev) => { const b = ev.target.closest('[data-editar]'); if (b) formulario(D.planes.find((p) => p.codigo === b.dataset.editar)); });
+}
+cargar().catch(toastError);
+</script>
+</body>
+</html>

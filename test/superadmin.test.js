@@ -18,5 +18,36 @@ test('el superadmin se define por SUPERADMIN_CORREO y el de la demo queda desact
   const s = await t.como('pablo@siguelogps.cl', 'clave-larga-123');
   const yo = await s.get('/api/yo');
   assert.equal(yo.datos.usuario.rol, 'superadmin');
-  assert.ok(yo.datos.empresas.length >= 1);
+  assert.equal(yo.datos.modo, 'backoffice');
+  assert.equal(yo.datos.empresa, null);
+});
+
+test('equipo Síguelo: backoffice, «ver como», planes y límites', async () => {
+  const sa = await t.como('pablo@siguelogps.cl', 'clave-larga-123');
+  // sin «ver como» no accede a datos de clientes
+  assert.equal((await sa.get('/api/reservas')).estado, 400);
+  const E = (await t.db.uno(`SELECT id FROM empresas WHERE slug = 'andes-rent'`)).id;
+  // crear usuario de soporte
+  const nuevo = await sa.post('/api/backoffice/equipo', { nombre: 'Ana Soporte', correo: 'ana@siguelogps.cl', rol: 'soporte' });
+  assert.equal(nuevo.estado, 200);
+  const ana = await t.como('ana@siguelogps.cl', nuevo.datos.clave_temporal);
+  assert.equal((await ana.get('/api/backoffice/equipo')).estado, 403, 'soporte no administra el equipo');
+  assert.equal((await ana.get('/api/backoffice/planes')).estado, 200);
+  assert.equal((await ana.get('/api/empresas')).estado, 200);
+  const vc = await ana.post('/api/empresa-activa', { empresa_id: E });
+  assert.equal(vc.datos.destino, '/inicio');
+  const yo = await ana.get('/api/yo');
+  assert.equal(yo.datos.ver_como, true);
+  assert.equal((await ana.get('/api/reservas')).estado, 200);
+  await ana.post('/api/empresa-activa', { empresa_id: null });
+  assert.equal((await ana.get('/api/yo')).datos.modo, 'backoffice');
+  // plan Básico: sin GPS y con límite de vehículos
+  assert.equal((await sa.patch(`/api/configuracion/empresas/${E}`, { plan: 'basico' })).estado, 200);
+  const admin = await t.como('demo@siguelogps.cl');
+  assert.equal((await admin.get('/api/gps/vehiculos')).estado, 403);
+  assert.equal((await admin.get('/api/yo')).datos.permisos.gps, null);
+  const suc = await admin.post('/api/configuracion/sucursales', { nombre: 'Temuco' });
+  assert.equal(suc.estado, 403, 'el plan Básico permite 1 sucursal');
+  assert.match(suc.datos.error, /plan Básico/);
+  await sa.patch(`/api/configuracion/empresas/${E}`, { plan: 'pro' });
 });

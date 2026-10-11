@@ -138,7 +138,7 @@ r.patch('/clientes/:id', editar, async (req, res) => {
 // ── Lista negra (motivo obligatorio; administrador y counter) ──
 r.post('/clientes/:id/lista-negra', editar, async (req, res) => {
   const E = req.empresaId, id = idDe(req.params.id);
-  if (!['administrador', 'counter', 'superadmin'].includes(req.usuario.rol)) throw new ErrorHttp(403, 'Solo administradores y counter cambian la lista negra');
+  if (!['administrador', 'counter', 'superadmin', 'soporte'].includes(req.usuario.rol)) throw new ErrorHttp(403, 'Solo administradores y counter cambian la lista negra');
   const activa = !!req.body.lista_negra, motivo = txt(req.body.motivo, 1000);
   if (!motivo) throw new ErrorHttp(400, activa ? 'Indica el motivo para agregar a la lista negra' : 'Indica el motivo para sacar de la lista negra', { campo: 'motivo' });
   const [c] = await q(`UPDATE clientes SET lista_negra = $3, lista_negra_motivo = CASE WHEN $3 THEN $4 ELSE NULL END, lista_negra_en = CASE WHEN $3 THEN now() ELSE NULL END,

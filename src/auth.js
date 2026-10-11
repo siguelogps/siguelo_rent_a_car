@@ -3,7 +3,8 @@ import crypto from 'node:crypto';
 import { q, uno } from './db.js';
 import { config } from './config.js';
 import { hashSha256, tokenAleatorio } from './cifrado.js';
-import { puede, permisosDe } from './permisos.js';
+import { puede, permisosDe, esSiguelo } from './permisos.js';
+import { incluye } from './planes.js';
 
 const COOKIE = 'rc_sesion';
 const DURACION_MS = 12 * 3600e3;
@@ -53,8 +54,9 @@ export async function cargarSesion(req, _res, next) {
        FROM sesiones s JOIN usuarios u ON u.id = s.usuario_id
       WHERE s.token_hash = $1 AND s.expira_en > now()`, [hashSha256(t)]);
   if (s && s.activo) {
-    req.usuario = { ...s, permisos: permisosDe(s.rol) };
+    req.usuario = { ...s, permisos: permisosDe(s.rol), siguelo: esSiguelo(s.rol) };
     req.empresaId = s.empresa_id;
+    req.verComo = esSiguelo(s.rol) && !!s.empresa_id; // equipo Síguelo dentro de la cuenta de un cliente
   }
   next();
 }
@@ -64,14 +66,19 @@ export class ErrorHttp extends Error {
 }
 
 // requiere('reservas', 'editar') → 401/403 si no corresponde; exige empresa activa salvo { sinEmpresa: true }.
-export const requiere = (modulo = null, accion = 'ver', { sinEmpresa = false } = {}) => (req, _res, next) => {
+export const requiere = (modulo = null, accion = 'ver', { sinEmpresa = false } = {}) => async (req, _res, next) => {
   if (!req.usuario) throw new ErrorHttp(401, 'Tu sesión terminó. Vuelve a ingresar.');
   if (modulo && !puede(req.usuario.rol, modulo, accion)) throw new ErrorHttp(403, 'Tu rol no tiene permiso para esta acción.');
-  if (!sinEmpresa && !req.empresaId) throw new ErrorHttp(400, 'Elige una empresa para continuar.');
+  if (!sinEmpresa && !req.empresaId) throw new ErrorHttp(400, req.usuario.siguelo ? 'Entra a la cuenta de un cliente con «Ver como» desde el backoffice.' : 'Elige una empresa para continuar.');
+  if (modulo && req.empresaId && !(await incluye(req.empresaId, modulo))) throw new ErrorHttp(403, 'El plan contratado no incluye este módulo. Pide a Síguelo un cambio de plan.');
   next();
 };
 export const soloSuperadmin = (req, _res, next) => {
-  if (req.usuario?.rol !== 'superadmin') throw new ErrorHttp(403, 'Solo el equipo de Síguelo puede hacer esto.');
+  if (req.usuario?.rol !== 'superadmin') throw new ErrorHttp(403, 'Solo un superadmin de Síguelo puede hacer esto.');
+  next();
+};
+export const soloSiguelo = (req, _res, next) => {
+  if (!esSiguelo(req.usuario?.rol)) throw new ErrorHttp(403, 'Solo el equipo de Síguelo puede hacer esto.');
   next();
 };
 

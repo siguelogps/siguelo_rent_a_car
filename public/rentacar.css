@@ -273,3 +273,14 @@ a.rc-marcha { text-decoration: none; }
 .rc-ojo { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 32px; height: 32px; border: 0; background: transparent; color: var(--ink-2); cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 6px; }
 .rc-ojo:hover { background: var(--soft); }
 .modal-pie.rc-pie-cuenta { justify-content: space-between; }
+/* «Ver como»: aviso fijo del equipo Síguelo dentro de la cuenta de un cliente */
+.rc-ver-como { display: flex; align-items: center; gap: 10px; padding: 8px 20px; background: var(--ink); color: #fff; font-size: 13px; position: sticky; top: 60px; z-index: 40; }
+.rc-ver-como svg { color: var(--marca); flex-shrink: 0; }
+.rc-ver-como span { flex: 1; }
+.rc-ver-como b { color: var(--marca); }
+/* Menú contraído: solo el logo del cliente, sin deformarse */
+.plegada .rc-empresa { justify-content: center; padding: 6px 0; margin: 0 0 6px; border: 0; }
+.plegada .rc-empresa > div { display: none; }
+.plegada .rc-empresa-logo { width: 36px; height: 36px; }
+.rc-empresa-logo { aspect-ratio: 1; }
+img.rc-empresa-logo { object-fit: contain; padding: 2px; }

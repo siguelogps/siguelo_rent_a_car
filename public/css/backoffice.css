@@ -1,0 +1,20 @@
+/* Backoffice Síguelo (prefijo bo-) */
+.bo-plan-celda { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.bo-uso { font-size: 12px; white-space: nowrap; }
+.bo-uso.lleno .mono { color: var(--red); font-weight: 600; }
+.bo-limites { display: flex; gap: 10px 18px; flex-wrap: wrap; }
+.bo-limites .bo-uso { font-size: 13px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--soft); }
+.bo-plan-precio { font: 600 18px var(--mono); }
+.bo-h3 { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .05em; }
+.bo-modulos { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 4px 14px; font-size: 13px; }
+.bo-modulos li.si { color: var(--ink); }
+.bo-modulos li.no { color: #9AA1AD; }
+.bo-planes { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 16px; align-items: start; }
+.bo-plan { display: flex; flex-direction: column; gap: 10px; }
+.bo-plan.inactivo { opacity: .6; }
+.bo-plan header { display: flex; align-items: center; gap: 8px; justify-content: space-between; }
+.bo-plan h2 { font-size: 18px; font-weight: 600; }
+.bo-mods-edit { display: grid; grid-template-columns: repeat(auto-fill, minmax(230px, 1fr)); gap: 6px 14px; }
+.bo-mods-edit label { display: flex; gap: 8px; align-items: center; font-size: 13px; }
+.bo-mods-edit input { width: 16px; height: 16px; accent-color: var(--ink); }
+.cf-check-linea { display: flex; gap: 8px; align-items: center; font-size: 13px; } .cf-check-linea input { width: 16px; height: 16px; accent-color: var(--ink); }

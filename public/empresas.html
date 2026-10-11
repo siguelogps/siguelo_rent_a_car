@@ -3,62 +3,66 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Empresas</title><link rel="icon" href="/img/logo-pin.png">
-<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/config.css">
+<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/config.css"><link rel="stylesheet" href="/css/backoffice.css">
 </head>
 <body>
 <main>
   <div class="pagina-cab">
-    <div><h1>Empresas</h1><p>Rent a Car clientes de Síguelo · solo equipo Síguelo</p></div>
+    <div><h1>Empresas</h1><p>Clientes Rent a Car de Síguelo · backoffice</p></div>
     <div class="acciones"><input class="campo" id="filtro" placeholder="Buscar por nombre, RUT o slug…" style="min-width:240px"><button class="btn primario" id="nueva">+ Nueva empresa</button></div>
   </div>
   <div class="kpis" id="kpis"></div>
   <div class="tarjeta"><div class="tabla-env"><table class="tabla">
-    <thead><tr><th>Empresa</th><th>Portal</th><th>Plan</th><th>Vehículos</th><th>Usuarios</th><th>Marcha blanca</th><th>Estado</th><th>Alta</th><th></th></tr></thead>
-    <tbody id="lista"><tr><td colspan="9" class="rc-cargando">Cargando…</td></tr></tbody>
+    <thead><tr><th>Empresa</th><th>Portal</th><th>Plan</th><th>Uso del plan</th><th>Marcha blanca</th><th>Estado</th><th>Alta</th><th></th></tr></thead>
+    <tbody id="lista"><tr><td colspan="8" class="rc-cargando">Cargando…</td></tr></tbody>
   </table></div></div>
 </main>
 <script type="module">
 import { iniciarPagina, api, esc, fecha, rut, validarRut, modal, confirmar, toast, toastError, leerForm } from '/comun.js';
+import { detallePlan, precio, uso } from '/js/backoffice.js';
 const yo = await iniciarPagina({ activo: 'empresas', titulo: 'Empresas' });
-if (yo.usuario.rol !== 'superadmin') {
+if (!yo.siguelo) {
   document.querySelector('main').innerHTML = '<p class="aviso error">Solo el equipo de Síguelo puede administrar las empresas.</p>';
   throw new Error('sin permiso');
 }
-let LISTA = [];
-const PLANES = ['basico', 'pro', 'empresa'];
-const PLAN = { basico: 'Básico', pro: 'Pro', empresa: 'Empresa' };
-
+let LISTA = [], PLANES = [], MODULOS = {};
+const planDe = (c) => PLANES.find((p) => p.codigo === c);
 async function cargar() {
-  LISTA = await api('empresas');
+  const [l, pl] = await Promise.all([api('empresas'), api('backoffice/planes')]);
+  LISTA = l; PLANES = pl.planes; MODULOS = pl.modulos;
   pintar();
 }
+
 function pintar() {
   const t = document.getElementById('filtro').value.trim().toLowerCase();
   const vis = LISTA.filter((e) => !t || [e.nombre, e.slug, e.rut, e.razon_social].some((x) => String(x || '').toLowerCase().includes(t)));
   document.getElementById('kpis').innerHTML = `
     <div class="kpi"><span>Empresas</span><b>${LISTA.length}</b><small>${LISTA.filter((e) => e.activa).length} activas</small></div>
     <div class="kpi"><span>Vehículos</span><b>${LISTA.reduce((s, e) => s + e.vehiculos, 0).toLocaleString('es-CL')}</b><small>en todas las empresas</small></div>
-    <div class="kpi"><span>Usuarios</span><b>${LISTA.reduce((s, e) => s + e.usuarios, 0)}</b><small>de los rentacars</small></div>
+    <div class="kpi"><span>Usuarios</span><b>${LISTA.reduce((s, e) => s + e.usuarios, 0)}</b><small>de los clientes</small></div>
     <div class="kpi"><span>En marcha blanca</span><b>${LISTA.filter((e) => e.marcha_blanca).length}</b><small>aún sin salidas reales</small></div>`;
   document.getElementById('lista').innerHTML = vis.map((e) => {
     const ini = e.nombre.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
-    const actual = e.id === yo.empresa?.id;
+    const p = planDe(e.plan);
     return `<tr><td><div class="rc-fila" style="flex-wrap:nowrap">${e.logo_clave ? `<img class="rc-empresa-logo" src="/api/logo/${esc(e.slug)}" alt="">` : `<span class="rc-empresa-logo" style="background:${esc(e.color || '#0F5F58')}">${esc(ini)}</span>`}
-      <div><b>${esc(e.nombre)}</b>${actual ? ' <span class="chip marca">activa en tu sesión</span>' : ''}<div class="peq muted mono">${e.rut ? rut(e.rut) : 'sin RUT'}</div></div></div></td>
+      <div><b>${esc(e.nombre)}</b><div class="peq muted mono">${e.rut ? rut(e.rut) : 'sin RUT'}</div></div></div></td>
       <td style="white-space:nowrap"><a class="mono peq" href="/reservar/${esc(e.slug)}" target="_blank" rel="noopener">/reservar/${esc(e.slug)}</a></td>
-      <td><select class="campo" data-plan="${e.id}" aria-label="Plan">${[...new Set([...PLANES, e.plan])].map((p) => `<option value="${esc(p)}"${p === e.plan ? ' selected' : ''}>${esc(PLAN[p] || p)}</option>`).join('')}</select></td>
-      <td class="mono">${e.vehiculos}</td><td class="mono">${e.usuarios}</td>
+      <td><div class="bo-plan-celda"><select class="campo" data-plan="${e.id}" aria-label="Plan">${PLANES.filter((x) => x.activo || x.codigo === e.plan).map((x) => `<option value="${esc(x.codigo)}"${x.codigo === e.plan ? ' selected' : ''}>${esc(x.nombre)}</option>`).join('')}${p ? '' : `<option selected>${esc(e.plan)} (no existe)</option>`}</select>
+        ${p ? `<button class="btn peq" data-detalle="${e.id}">Ver detalle</button>` : ''}</div><div class="peq muted">${p ? precio(p) : ''}</div></td>
+      <td>${p ? uso(e.vehiculos, p.max_vehiculos, 'vehículos') + uso(e.usuarios, p.max_usuarios, 'usuarios') + uso(e.sucursales, p.max_sucursales, 'sucursales') : ''}</td>
       <td>${e.marcha_blanca ? '<span class="chip rc-marcha">● Activa</span>' : '<span class="chip ok">Operación real</span>'}</td>
       <td><label class="cf-switch-et"><span class="switch"><input type="checkbox" data-activa="${e.id}"${e.activa ? ' checked' : ''} aria-label="Empresa activa"><span></span></span><span>${e.activa ? 'Activa' : 'Suspendida'}</span></label></td>
       <td class="mono peq" style="white-space:nowrap">${fecha(e.creado_en)}</td>
-      <td style="text-align:right"><button class="btn peq ${actual ? '' : 'primario'}" data-entrar="${e.id}">${actual ? 'Ir al inicio' : 'Entrar'}</button></td></tr>`;
-  }).join('') || '<tr><td colspan="9" class="rc-vacio">Sin empresas</td></tr>';
+      <td style="text-align:right"><button class="btn peq primario" data-entrar="${e.id}" title="Entrar a la cuenta del cliente como equipo Síguelo">Ver como</button></td></tr>`;
+  }).join('') || '<tr><td colspan="8" class="rc-vacio">Sin empresas</td></tr>';
 }
 document.getElementById('filtro').oninput = pintar;
 document.getElementById('lista').addEventListener('click', async (ev) => {
+  const d = ev.target.closest('[data-detalle]');
+  if (d) { const e = LISTA.find((x) => x.id === Number(d.dataset.detalle)); const p = planDe(e.plan); return modal({ titulo: `Plan ${p.nombre} · ${e.nombre}`, html: detallePlan(p, MODULOS, e) }); }
   const b = ev.target.closest('[data-entrar]');
   if (!b) return;
-  try { await api('empresa-activa', { body: { empresa_id: Number(b.dataset.entrar) } }); location.href = '/inicio'; } catch (e) { toastError(e); }
+  try { const r = await api('empresa-activa', { body: { empresa_id: Number(b.dataset.entrar) } }); location.href = r.destino || '/inicio'; } catch (e) { toastError(e); }
 });
 document.getElementById('lista').addEventListener('change', async (ev) => {
   const a = ev.target.closest('[data-activa]'), p = ev.target.closest('[data-plan]');
@@ -85,6 +89,7 @@ document.getElementById('nueva').onclick = () => modal({ titulo: 'Nueva empresa 
     <label class="etiqueta">Teléfono<input class="campo" name="telefono"></label>
     <label class="etiqueta">Correo de contacto<input class="campo" type="email" name="correo"></label>
     <label class="etiqueta">Primera sucursal<input class="campo" name="sucursal" placeholder="Casa matriz"></label>
+    <label class="etiqueta">Plan<select class="campo" name="plan">${PLANES.filter((x) => x.activo).map((x) => `<option value="${esc(x.codigo)}"${x.codigo === 'pro' ? ' selected' : ''}>${esc(x.nombre)} · ${precio(x)}</option>`).join('')}</select></label>
   </div>
   <h3 style="font-size:14px">Administrador inicial</h3>
   <div class="cf-form">
@@ -99,7 +104,7 @@ botones: [{ texto: 'Cancelar' }, { texto: 'Crear empresa', clase: 'primario', ac
   if ((d.admin_clave || '').length < 10) throw new Error('La clave del administrador debe tener al menos 10 caracteres');
   const e = await api('empresas', { body: d });
   toast(`${e.nombre} creada · portal /reservar/${e.slug}`, 'ok');
-  setTimeout(() => modal({ titulo: 'Empresa creada', html: `<p>Entrega estos datos al administrador de <b>${esc(e.nombre)}</b>:</p><div class="cf-clave" style="font-size:15px;text-align:left">Correo: ${esc(d.admin_correo)}<br>Clave temporal: ${esc(d.admin_clave)}</div><p class="peq muted">Puede cambiar la clave en Configuración › Mi clave.</p>` }), 50);
+  setTimeout(() => modal({ titulo: 'Empresa creada', html: `<p>Entrega estos datos al administrador de <b>${esc(e.nombre)}</b>:</p><div class="cf-clave" style="font-size:15px;text-align:left">Correo: ${esc(d.admin_correo)}<br>Clave temporal: ${esc(d.admin_clave)}</div><p class="peq muted">Puede cambiar la clave en «Mi cuenta» (su nombre, abajo en el menú).</p>` }), 50);
   cargar();
 } }] });
 cargar().catch(toastError);

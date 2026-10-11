@@ -47,7 +47,7 @@ export async function crearApp() {
     const archivo = path.join(PUBLICO, `${html}.html`);
     fs.existsSync(archivo) ? res.sendFile(archivo, { dotfiles: 'allow' }) : next();
   });
-  app.get('/', (req, res) => res.redirect(req.usuario ? '/inicio' : '/ingresar'));
+  app.get('/', (req, res) => res.redirect(!req.usuario ? '/ingresar' : req.usuario.siguelo && !req.empresaId ? '/empresas' : '/inicio'));
 
   app.use((req, res) => {
     if (req.accepts('html')) return res.status(404).sendFile(path.join(PUBLICO, '404.html'), { dotfiles: 'allow' });

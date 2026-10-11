@@ -106,6 +106,7 @@ test('sincronización: une por patente, actualiza vehículo, guarda lecturas y a
 test('inmovilización: doble validación, nunca con el vehículo en movimiento, marcha blanca → simulada', async () => {
   const admin = await t.como('demo@siguelogps.cl');
   const soporte = await t.como('soporte@siguelogps.cl'); // superadmin: segundo validador
+  await soporte.post('/api/empresa-activa', { empresa_id: (await t.db.uno(`SELECT id FROM empresas WHERE slug = 'andes-rent'`)).id }); // «ver como»
   const counter = await t.como('counter@siguelogps.cl');
   const patio = await t.como('patio@siguelogps.cl');
   await admin.post('/api/integraciones/gps/activar', { activa: false });
@@ -150,6 +151,7 @@ test('inmovilización: doble validación, nunca con el vehículo en movimiento, 
 test('inmovilización real (sin marcha blanca): exec_cmd con el vehículo detenido, liberación con el mismo flujo', async () => {
   const admin = await t.como('demo@siguelogps.cl');
   const soporte = await t.como('soporte@siguelogps.cl');
+  await soporte.post('/api/empresa-activa', { empresa_id: (await t.db.uno(`SELECT id FROM empresas WHERE slug = 'andes-rent'`)).id });
   const v = await db.uno(`SELECT id, patente, gps_unidad_id FROM vehiculos WHERE patente = 'RVLW56'`);
   const cmds = [];
   _usarFetch(async (_url, op) => {

@@ -45,12 +45,12 @@ export async function crearApp() {
     const html = PAGINAS_PARAM[req.params.pagina];
     if (!html) return next();
     const archivo = path.join(PUBLICO, `${html}.html`);
-    fs.existsSync(archivo) ? res.sendFile(archivo) : next();
+    fs.existsSync(archivo) ? res.sendFile(archivo, { dotfiles: 'allow' }) : next();
   });
   app.get('/', (req, res) => res.redirect(req.usuario ? '/inicio' : '/ingresar'));
 
   app.use((req, res) => {
-    if (req.accepts('html')) return res.status(404).sendFile(path.join(PUBLICO, '404.html'));
+    if (req.accepts('html')) return res.status(404).sendFile(path.join(PUBLICO, '404.html'), { dotfiles: 'allow' });
     res.status(404).json({ error: 'No encontrado' });
   });
 
@@ -58,7 +58,8 @@ export async function crearApp() {
   app.use((err, req, res, _next) => {
     const estado = err.estado || err.status || 500;
     if (estado >= 500) console.error(`[${req.method} ${req.path}]`, err);
-    res.status(estado).json({ error: estado >= 500 && process.env.NODE_ENV === 'production' ? 'Ocurrió un error inesperado. Inténtalo de nuevo.' : err.message, ...(err.campo ? { campo: err.campo } : {}) });
+    const { estado: _e, status: _s, message: _m, stack: _st, ...extra } = err;
+    res.status(estado).json({ ...(estado < 500 ? extra : {}), error: estado >= 500 && process.env.NODE_ENV === 'production' ? 'Ocurrió un error inesperado. Inténtalo de nuevo.' : err.message });
   });
   return app;
 }

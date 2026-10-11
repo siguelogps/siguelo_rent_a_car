@@ -163,7 +163,7 @@ export async function sembrarDemo({ clave = 'demo1234' } = {}) {
   // Datos de prueba de cada módulo: src/demo-extra/*.js exporta sembrar(empresaId)
   const fs = await import('node:fs'), path = await import('node:path'), url = await import('node:url');
   const dir = path.join(path.dirname(url.fileURLToPath(import.meta.url)), 'demo-extra');
-  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.js')).sort()) {
+  for (const f of (fs.existsSync(dir) ? fs.readdirSync(dir) : []).filter((x) => x.endsWith('.js')).sort()) {
     const m = await import(url.pathToFileURL(path.join(dir, f)).href);
     if (m.sembrar) await m.sembrar(E);
   }

@@ -210,7 +210,9 @@ export async function datosAviso(empresaId, reservaId) {
 export async function avisarConfirmada(empresaId, reservaId, { correo = null, telefono = null } = {}) {
   const d = await datosAviso(empresaId, reservaId);
   if (!d) return [];
-  return avisar({ empresaId, clave: 'reserva_confirmada', datos: d.datos, correo: correo || d.fila.c_correo, telefono: telefono || d.fila.c_telefono, entidad: 'reserva', entidadId: reservaId });
+  const est = await uno('SELECT estado FROM reservas WHERE id = $1 AND empresa_id = $2', [reservaId, empresaId]);
+  const clave = est?.estado === 'cotizacion' ? 'reserva_recibida' : 'reserva_confirmada';
+  return avisar({ empresaId, clave, datos: d.datos, correo: correo || d.fila.c_correo, telefono: telefono || d.fila.c_telefono, entidad: 'reserva', entidadId: reservaId });
 }
 
 /**

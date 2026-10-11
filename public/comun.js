@@ -224,7 +224,7 @@ export async function iniciarPagina({ activo, titulo = '' } = {}) {
   app.querySelector('.btn-plegar').onclick = () => { app.classList.toggle('plegada'); try { localStorage.setItem('rc_menu_plegado', app.classList.contains('plegada') ? '1' : '0'); } catch { /* sin almacenamiento */ } };
   app.querySelector('.btn-menu-movil').onclick = () => app.classList.toggle('menu-abierto');
   app.querySelector('#rc-usuario').onclick = async () => {
-    const r = await modal({ titulo: YO.usuario.nombre, html: `<p class="muted">${esc(YO.usuario.correo)} · ${esc(YO.usuario.rol_nombre)}</p>`, botones: [{ texto: 'Cerrar' }, { texto: 'Cerrar sesión', clase: 'oscuro', valor: 'salir' }] });
+    const r = await modal({ titulo: YO.usuario.nombre, html: `<p class="muted">${esc(YO.usuario.correo)} · ${esc(YO.usuario.rol_nombre)}</p><p><a href="/configuracion#mi-clave">Cambiar mi clave</a></p>`, botones: [{ texto: 'Cerrar' }, { texto: 'Cerrar sesión', clase: 'oscuro', valor: 'salir' }] });
     if (r === 'salir') { await api('salir', { body: {} }); location.href = '/ingresar'; }
   };
   app.querySelector('#rc-empresa')?.addEventListener('change', async (ev) => { await api('empresa-activa', { body: { empresa_id: Number(ev.target.value) } }); location.reload(); });

@@ -149,9 +149,25 @@ async function actualizarDesdeMp(pagoId, pagoMp, aj = {}) {
 
 // ── Retorno desde el proveedor (navegador del cliente) ──
 export async function confirmarRetorno(proveedor, datos = {}) {
-  if (proveedor === 'webpay') return retornoWebpay(datos);
-  if (proveedor === 'mercadopago') return retornoMp(datos);
+  if (proveedor === 'webpay') return confirmarReservaPortal(await retornoWebpay(datos));
+  if (proveedor === 'mercadopago') return confirmarReservaPortal(await retornoMp(datos));
   throw new ErrorHttp(400, 'Proveedor desconocido');
+}
+
+// Reserva del portal que quedó como cotización mientras el cliente pagaba: con el pago del arriendo aprobado se confirma
+// (si el vehículo sigue libre; si no, queda como cotización y el equipo la resuelve).
+async function confirmarReservaPortal(pago) {
+  if (!pago || pago.concepto !== 'arriendo' || !['pagado', 'retenido', 'capturado'].includes(pago.estado) || !pago.reserva_id) return pago;
+  const r = await uno(`SELECT id, empresa_id, folio, vehiculo_id, inicio, fin, estado, origen FROM reservas WHERE id = $1`, [pago.reserva_id]);
+  if (!r || r.estado !== 'cotizacion' || r.origen !== 'portal') return pago;
+  const { conflictos } = await import('../disponibilidad.js');
+  if (r.vehiculo_id && (await conflictos(r.empresa_id, r.vehiculo_id, r.inicio, r.fin, { excluirReservaId: r.id })).length) return pago;
+  const { siguienteFolio } = await import('../db.js');
+  const folio = r.folio.startsWith('C-') ? await siguienteFolio(r.empresa_id, 'R') : r.folio;
+  await q(`UPDATE reservas SET estado = 'confirmada', folio = $2, notas = trim(coalesce(notas,'') || $3), actualizado_en = now() WHERE id = $1`,
+    [r.id, folio, folio !== r.folio ? ` Cotización ${r.folio} confirmada con pago en línea.` : '']);
+  await bit(r.empresa_id, null, 'reserva_confirmada_por_pago', pago.id, { reserva: folio });
+  return pago;
 }
 
 async function retornoWebpay(d) {
@@ -215,6 +231,11 @@ async function sincronizarMp(pago, idMp) {
 
 // Notificación de Mercado Pago: { type: 'payment', data: { id } } (o topic/id en la query, formato antiguo).
 export async function webhookMercadoPago(empresaId, body = {}, query = {}) {
+  const r = await webhookMercadoPagoBase(empresaId, body, query);
+  if (r.pagoId) await confirmarReservaPortal(await uno('SELECT * FROM pagos WHERE id = $1', [r.pagoId]));
+  return r;
+}
+async function webhookMercadoPagoBase(empresaId, body = {}, query = {}) {
   const tipo = body.type || body.topic || query.type || query.topic;
   const id = body.data?.id || query['data.id'] || query.id;
   if (tipo !== 'payment' || !id || !empresaId) return { ignorado: true };

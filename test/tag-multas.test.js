@@ -114,7 +114,7 @@ test('reglas de asignación de multas: hora exacta, solo fecha, día compartido 
   const E = (await db.uno(`SELECT id FROM empresas WHERE slug = 'andes-rent'`)).id;
   const sx = await db.uno(`SELECT id FROM vehiculos WHERE patente = 'SXLR27'`);
   const camila = await db.uno(`SELECT id, cliente_id, retiro_real FROM reservas WHERE vehiculo_id = $1 AND estado = 'en_curso'`, [sx.id]);
-  const anterior = await db.uno(`SELECT id, devolucion_real FROM reservas WHERE vehiculo_id = $1 AND estado = 'cerrada'`, [sx.id]);
+  const anterior = await db.uno(`SELECT id, devolucion_real FROM reservas WHERE vehiculo_id = $1 AND estado = 'cerrada' AND devolucion_real <= $2 ORDER BY devolucion_real DESC LIMIT 1`, [sx.id, camila.retiro_real]);
   // la demo deja un contrato que terminó el mismo día en que retiró Camila
   assert.equal(partes(new Date(anterior.devolucion_real)).iso, partes(new Date(camila.retiro_real)).iso);
   const dia = new Date(camila.retiro_real);
@@ -126,7 +126,7 @@ test('reglas de asignación de multas: hora exacta, solo fecha, día compartido 
   assert.deepEqual(soloFecha.candidatos.map((c) => c.reserva_id).sort(), [anterior.id, camila.id].sort());
   const otroDia = await decidirMulta(E, sx.id, new Date(dia.getTime() + 864e5), false);
   assert.equal(otroDia.estado, 'asignada');
-  const nada = await decidirMulta(E, sx.id, new Date(Date.now() - 60 * 864e5), false);
+  const nada = await decidirMulta(E, sx.id, new Date(Date.now() - 400 * 864e5), false);
   assert.equal(nada.estado, 'sin_contrato');
   // las de la demo pasaron por la asignación real
   const demo = await db.q(`SELECT patente, estado, cliente_id FROM multas WHERE origen = 'dashboard' ORDER BY patente`);

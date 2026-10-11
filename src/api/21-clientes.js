@@ -58,9 +58,10 @@ r.get('/clientes', ver, async (req, res) => {
   const t = String(req.query.q || '').trim();
   if (t) {
     p.push(`%${t}%`); const i = p.length;
-    p.push(`%${limpiarRut(t) || '__'}%`);
-    w.push(`((c.nombre || ' ' || coalesce(c.apellidos,'')) ILIKE $${i} OR c.correo ILIKE $${i} OR c.telefono ILIKE $${i} OR c.razon_social ILIKE $${i}
-      OR replace(c.documento, '-', '') ILIKE $${p.length})`);
+    const doc = limpiarRut(t);
+    let porDoc = `c.documento ILIKE $${i}`;
+    if (doc.length >= 3) { p.push(`%${doc}%`); porDoc += ` OR replace(c.documento, '-', '') ILIKE $${p.length}`; }
+    w.push(`((c.nombre || ' ' || coalesce(c.apellidos,'')) ILIKE $${i} OR c.correo ILIKE $${i} OR c.telefono ILIKE $${i} OR c.razon_social ILIKE $${i} OR ${porDoc})`);
   }
   if (req.query.lista_negra === '1') w.push('c.lista_negra');
   if (req.query.licencia_vencida === '1') w.push(`c.tipo = 'persona' AND (c.licencia_vence IS NULL OR c.licencia_vence < (now() AT TIME ZONE 'America/Santiago')::date)`);

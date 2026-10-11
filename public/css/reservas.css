@@ -23,12 +23,13 @@
 @media (max-width: 860px) {
   .rs-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 0 0 12px 12px; }
   .rs-scroll .rc-gantt { width: max-content; min-width: 100%; }
-  .rs-scroll .rc-gantt-cab, .rs-scroll .rc-gantt-fila { grid-template-columns: 128px calc(var(--dias) * 54px); }
-  .rs-scroll .rc-gantt.rs-vista-dia .rc-gantt-cab, .rs-scroll .rc-gantt.rs-vista-dia .rc-gantt-fila { grid-template-columns: 128px calc(var(--dias) * 40px); }
-  .rs-scroll .rc-gantt-izq { position: sticky; left: 0; z-index: 4; background: var(--card); padding: 6px 8px; gap: 6px; }
-  .rs-scroll .rc-gantt-cab .rc-gantt-izq { background: var(--soft); }
+  .rs-scroll .rc-gantt-cab, .rs-scroll .rc-gantt-fila { grid-template-columns: 104px calc(var(--dias) * 54px); }
+  .rs-scroll .rc-gantt.rs-vista-dia .rc-gantt-cab, .rs-scroll .rc-gantt.rs-vista-dia .rc-gantt-fila { grid-template-columns: 104px calc(var(--dias) * 40px); }
+  .rs-scroll .rc-gantt-izq { position: sticky; left: 0; z-index: 5; background: var(--card); padding: 6px 8px; gap: 3px; flex-direction: column; align-items: flex-start; justify-content: center; overflow: hidden; }
+  .rs-scroll .rc-gantt-cab .rc-gantt-izq { background: var(--soft); justify-content: flex-end; }
   .rs-scroll .rc-gantt-grupo { position: sticky; left: 0; width: calc(100vw - 26px); }
-  .rs-scroll .rc-gantt-izq .t small { max-width: 72px; }
+  .rs-scroll .rc-gantt-izq .t small { display: none; }
+  .rs-scroll .rc-gantt-izq .chip { font-size: 10px; padding: 1px 6px; margin-top: 0 !important; white-space: nowrap; }
   #panel-cal .rc-leyenda { gap: 6px 12px; }
 }
 
@@ -57,7 +58,7 @@
 .rs-tramo-form > div > b { font-size: 12px; color: var(--muted); font-weight: 500; }
 .rs-tramo-form .rc-fila { flex-wrap: nowrap; }
 .rs-tramo-form .rc-fila .campo { flex: 1 1 0; min-width: 0; }
-.rs-tramo-form .rc-fila input[type=time] { flex: 0 0 110px; }
+.rs-tramo-form .rc-fila input[type=time] { flex: 0 0 128px; }
 .rs-vehiculos { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 8px; }
 .rs-veh { display: flex; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; cursor: pointer; background: var(--card); }
 .rs-veh input { accent-color: var(--ink); }

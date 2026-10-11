@@ -23,8 +23,13 @@ r.get('/contratos', ver, async (req, res) => {
   if (/^\d{4}-\d{2}-\d{2}$/.test(req.query.hasta || '')) { p.push(req.query.hasta); w.push(`(ct.creado_en AT TIME ZONE 'America/Santiago')::date <= $${p.length}::date`); }
   if (req.query.reserva_id) { p.push(Number(req.query.reserva_id)); w.push(`ct.reserva_id = $${p.length}`); }
   const t = String(req.query.q || '').trim();
-  if (t) { p.push(`%${t}%`); const i = p.length; p.push(`%${t.toUpperCase().replace(/[^A-Z0-9]/g, '') || '__'}%`);
-    w.push(`(ct.folio ILIKE $${i} OR r.folio ILIKE $${i} OR (c.nombre || ' ' || coalesce(c.apellidos,'')) ILIKE $${i} OR v.patente ILIKE $${p.length} OR ct.codigo_verificacion ILIKE $${i})`); }
+  if (t) {
+    p.push(`%${t}%`); const i = p.length;
+    const np = t.toUpperCase().replace(/[^A-Z0-9]/g, '');
+    let pat = '';
+    if (np.length >= 3) { p.push(`%${np}%`); pat = ` OR v.patente ILIKE $${p.length}`; }
+    w.push(`(ct.folio ILIKE $${i} OR r.folio ILIKE $${i} OR (c.nombre || ' ' || coalesce(c.apellidos,'')) ILIKE $${i} OR ct.codigo_verificacion ILIKE $${i}${pat})`);
+  }
   const filas = await q(`SELECT ct.id, ct.folio, ct.estado, ct.creado_en, ct.firmado_en, ct.firmante_nombre, ct.pdf_archivo_id, ct.codigo_verificacion, ct.reserva_id,
       r.folio AS reserva_folio, r.estado AS reserva_estado, r.inicio, r.fin, trim(c.nombre || ' ' || coalesce(c.apellidos,'')) AS cliente, v.patente, v.marca, v.modelo
     FROM contratos ct JOIN reservas r ON r.id = ct.reserva_id LEFT JOIN clientes c ON c.id = r.cliente_id LEFT JOIN vehiculos v ON v.id = r.vehiculo_id

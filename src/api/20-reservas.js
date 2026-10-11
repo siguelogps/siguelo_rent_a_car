@@ -21,6 +21,13 @@ const idDe = (v) => { const n = Number(v); if (!Number.isInteger(n) || n <= 0) t
 const fechaValida = (v, campo) => { const d = new Date(v); if (!v || Number.isNaN(d.getTime())) throw new ErrorHttp(400, 'Fecha u hora inválida', { campo }); return d; };
 const numOnull = (v) => (v === '' || v == null ? null : Number(v));
 const mensajeConflicto = (c) => (c.tipo === 'reserva' ? `El vehículo ya está tomado por la reserva ${c.folio} (${fechaHora(c.inicio)} a ${fechaHora(c.fin)}).` : `El vehículo está bloqueado: ${c.motivo} (${fechaHora(c.inicio)} a ${fechaHora(c.fin)}).`);
+// El manejador de errores del núcleo solo reenvía «campo»: los 409 de disponibilidad se responden aquí con el folio en conflicto.
+const conConflicto = (fn) => async (req, res) => {
+  try { return await fn(req, res); } catch (e) {
+    if (e.estado === 409 && e.conflicto !== undefined) return res.status(409).json({ error: e.message, folio: e.folio ?? null, conflicto: e.conflicto });
+    throw e;
+  }
+};
 const errorConflicto = (c) => new ErrorHttp(409, mensajeConflicto(c), { conflicto: c.folio || c.motivo, folio: c.folio || null });
 
 // ── Entrada del formulario → datos validados (cliente, categoría, sucursales, fechas, extras, conductores) ──
@@ -135,7 +142,8 @@ function filtrosLista(req) {
   const t = String(req.query.q || '').trim();
   if (t) {
     add(`(r.folio ILIKE ? OR (c.nombre || ' ' || coalesce(c.apellidos,'')) ILIKE ? OR c.documento ILIKE ?`, `%${t}%`);
-    p.push(`%${normalizarPatente(t) || '__'}%`); w[w.length - 1] += ` OR v.patente ILIKE $${p.length})`;
+    const np = normalizarPatente(t);
+    if (np.length >= 3) { p.push(`%${np}%`); w[w.length - 1] += ` OR v.patente ILIKE $${p.length})`; } else w[w.length - 1] += ')';
   }
   return { where: w.join(' AND '), p };
 }
@@ -185,7 +193,7 @@ r.get('/reservas/disponibles', ver, async (req, res) => {
 });
 
 // ── Alta ──
-r.post('/reservas', editar, async (req, res) => {
+r.post('/reservas', editar, conConflicto(async (req, res) => {
   const E = req.empresaId, b = req.body;
   const estado = b.estado === 'confirmada' ? 'confirmada' : 'cotizacion';
   const reserva = await transaccion(async (tx) => {
@@ -216,7 +224,7 @@ r.post('/reservas', editar, async (req, res) => {
   });
   if (estado === 'confirmada') await avisarConfirmada(E, reserva.id).catch((e) => console.error('aviso reserva_confirmada', e.message));
   res.status(201).json(reserva);
-});
+}));
 
 // ── Ficha ──
 r.get('/reservas/:id', ver, async (req, res) => {
@@ -253,7 +261,7 @@ r.get('/reservas/:id', ver, async (req, res) => {
 });
 
 // ── Edición (cotización o confirmada) ──
-r.patch('/reservas/:id', editar, async (req, res) => {
+r.patch('/reservas/:id', editar, conConflicto(async (req, res) => {
   const E = req.empresaId, id = idDe(req.params.id);
   const out = await transaccion(async (tx) => {
     const [act] = await tx.query('SELECT * FROM reservas WHERE id = $1 AND empresa_id = $2 FOR UPDATE', [id, E]);
@@ -283,7 +291,7 @@ r.patch('/reservas/:id', editar, async (req, res) => {
     return { ...nueva, avisos: cot.avisos };
   });
   res.json(out);
-});
+}));
 
 // ── Mover (arrastrar y soltar en el calendario): otro vehículo y/o fechas ──
 async function evaluarMovimiento(E, act, b, tx) {
@@ -311,7 +319,7 @@ async function evaluarMovimiento(E, act, b, tx) {
   return { v, inicio, fin, cot, cambiaCategoria, total_anterior: Number(act.total), total_nuevo: cot ? cot.total : Number(act.total) };
 }
 
-r.patch('/reservas/:id/mover', editar, async (req, res) => {
+r.patch('/reservas/:id/mover', editar, conConflicto(async (req, res) => {
   const E = req.empresaId, id = idDe(req.params.id);
   if (req.body.simular) {
     const act = await uno('SELECT * FROM reservas WHERE id = $1 AND empresa_id = $2', [id, E]);
@@ -337,10 +345,10 @@ r.patch('/reservas/:id/mover', editar, async (req, res) => {
     return { ...nueva, diferencia: m.total_nuevo - m.total_anterior };
   });
   res.json(out);
-});
+}));
 
 // ── Cambio de estado manual: cotización → confirmada | cancelada; confirmada → cancelada | no_show ──
-r.post('/reservas/:id/estado', editar, async (req, res) => {
+r.post('/reservas/:id/estado', editar, conConflicto(async (req, res) => {
   const E = req.empresaId, id = idDe(req.params.id);
   const { estado, motivo = null } = req.body;
   const nueva = await transaccion(async (tx) => {
@@ -356,7 +364,7 @@ r.post('/reservas/:id/estado', editar, async (req, res) => {
   });
   if (estado === 'confirmada') await avisarConfirmada(E, id).catch((e) => console.error('aviso reserva_confirmada', e.message));
   res.json(nueva);
-});
+}));
 
 // Enlace del portal del cliente (subir documentos, ver su reserva y contrato)
 r.post('/reservas/:id/portal', editar, async (req, res) => {

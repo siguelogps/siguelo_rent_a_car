@@ -94,7 +94,7 @@ function pintar(f) {
   const acc = [];
   if (tel) acc.push(`<a class="btn" href="https://wa.me/${tel}?text=${waTxt}" target="_blank" rel="noopener">Enviar por WhatsApp</a>`);
   if (editar && ['cotizacion', 'confirmada'].includes(r.estado)) acc.push('<button class="btn" data-acc="editar">Editar</button>');
-  if (editar && r.estado === 'confirmada') acc.push('<button class="btn" data-acc="no_show">No se presentó</button>');
+  if (editar && r.estado === 'confirmada' && new Date(r.inicio) < new Date()) acc.push('<button class="btn" data-acc="no_show">No se presentó</button>');
   if (editar && ['cotizacion', 'confirmada'].includes(r.estado)) acc.push(`<button class="btn peligro" data-acc="cancelar">${r.estado === 'cotizacion' ? 'Descartar cotización' : 'Cancelar reserva'}</button>`);
   if (editar && r.estado === 'cotizacion') acc.push('<button class="btn primario" data-acc="confirmar">Confirmar reserva</button>');
   if (r.estado === 'confirmada') {
@@ -126,7 +126,13 @@ function pintar(f) {
     ...f.bitacora.map((b) => { const fn = ACCION[b.accion]; const [t, d] = fn ? fn(b.detalle || {}) : [esc(b.accion.replace(/_/g, ' ')), '']; return { en: b.creado_en, html: `<b>${t}</b>${d}`, sub: b.usuario ? `por ${esc(b.usuario)}` : r.origen === 'portal' ? 'portal web' : 'sistema' }; }),
     ...pagos.map((p) => ({ en: p.creado_en, html: `<b>${p.concepto === 'garantia' ? 'Garantía' : 'Pago'} ${p.estado === 'simulado' ? 'simulado (marcha blanca)' : esc(p.estado)}</b> · <span class="monto">${clp(p.monto)}</span> ${esc(METODO[p.metodo]?.[0] || p.metodo)}${p.autorizacion ? ` · autorización ${esc(p.autorizacion)}` : ''}`, sub: 'pagos y garantías' })),
     ...f.salidas.map((s) => ({ en: s.creado_en, pend: s.estado !== 'enviada', html: s.estado === 'retenida' ? `<b>${s.canal === 'correo' ? 'Correo' : 'WhatsApp'} no enviado</b> · ${esc(s.asunto || 'mensaje al cliente')} · marcha blanca activa` : `<b>${s.canal === 'correo' ? 'Correo' : 'WhatsApp'} ${s.estado === 'enviada' ? 'enviado' : esc(s.estado)}</b> · ${esc(s.destino)}`, sub: s.estado === 'retenida' ? 'se enviará al activar las comunicaciones en Configuración' : '' }))
-  ].sort((a, b) => new Date(b.en) - new Date(a.en));
+  ];
+  // Hitos que no quedaron en la bitácora (reservas importadas o del portal)
+  const hay = (acc) => f.bitacora.some((b) => b.accion === acc);
+  if (!hay('reserva_creada')) ev.push({ en: r.creado_en, html: `<b>${r.folio.startsWith('C-') ? 'Cotización creada' : 'Reserva creada'}</b> · ${esc(ORIGEN[r.origen] || r.origen)}${r.codigo_descuento ? ` con código <span class="mono">${esc(r.codigo_descuento)}</span>` : ''}`, sub: r.creado_por_nombre ? `por ${esc(r.creado_por_nombre)}` : esc(ORIGEN[r.origen] || '') });
+  if (r.retiro_real && !hay('reserva_en_curso')) ev.push({ en: r.retiro_real, html: '<b>Vehículo entregado (check-out)</b>', sub: esc(sr?.nombre || '') });
+  if (r.devolucion_real && !hay('reserva_devuelta')) ev.push({ en: r.devolucion_real, html: '<b>Vehículo devuelto (check-in)</b>', sub: esc(sd?.nombre || '') });
+  ev.sort((a, b) => new Date(b.en) - new Date(a.en));
 
   main.innerHTML = `
   <a href="/reservas" class="peq muted rs-volver">‹ Calendario de reservas</a>

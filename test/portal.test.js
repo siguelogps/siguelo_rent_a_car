@@ -177,3 +177,13 @@ test('páginas públicas: /reservar, /embed y /portal se pueden incrustar', { sk
   assert.equal(js.status, 200);
   assert.match(await js.text(), /data-rentacar/);
 });
+
+test('el cliente ubica su reserva con folio y RUT para subir documentos (sin revelar reservas ajenas)', async () => {
+  const pub = (b) => fetch(`${t.base}/api/portal/empresa/andes-rent/mi-reserva`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) });
+  const r = await t.db.uno(`SELECT r.folio, c.documento, r.token_portal FROM reservas r JOIN clientes c ON c.id = r.cliente_id WHERE r.estado = 'confirmada' AND c.documento_tipo = 'rut' ORDER BY r.id LIMIT 1`);
+  const ok = await pub({ folio: r.folio.toLowerCase(), documento: r.documento.replace('-', '') });
+  assert.equal(ok.status, 200);
+  assert.equal((await ok.json()).url_portal, `/portal/${r.token_portal}#documentos`);
+  const mal = await pub({ folio: r.folio, documento: '11111111-1' });
+  assert.equal(mal.status, 404);
+});

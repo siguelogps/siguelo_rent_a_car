@@ -41,6 +41,22 @@ r.post('/portal/empresa/:slug/reservar', reservas, async (req, res) => {
     redirigir: cobro?.redirigir || null, simulado: !!cobro?.simulado, mensaje });
 });
 
+// El cliente ubica su reserva con el folio y su RUT o pasaporte para subir sus documentos antes del retiro.
+// Respuesta genérica si no calza (no revela si el folio existe) y límite de intentos por IP.
+const busquedasReserva = limitar({ nombre: 'portal-mi-reserva', max: 10, ventanaMs: 10 * 60e3 });
+r.post('/portal/empresa/:slug/mi-reserva', busquedasReserva, async (req, res) => {
+  const e = await empresaPorSlug(req.params.slug);
+  const folio = String(req.body?.folio || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const doc = String(req.body?.documento || '').toUpperCase().replace(/[^0-9A-Z]/g, '');
+  if (!folio || doc.length < 5) throw new ErrorHttp(400, 'Ingresa el número de reserva y tu RUT o pasaporte.');
+  const [r0] = await q(`SELECT r.token_portal FROM reservas r JOIN clientes c ON c.id = r.cliente_id
+      WHERE r.empresa_id = $1 AND upper(regexp_replace(r.folio, '[^A-Za-z0-9]', '', 'g')) = $2
+        AND upper(regexp_replace(c.documento, '[^0-9A-Za-z]', '', 'g')) = $3
+        AND r.estado IN ('cotizacion','confirmada','en_curso') AND r.token_portal IS NOT NULL`, [e.id, folio, doc]);
+  if (!r0) throw new ErrorHttp(404, 'No encontramos una reserva vigente con esos datos. Revisa el número de reserva (está en tu correo de confirmación) y tu RUT o pasaporte.');
+  res.json({ url_portal: `/portal/${r0.token_portal}#documentos` });
+});
+
 // ── Área del cliente ──
 r.get('/portal/r/:token', async (req, res) => {
   res.json(await resumenParaCliente(await reservaPorToken(req.params.token)));

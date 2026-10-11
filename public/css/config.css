@@ -1,5 +1,6 @@
 /* Configuración (/configuracion) y Empresas (/empresas). Prefijo cf- */
-.cf-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); overflow-x: auto; scrollbar-width: thin; }
+.cf-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
+.cf-tabs::-webkit-scrollbar { display: none; }
 .cf-tabs a { display: inline-flex; align-items: center; gap: 6px; padding: 10px 14px; text-decoration: none; color: var(--ink-2); font-weight: 500; border-bottom: 3px solid transparent; white-space: nowrap; margin-bottom: -1px; }
 .cf-tabs a:hover { color: var(--ink); background: var(--soft); border-radius: 8px 8px 0 0; }
 .cf-tabs a[aria-current="page"] { color: var(--ink); font-weight: 600; border-bottom-color: var(--marca); }

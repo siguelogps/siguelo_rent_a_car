@@ -77,20 +77,42 @@ function aplicarMarca() {
   document.documentElement.style.setProperty('--pt-color', c);
   document.documentElement.style.setProperty('--pt-texto', claro ? '#15181D' : '#fff');
   document.documentElement.style.setProperty('--pt-color-suave', `rgba(${r},${g},${b},.09)`);
-  // Fondo del encabezado y botón principal (colores propios del portal; la vista previa de Configuración los manda por la URL)
-  const qs = new URLSearchParams(location.search);
-  const hex = (v, def) => (/^#[0-9a-f]{6}$/i.test(v || '') ? v : def);
-  const textoSobre = (h) => { const [x, y, z] = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)); return (x * 299 + y * 587 + z * 114) / 1000 > 160 ? '#15181D' : '#fff'; };
-  const fondo = hex(qs.get('fondo'), hex(INFO.color_fondo, c)), boton = hex(qs.get('boton'), hex(INFO.color_boton, c));
-  document.documentElement.style.setProperty('--pt-fondo', fondo);
-  document.documentElement.style.setProperty('--pt-fondo-texto', textoSobre(fondo));
-  document.documentElement.style.setProperty('--pt-boton', boton);
-  document.documentElement.style.setProperty('--pt-boton-texto', textoSobre(boton));
   document.title = `Reserva tu vehículo · ${INFO.nombre}`;
   const ini = INFO.nombre.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
   document.getElementById('cab').innerHTML = `${INFO.logo ? `<img class="pt-logo" src="/api/logo/${encodeURIComponent(SLUG)}" alt="${esc(INFO.nombre)}">` : `<span class="pt-logo-txt">${esc(ini)}</span>`}
     <div class="pt-marca"><b>${esc(INFO.nombre)}</b><span>Reserva en línea</span></div>
     <div class="pt-cab-der">${INFO.telefono ? `<a href="tel:${esc(INFO.telefono.replace(/\s/g, ''))}">${IC.tel} <span class="tel-txt">${esc(INFO.telefono)}</span></a>` : ''}</div>`;
+}
+
+// «Subir mis documentos»: el cliente ubica su reserva con el folio y su RUT o pasaporte y pasa a su área (/portal/:token)
+function abrirMisDocumentos() {
+  const fondo = document.createElement('div');
+  fondo.className = 'modal-fondo';
+  fondo.innerHTML = `<form class="modal" style="width:min(440px,100%)" id="md-f">
+    <div class="modal-cab"><h2>Subir mis documentos</h2><button type="button" class="btn-icono" data-cerrar aria-label="Cerrar">✕</button></div>
+    <div class="modal-cuerpo">
+      <p class="peq muted">Ingresa el número de tu reserva (aparece en el correo de confirmación) y el RUT o pasaporte con que reservaste.</p>
+      <label class="etiqueta">Número de reserva<input class="campo mono" name="folio" placeholder="R-1007" required autocomplete="off"></label>
+      <label class="etiqueta">RUT o pasaporte<input class="campo mono" name="documento" placeholder="12.345.678-9" required autocomplete="off"></label>
+      <div class="aviso error" id="md-err" hidden></div>
+    </div>
+    <div class="modal-pie"><button type="button" class="btn" data-cerrar>Cancelar</button><button class="btn pt-primario" type="submit">Continuar</button></div></form>`;
+  const cerrar = () => fondo.remove();
+  fondo.addEventListener('click', (ev) => { if (ev.target === fondo || ev.target.closest('[data-cerrar]')) cerrar(); });
+  document.body.appendChild(fondo);
+  const fm = fondo.querySelector('#md-f'), err = fondo.querySelector('#md-err');
+  fm.folio.focus();
+  fm.documento.addEventListener('blur', () => { if (validarRut(fm.documento.value)) fm.documento.value = fmtRut(fm.documento.value); });
+  fm.onsubmit = async (ev) => {
+    ev.preventDefault(); err.hidden = true;
+    try {
+      const r = await fetch(`/api/portal/empresa/${encodeURIComponent(SLUG)}/mi-reserva`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folio: fm.folio.value, documento: fm.documento.value }) });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || 'No se pudo buscar la reserva');
+      if (EMBED) window.open(j.url_portal, '_blank', 'noopener'); else location.href = j.url_portal;
+      cerrar();
+    } catch (e) { err.textContent = e.message; err.hidden = false; }
+  };
 }
 
 // Altura para el iframe incrustado (embed.js)
@@ -143,8 +165,9 @@ function pasoBusqueda() {
     <div class="pt-ventajas">
       <div><i>${IC.tarj}</i><span><b>Precio final</b><small>Sin cargos ocultos: impuestos incluidos.</small></span></div>
       <div><i>${IC.esc}</i><span><b>Vehículos con GPS y seguro</b><small>Asistencia y deducible informados antes de pagar.</small></span></div>
-      <div><i>${IC.doc}</i><span><b>Retiro más rápido</b><small>Sube tus documentos antes de llegar al mesón.</small></span></div>
+      <button type="button" class="pt-ventaja-btn" id="mis-docs"><i>${IC.doc}</i><span><b>Retiro más rápido</b><small>¿Ya reservaste? Sube tu licencia y cédula antes de llegar al mesón.</small><em>Subir mis documentos →</em></span></button>
     </div>`;
+  app.querySelector('#mis-docs').onclick = abrirMisDocumentos;
   const f = app.querySelector('#fb');
   f.querySelector('#otra').onchange = (ev) => { f.querySelector('#lbl-dev').hidden = !ev.target.checked; f.querySelector('#otra-box').hidden = ev.target.checked; };
   f.retiro_fecha.onchange = () => { if (f.devolucion_fecha.value <= f.retiro_fecha.value) { f.devolucion_fecha.value = masDias(f.retiro_fecha.value, 3); f.devolucion_fecha.dispatchEvent(new Event('change')); } f.devolucion_fecha.min = f.retiro_fecha.value; };

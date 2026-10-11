@@ -41,10 +41,6 @@ function marca(e) {
   document.documentElement.style.setProperty('--pt-color', c);
   document.documentElement.style.setProperty('--pt-texto', (r * 299 + g * 587 + b * 114) / 1000 > 160 ? '#15181D' : '#fff');
   document.documentElement.style.setProperty('--pt-color-suave', `rgba(${r},${g},${b},.09)`);
-  const txt = (h) => { const [x, y, z] = [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16)); return (x * 299 + y * 587 + z * 114) / 1000 > 160 ? '#15181D' : '#fff'; };
-  for (const [k, v] of [['fondo', e.color_fondo], ['boton', e.color_boton]]) if (/^#[0-9a-f]{6}$/i.test(v || '')) {
-    document.documentElement.style.setProperty(`--pt-${k}`, v); document.documentElement.style.setProperty(`--pt-${k}-texto`, txt(v));
-  }
   const ini = e.nombre.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
   document.getElementById('cab').innerHTML = `${e.logo ? `<img class="pt-logo" src="/api/logo/${encodeURIComponent(e.slug)}" alt="${esc(e.nombre)}">` : `<span class="pt-logo-txt">${esc(ini)}</span>`}
     <div class="pt-marca"><b>${esc(e.nombre)}</b><span>Mi reserva</span></div>
@@ -80,7 +76,7 @@ async function cargar() {
         </div></section>
 
         ${docs.puede_subir || Object.keys(docs.subidos).length ? `<section class="tarjeta"><div class="bloque">
-          <h2>Tus documentos ${faltan.length ? `<span class="chip aviso">Faltan ${faltan.length}</span>` : '<span class="chip ok">Completos</span>'}</h2>
+          <h2 id="documentos">Tus documentos ${faltan.length ? `<span class="chip aviso">Faltan ${faltan.length}</span>` : '<span class="chip ok">Completos</span>'}</h2>
           <p class="ayuda">Sube una foto legible de cada documento. Así el retiro en el mesón toma solo unos minutos.</p>
           <div class="pt-docs">${docs.requeridos.map((t) => `<div class="pt-doc${docs.subidos[t] ? ' ok' : ''}">
             <b>${esc(docs.nombres[t])}</b>
@@ -148,7 +144,7 @@ async function cargar() {
     } catch (e) { b.disabled = false; toast(e.message, 'error'); }
   });
 }
-cargar();
+cargar().then(() => { if (location.hash === "#documentos") document.getElementById("documentos")?.scrollIntoView({ behavior: "smooth", block: "start" }); });
 </script>
 </body>
 </html>

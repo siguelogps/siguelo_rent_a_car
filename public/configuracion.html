@@ -80,7 +80,7 @@ async function empresa() {
               <span class="cf-ayuda">Aparece en contratos, correos y el portal de reservas.</span>
             </div>
           </div>
-          <div class="cf-color"><input type="color" id="color" value="${esc(/^#[0-9a-f]{6}$/i.test(e.color || '') ? e.color : '#0F5F58')}"${dis}><input class="campo mono" id="color-txt" value="${esc(e.color || '#0F5F58')}" style="width:110px"${dis}>${ed ? '<button class="btn" id="color-ok" type="button">Guardar color</button>' : ''}<span class="cf-ayuda">Color de marca del portal de reservas</span></div>
+          <div class="cf-color"><input type="color" id="color" value="${esc(/^#[0-9a-f]{6}$/i.test(e.color || '') ? e.color : '#0F5F58')}"${dis}><input class="campo mono" id="color-txt" value="${esc(e.color || '#0F5F58')}" style="width:110px"${dis}>${ed ? '<button class="btn" id="color-ok" type="button">Guardar color</button>' : ''}<span class="cf-ayuda">Color de marca: encabezado y botones del portal de reservas</span></div>
         </div>
         <form class="tarjeta bloque" id="f-aj">
           <h2>Ajustes de operación</h2>
@@ -479,9 +479,6 @@ async function portal() {
   const url = `${location.origin}/reservar/${e.slug}`;
   const snippet = `<script src="${location.origin}/embed.js" data-rentacar="${e.slug}"><\/script>`;
   const modo = e.ajustes?.portal_pago || 'opcional';
-  const HEXC = /^#[0-9a-f]{6}$/i, marca = HEXC.test(e.color || '') ? e.color : '#0F5F58';
-  let cFondo = HEXC.test(e.ajustes?.portal_color_fondo || '') ? e.ajustes.portal_color_fondo : marca;
-  let cBoton = HEXC.test(e.ajustes?.portal_color_boton || '') ? e.ajustes.portal_color_boton : marca;
   let codigos = [];
   try { codigos = ((await api('tarifas')).descuentos || []).filter((c) => c.activo); } catch { /* sin permiso de tarifas */ }
   panel.innerHTML = `<div class="columnas-2">
@@ -500,15 +497,6 @@ async function portal() {
       <div class="cf-codigo-pre"><select class="campo" id="pt-codigo"><option value="">Sin código precargado</option>${codigos.map((c) => `<option value="${esc(c.codigo)}">${esc(c.codigo)} · ${c.tipo === 'porcentaje' ? `${c.valor} %` : clp(c.valor)}${c.hasta ? ` · hasta ${fecha(c.hasta)}` : ''}</option>`).join('')}</select>
         ${codigos.length ? '' : '<span class="cf-ayuda">No hay códigos activos. <a href="/tarifas#descuentos">Crear uno</a></span>'}</div>
     </div>
-    <div class="tarjeta bloque"><h2>Colores del portal</h2>
-      <p class="ayuda">Elige el color del encabezado («Arrienda tu vehículo en ${esc(e.nombre)}») y el del botón «Buscar vehículos». El texto se pone blanco o negro solo, según lo que se lea mejor.</p>
-      <div class="cf-colores-portal">
-        <label class="etiqueta">Fondo del encabezado<div class="cf-color"><input type="color" id="pc-fondo" value="${esc(cFondo)}"${ed ? '' : ' disabled'}><input class="campo mono" id="pc-fondo-txt" value="${esc(cFondo)}" style="width:110px"${ed ? '' : ' disabled'}></div></label>
-        <label class="etiqueta">Botón «Buscar vehículos»<div class="cf-color"><input type="color" id="pc-boton" value="${esc(cBoton)}"${ed ? '' : ' disabled'}><input class="campo mono" id="pc-boton-txt" value="${esc(cBoton)}" style="width:110px"${ed ? '' : ' disabled'}></div></label>
-      </div>
-      ${ed ? '<div class="cf-pie"><button class="btn" id="pc-restaurar" type="button">Usar el color de marca</button><button class="btn primario" id="pc-guardar" type="button">Guardar colores</button></div>' : ''}
-    </div>
-    </div><div class="columnas-2">
     <div class="tarjeta bloque"><h2>Pago al reservar</h2>
       <div class="pt-pagos" style="display:flex;flex-direction:column;gap:8px">${[['obligatorio', 'Obligatorio', 'El cliente paga el total en línea al reservar; la reserva queda confirmada.'], ['opcional', 'Opcional', 'El cliente elige pagar en línea (confirmada) o en el mesón (queda como cotización por confirmar).'], ['mostrador', 'Solo en el mesón', 'No se cobra en línea; las reservas llegan como cotización para confirmar.']]
         .map(([v, t, d]) => `<label class="rc-alerta-venc" style="cursor:pointer"><input type="radio" name="portal_pago" value="${v}"${modo === v ? ' checked' : ''}${ed ? '' : ' disabled'}><div><b>${t}</b><small>${d}</small></div></label>`).join('')}</div>
@@ -527,22 +515,6 @@ async function portal() {
   panel.querySelector('#pt-codigo').onchange = refrescarCodigo;
   panel.querySelector('#pt-copiar').onclick = () => copiar(urlCon());
   panel.querySelector('#pt-copiar-snip').onclick = () => copiar(snipCon());
-  // Colores: vista previa en vivo en el iframe y guardado en los ajustes de la empresa
-  const prevColores = () => { panel.querySelector('#pt-iframe').src = `/embed/${encodeURIComponent(e.slug)}?fondo=${encodeURIComponent(cFondo)}&boton=${encodeURIComponent(cBoton)}`; };
-  for (const k of ['fondo', 'boton']) {
-    const col = panel.querySelector(`#pc-${k}`), tx = panel.querySelector(`#pc-${k}-txt`);
-    const fijar = (v) => { if (!HEXC.test(v)) return; col.value = v; tx.value = v; if (k === 'fondo') cFondo = v; else cBoton = v; };
-    col.addEventListener('input', () => fijar(col.value));
-    col.addEventListener('change', prevColores);
-    tx.addEventListener('change', () => { if (HEXC.test(tx.value.trim())) { fijar(tx.value.trim()); prevColores(); } else toast('Usa un color en formato #RRGGBB', 'error'); });
-  }
-  panel.querySelector('#pc-restaurar')?.addEventListener('click', () => {
-    for (const k of ['fondo', 'boton']) { panel.querySelector(`#pc-${k}`).value = marca; panel.querySelector(`#pc-${k}-txt`).value = marca; }
-    cFondo = marca; cBoton = marca; prevColores();
-  });
-  panel.querySelector('#pc-guardar')?.addEventListener('click', async () => {
-    try { await api('empresa', { method: 'PATCH', body: { ajustes: { portal_color_fondo: cFondo, portal_color_boton: cBoton } } }); toast('Colores del portal guardados', 'ok'); prevColores(); } catch (err) { toastError(err); }
-  });
   panel.querySelector('#pt-guardar')?.addEventListener('click', async () => {
     const v = panel.querySelector('input[name="portal_pago"]:checked')?.value;
     try { await api('empresa', { method: 'PATCH', body: { ajustes: { portal_pago: v } } }); toast('Guardado', 'ok'); panel.querySelector('#pt-iframe').src += ''; } catch (err) { toastError(err); }

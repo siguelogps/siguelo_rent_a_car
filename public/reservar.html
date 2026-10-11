@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reserva tu vehículo</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/portal.css">
+</head>
+<body class="pt">
+<header class="pt-cab"><div class="pt-cab-in" id="cab"></div></header>
+<main class="pt-cuerpo" id="app"><p class="rc-cargando">Cargando…</p></main>
+<footer class="pt-pie"><a href="https://www.siguelogps.cl" target="_blank" rel="noopener">con tecnología <img src="/img/logo-siguelo.png" alt="Síguelo GPS"></a></footer>
+<script type="module">
+import { esc, clp, fecha, hora, validarRut, rut as fmtRut } from '/comun.js';
+
+const partes = location.pathname.split('/').filter(Boolean);
+const EMBED = partes[0] === 'embed';
+const SLUG = decodeURIComponent(partes[1] || '');
+if (EMBED) document.body.classList.add('pt-embed');
+const app = document.getElementById('app');
+
+// ── utilidades ──
+async function pedir(ruta, body) {
+  const r = await fetch(`/api/portal/${ruta}`, { method: body ? 'POST' : 'GET', headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw Object.assign(new Error(j.error || 'No pudimos completar la solicitud. Inténtalo de nuevo.'), { estado: r.status, campo: j.campo });
+  return j;
+}
+const hoyIso = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(new Date());
+const masDias = (iso, n) => new Date(Date.parse(`${iso}T12:00:00Z`) + n * 864e5).toISOString().slice(0, 10);
+const HORAS = Array.from({ length: 31 }, (_, i) => `${String(7 + Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`);
+const fechaLarga = (d) => new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(d));
+const S = (d, w = 16) => `<svg width="${w}" height="${w}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${d}</svg>`;
+const IC = {
+  pas: S('<circle cx="12" cy="8" r="3.5"/><path d="M5 20a7 7 0 0 1 14 0"/>'),
+  mal: S('<rect x="5" y="7" width="14" height="13" rx="2"/><path d="M9 7V4h6v3"/>'),
+  tr: S('<circle cx="6" cy="6" r="2"/><circle cx="12" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="6" cy="18" r="2"/><circle cx="12" cy="18" r="2"/><path d="M6 8v8M12 8v8M18 8v4H6"/>'),
+  km: S('<path d="M12 20a8 8 0 1 1 8-8"/><path d="M12 12l4-3"/>'),
+  esc: S('<path d="M12 3l8 3v6c0 5-3.5 8-8 9-4.5-1-8-4-8-9V6z"/><path d="M9 12l2 2 4-4"/>'),
+  tel: S('<path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/>'),
+  ok: S('<path d="M5 12l4 4L19 7"/>', 32), reloj: S('<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>', 32),
+  doc: S('<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5"/>'), tarj: S('<rect x="2" y="5" width="20" height="14" rx="2"/><path d="M2 10h20"/>')
+};
+
+// Ilustración de la categoría (silueta lateral con el color de la marca)
+function ilustracion(nombre = '') {
+  const n = nombre.toLowerCase();
+  const tipo = /van|furg|minibus/.test(n) ? 'van' : /camioneta|4x4|pick/.test(n) ? 'pick' : /suv|jeep|todo/.test(n) ? 'suv' : /sed/.test(n) ? 'sedan' : 'hatch';
+  const cuerpos = {
+    hatch: 'M30 74 L36 56 Q40 46 52 44 L84 40 Q96 30 112 30 L142 30 Q156 30 164 44 L178 48 Q190 52 190 64 L190 74 Z',
+    sedan: 'M18 74 L22 58 Q26 50 40 48 L70 44 Q86 30 104 30 L140 30 Q154 30 166 44 L192 48 Q204 52 204 62 L204 74 Z',
+    suv: 'M20 76 L22 52 Q24 42 36 40 L58 38 Q70 24 88 24 L150 24 Q166 24 174 38 L192 42 Q204 46 204 58 L204 76 Z',
+    pick: 'M16 76 L16 54 Q16 48 24 48 L96 48 L104 30 Q108 24 118 24 L150 24 Q160 24 166 34 L176 46 L196 50 Q206 52 206 62 L206 76 Z',
+    van: 'M18 78 L18 34 Q18 22 32 22 L160 22 Q176 22 184 34 L200 50 Q206 54 206 64 L206 78 Z'
+  };
+  const vidrios = {
+    hatch: 'M90 44 Q100 35 112 35 L130 35 L130 44 Z M136 35 L142 35 Q152 35 158 44 L136 44 Z',
+    sedan: 'M78 46 Q90 35 104 35 L120 35 L120 46 Z M126 35 L140 35 Q150 35 160 46 L126 46 Z',
+    suv: 'M66 40 Q76 29 90 29 L118 29 L118 40 Z M124 29 L150 29 Q162 29 168 40 L124 40 Z',
+    pick: 'M110 46 L114 32 Q116 29 120 29 L134 29 L134 46 Z M140 29 L150 29 Q156 29 160 35 L168 46 L140 46 Z',
+    van: 'M30 28 L60 28 L60 44 L30 44 Z M68 28 L100 28 L100 44 L68 44 Z M108 28 L140 28 L140 44 L108 44 Z M148 28 L162 28 Q172 28 178 36 L186 46 L148 46 Z'
+  };
+  const r1 = tipo === 'sedan' || tipo === 'van' ? 58 : 60, r2 = tipo === 'pick' ? 174 : tipo === 'sedan' ? 172 : 166;
+  return `<svg viewBox="0 0 224 100" aria-hidden="true"><ellipse cx="112" cy="88" rx="96" ry="5" fill="rgba(0,0,0,.08)"/>
+    <path d="${cuerpos[tipo]}" fill="var(--pt-color)"/><path d="${vidrios[tipo]}" fill="#fff" opacity=".85"/>
+    <rect x="${tipo === 'van' ? 196 : 182}" y="58" width="10" height="4" rx="2" fill="#FFD500"/>
+    ${[r1, r2].map((x) => `<circle cx="${x}" cy="76" r="13" fill="#15181D"/><circle cx="${x}" cy="76" r="5.5" fill="#C9CED6"/>`).join('')}</svg>`;
+}
+
+// ── estado ──
+let INFO = null;
+const E = { paso: 1, busq: null, resultados: null, cat: null, extras: {}, cot: null, cliente: { documento_tipo: 'rut' }, pago: null, proveedor: null, final: null };
+
+function aplicarMarca() {
+  const c = /^#[0-9a-f]{6}$/i.test(INFO.color) ? INFO.color : '#0F5F58';
+  const [r, g, b] = [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+  const claro = (r * 299 + g * 587 + b * 114) / 1000 > 160;
+  document.documentElement.style.setProperty('--pt-color', c);
+  document.documentElement.style.setProperty('--pt-texto', claro ? '#15181D' : '#fff');
+  document.documentElement.style.setProperty('--pt-color-suave', `rgba(${r},${g},${b},.09)`);
+  document.title = `Reserva tu vehículo · ${INFO.nombre}`;
+  const ini = INFO.nombre.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
+  document.getElementById('cab').innerHTML = `${INFO.logo ? `<img class="pt-logo" src="/api/logo/${encodeURIComponent(SLUG)}" alt="${esc(INFO.nombre)}">` : `<span class="pt-logo-txt">${esc(ini)}</span>`}
+    <div class="pt-marca"><b>${esc(INFO.nombre)}</b><span>Reserva en línea</span></div>
+    <div class="pt-cab-der">${INFO.telefono ? `<a href="tel:${esc(INFO.telefono.replace(/\s/g, ''))}">${IC.tel} <span class="tel-txt">${esc(INFO.telefono)}</span></a>` : ''}</div>`;
+}
+
+// Altura para el iframe incrustado (embed.js)
+function avisarAltura() { if (EMBED && parent !== window) parent.postMessage({ tipo: 'siguelo-rentacar-altura', altura: Math.ceil(document.documentElement.scrollHeight) }, '*'); }
+if (EMBED) { new ResizeObserver(avisarAltura).observe(document.body); addEventListener('load', avisarAltura); }
+function arriba() { if (EMBED && parent !== window) parent.postMessage({ tipo: 'siguelo-rentacar-arriba' }, '*'); else scrollTo({ top: 0, behavior: 'smooth' }); }
+
+const PASOS = ['Búsqueda', 'Vehículo', 'Extras', 'Tus datos', 'Listo'];
+const pasosHtml = () => `<nav class="pt-pasos" aria-label="Pasos de la reserva">${PASOS.map((p, i) => {
+  const n = i + 1, cls = n < E.paso && E.paso < 5 ? 'hecho' : n === E.paso ? 'actual' : '';
+  return `${i ? '<span class="sep"></span>' : ''}<button type="button" class="${cls}" data-ir="${n}" ${cls === 'hecho' ? '' : 'tabindex="-1"'} ${n === E.paso ? 'aria-current="step"' : ''}><i>${n < E.paso && E.paso < 5 ? '✓' : n}</i><span class="txt">${p}</span></button>`;
+}).join('')}</nav>`;
+
+function ir(paso, { historial = true } = {}) {
+  E.paso = paso;
+  if (historial) history.pushState({ paso }, '', location.pathname + location.search);
+  pintar();
+  arriba();
+}
+addEventListener('popstate', (ev) => { const p = ev.state?.paso || 1; if (E.paso === 5) return; if (p <= 2 || (p === 3 && E.cat) || (p === 4 && E.cat)) ir(p, { historial: false }); });
+app.addEventListener('click', (ev) => { const b = ev.target.closest('.pt-pasos button.hecho'); if (b) ir(Number(b.dataset.ir)); });
+
+function marcarError(err, cont = app) {
+  cont.querySelectorAll('[aria-invalid]').forEach((x) => x.removeAttribute('aria-invalid'));
+  const box = cont.querySelector('.pt-msg');
+  if (err.campo) cont.querySelector(`[name="${err.campo}"]`)?.setAttribute('aria-invalid', 'true');
+  if (box) { box.textContent = err.message; box.hidden = false; box.scrollIntoView({ block: 'nearest' }); }
+}
+
+// ── Paso 1: búsqueda ──
+function pasoBusqueda() {
+  const b = E.busq || { sucursal_retiro_id: INFO.sucursales[0]?.id, sucursal_devolucion_id: INFO.sucursales[0]?.id, retiro_fecha: masDias(hoyIso(), 1), retiro_hora: '10:00', devolucion_fecha: masDias(hoyIso(), 4), devolucion_hora: '10:00', categoria_id: '', codigo_descuento: new URLSearchParams(location.search).get('codigo') || '' };
+  const otra = b.sucursal_devolucion_id && Number(b.sucursal_devolucion_id) !== Number(b.sucursal_retiro_id);
+  const ops = (sel) => INFO.sucursales.map((s) => `<option value="${s.id}"${Number(sel) === s.id ? ' selected' : ''}>${esc(s.nombre)}${s.comuna ? ` · ${esc(s.comuna)}` : ''}</option>`).join('');
+  const horas = (sel) => HORAS.map((h) => `<option${h === sel ? ' selected' : ''}>${h}</option>`).join('');
+  app.innerHTML = `
+    <section class="pt-hero"><h1>Arrienda tu vehículo en ${esc(INFO.nombre)}</h1><p>Elige dónde y cuándo lo retiras. Verás los precios finales al instante.</p></section>
+    <form class="pt-buscador" id="fb" novalidate>
+      <label class="etiqueta c6">Sucursal de retiro<select class="campo" name="sucursal_retiro_id">${ops(b.sucursal_retiro_id)}</select></label>
+      <label class="etiqueta c6" id="lbl-dev" ${otra ? '' : 'hidden'}>Sucursal de devolución<select class="campo" name="sucursal_devolucion_id">${ops(b.sucursal_devolucion_id || b.sucursal_retiro_id)}</select></label>
+      <div class="etiqueta c6" id="otra-box" ${otra ? 'hidden' : ''} style="justify-content:flex-end"><label class="pt-chk"><input type="checkbox" id="otra"> Devolver en otra sucursal</label></div>
+      <div class="etiqueta c6">Retiro<div class="pt-fechahora"><input class="campo" type="date" name="retiro_fecha" value="${b.retiro_fecha}" min="${hoyIso()}" aria-label="Fecha de retiro"><select class="campo" name="retiro_hora" aria-label="Hora de retiro">${horas(b.retiro_hora)}</select></div></div>
+      <div class="etiqueta c6">Devolución<div class="pt-fechahora"><input class="campo" type="date" name="devolucion_fecha" value="${b.devolucion_fecha}" min="${hoyIso()}" aria-label="Fecha de devolución"><select class="campo" name="devolucion_hora" aria-label="Hora de devolución">${horas(b.devolucion_hora)}</select></div></div>
+      <label class="etiqueta c4">Tipo de vehículo (opcional)<select class="campo" name="categoria_id"><option value="">Todos</option>${INFO.categorias.map((c) => `<option value="${c.id}"${Number(b.categoria_id) === c.id ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select></label>
+      <label class="etiqueta c4">Código de descuento<input class="campo" name="codigo_descuento" value="${esc(b.codigo_descuento || '')}" autocomplete="off" style="text-transform:uppercase"></label>
+      <div class="acciones c4"><button class="btn pt-primario grande" type="submit" style="flex:1">Buscar vehículos</button></div>
+      <p class="aviso error c12 pt-msg" hidden></p>
+    </form>
+    <div class="pt-ventajas">
+      <div><i>${IC.tarj}</i><span><b>Precio final</b><small>Sin cargos ocultos: impuestos incluidos.</small></span></div>
+      <div><i>${IC.esc}</i><span><b>Vehículos con GPS y seguro</b><small>Asistencia y deducible informados antes de pagar.</small></span></div>
+      <div><i>${IC.doc}</i><span><b>Retiro más rápido</b><small>Sube tus documentos antes de llegar al mesón.</small></span></div>
+    </div>`;
+  const f = app.querySelector('#fb');
+  f.querySelector('#otra').onchange = (ev) => { f.querySelector('#lbl-dev').hidden = !ev.target.checked; f.querySelector('#otra-box').hidden = ev.target.checked; };
+  f.retiro_fecha.onchange = () => { if (f.devolucion_fecha.value <= f.retiro_fecha.value) f.devolucion_fecha.value = masDias(f.retiro_fecha.value, 3); f.devolucion_fecha.min = f.retiro_fecha.value; };
+  f.onsubmit = async (ev) => {
+    ev.preventDefault();
+    const datos = Object.fromEntries(new FormData(f));
+    if (f.querySelector('#lbl-dev').hidden) datos.sucursal_devolucion_id = datos.sucursal_retiro_id;
+    datos.codigo_descuento = (datos.codigo_descuento || '').trim().toUpperCase();
+    const btn = f.querySelector('button[type="submit"]'); btn.disabled = true; btn.textContent = 'Buscando…';
+    try {
+      const r = await pedir(`empresa/${encodeURIComponent(SLUG)}/buscar`, datos);
+      E.busq = datos; E.resultados = r; E.cat = null; E.extras = {};
+      ir(2);
+    } catch (e) { marcarError(e, f); btn.disabled = false; btn.textContent = 'Buscar vehículos'; }
+  };
+}
+
+const sucNombre = (id) => INFO.sucursales.find((s) => s.id === Number(id))?.nombre || '';
+function resumenBusqueda() {
+  const r = E.resultados;
+  return `<div class="pt-resumen-busq">
+    <div class="dato"><span>Retiro</span><span class="v">${esc(sucNombre(E.busq.sucursal_retiro_id))} · ${esc(fechaLarga(r.inicio))} ${hora(r.inicio)}</span></div>
+    <div class="dato"><span>Devolución</span><span class="v">${esc(sucNombre(E.busq.sucursal_devolucion_id))} · ${esc(fechaLarga(r.fin))} ${hora(r.fin)}</span></div>
+    ${r.dias ? `<div class="dato"><span>Duración</span><span class="v">${r.dias} ${r.dias === 1 ? 'día' : 'días'}</span></div>` : ''}
+    <button type="button" class="btn peq" data-ir-busq>Cambiar búsqueda</button></div>`;
+}
+app.addEventListener('click', (ev) => { if (ev.target.closest('[data-ir-busq]')) ir(1); });
+
+const specs = (c) => `<div class="pt-specs"><span>${IC.pas}${c.pasajeros || '—'} pasajeros</span><span>${IC.mal}${c.maletas ?? '—'} ${c.maletas === 1 ? 'maleta' : 'maletas'}</span><span>${IC.tr}${esc(c.transmision || '')}</span></div>`;
+const kmTxt = (cot) => (cot.km_libre ? 'Kilometraje libre' : `${(cot.km_incluidos || 0).toLocaleString('es-CL')} km incluidos`);
+
+// ── Paso 2: resultados ──
+function pasoResultados() {
+  const r = E.resultados;
+  const avisos = [...new Set(r.resultados.flatMap((x) => x.cotizacion.avisos || []))];
+  app.innerHTML = `${pasosHtml()}${resumenBusqueda()}
+    ${avisos.map((a) => `<p class="aviso info">${esc(a)}</p>`).join('')}
+    <div class="pt-lista">${r.resultados.map((c) => `
+      <article class="pt-cat${c.disponible ? '' : ' sin'}">
+        <div class="pt-ilus">${ilustracion(c.nombre)}</div>
+        <div><h3>${esc(c.nombre)}</h3><div class="ej">${esc(c.ejemplo || '')}</div>${specs(c)}
+          <div class="pt-incl"><span class="chip">${IC.km} ${kmTxt(c.cotizacion)}</span><span class="chip">Garantía ${clp(c.cotizacion.garantia)}</span></div></div>
+        <div class="pt-precio">
+          ${c.disponible ? `<div>${c.cotizacion.descuento ? `<s>${clp(c.cotizacion.subtotal)}</s> ` : ''}<div class="total">${clp(c.cotizacion.total)}</div><small>total ${c.cotizacion.dias} ${c.cotizacion.dias === 1 ? 'día' : 'días'} · ${clp(c.cotizacion.por_dia)} por día</small>
+            ${c.quedan_pocos ? '<div class="pt-pocos">¡Quedan pocos!</div>' : ''}</div>
+            <button type="button" class="btn pt-primario" data-cat="${c.id}">Elegir</button>`
+    : '<small>Sin disponibilidad para estas fechas</small>'}
+        </div>
+      </article>`).join('') || '<p class="tarjeta rc-vacio">No hay vehículos para esta búsqueda. Prueba con otras fechas.</p>'}</div>`;
+  app.querySelectorAll('[data-cat]').forEach((b) => b.onclick = () => {
+    E.cat = r.resultados.find((x) => x.id === Number(b.dataset.cat));
+    E.cot = E.cat.cotizacion;
+    ir(3);
+  });
+}
+
+// ── Resumen lateral (cotización en vivo) ──
+function resumenHtml() {
+  const c = E.cat, cot = E.cot, r = E.resultados;
+  return `<aside class="pt-resumen tarjeta"><div class="bloque">
+    <div class="cab-cat"><div class="pt-ilus">${ilustracion(c.nombre)}</div><div><b>${esc(c.nombre)}</b><div class="peq muted">${esc(c.ejemplo || '')}</div></div></div>
+    <div class="pt-tramo"><i></i><div><b>${esc(sucNombre(E.busq.sucursal_retiro_id))}</b><small>${esc(fechaLarga(r.inicio))} · ${hora(r.inicio)}</small></div>
+      <i class="fin"></i><div><b>${esc(sucNombre(E.busq.sucursal_devolucion_id))}</b><small>${esc(fechaLarga(r.fin))} · ${hora(r.fin)}</small></div></div>
+    <table class="rc-lineas lineas-det" id="lineas">${lineasHtml(cot)}</table>
+    <p class="pt-nota">${kmTxt(cot)}${cot.km_libre ? '' : ` · km adicional ${clp(cot.precio_km_extra)}`}. Garantía de ${clp(cot.garantia)} (preautorización al retirar) · deducible ${clp(cot.deducible)}.</p>
+  </div></aside>`;
+}
+const lineasHtml = (cot) => `${cot.lineas.map((l) => `<tr class="${l.monto < 0 ? 'desc' : ''}"><td>${esc(l.concepto)}<small>${esc(l.detalle || '')}</small></td><td>${clp(l.monto)}</td></tr>`).join('')}
+  <tr class="total"><td>Total</td><td>${clp(cot.total)}</td></tr>`;
+let tCot = null;
+function recotizar() {
+  clearTimeout(tCot);
+  tCot = setTimeout(async () => {
+    try {
+      E.cot = await pedir(`empresa/${encodeURIComponent(SLUG)}/cotizar`, { busqueda: E.busq, categoria_id: E.cat.id, extras: extrasLista(), fecha_nacimiento: E.cliente.fecha_nacimiento || null });
+      const t = document.getElementById('lineas'); if (t) t.innerHTML = lineasHtml(E.cot);
+      document.querySelectorAll('[data-total]').forEach((x) => { x.textContent = clp(E.cot.total); });
+    } catch { /* se reintenta al confirmar */ }
+  }, 220);
+}
+const extrasLista = () => Object.entries(E.extras).filter(([, n]) => n > 0).map(([codigo, cantidad]) => ({ codigo, cantidad }));
+
+// ── Paso 3: extras ──
+const MULTIPLES = new Set(['silla_nino', 'alzador', 'conductor_adicional']);
+function pasoExtras() {
+  const dias = E.cot.dias;
+  app.innerHTML = `${pasosHtml()}
+    <div class="pt-dos"><div class="tarjeta"><div class="bloque"><h2>Agrega lo que necesites</h2>
+      <div class="pt-extras">${INFO.extras.map((x) => {
+        const n = E.extras[x.codigo] || 0;
+        const precio = x.cobro === 'dia' ? Math.min(x.precio * dias, x.tope || Infinity) : x.precio;
+        return `<label class="pt-extra${n ? ' on' : ''}" data-x="${esc(x.codigo)}"><input type="checkbox"${n ? ' checked' : ''}><div><b>${esc(x.nombre)}</b>
+          <small>${x.cobro === 'dia' ? `${clp(x.precio)} por día${x.tope ? ` · tope ${clp(x.tope)}` : ''}` : 'Cargo único'}${x.descripcion ? ` · ${esc(x.descripcion)}` : ''}</small>
+          ${MULTIPLES.has(x.codigo) ? `<span class="pt-cant" ${n ? '' : 'hidden'}><button type="button" data-menos aria-label="Quitar uno">−</button><b>${Math.max(1, n)}</b><button type="button" data-mas aria-label="Agregar uno">+</button></span>` : ''}
+          </div><span class="monto">${clp(precio)}</span></label>`;
+      }).join('') || '<p class="muted">Este rentacar no ofrece extras en línea.</p>'}</div>
+      <div class="rc-entre pt-acciones-pie" style="margin-top:6px"><button type="button" class="btn" data-volver>← Volver</button><button type="button" class="btn pt-primario grande" data-seguir>Continuar · <span data-total>${clp(E.cot.total)}</span></button></div>
+    </div></div>${resumenHtml()}</div>`;
+  app.querySelectorAll('.pt-extra').forEach((el) => {
+    const cod = el.dataset.x, chk = el.querySelector('input'), cant = el.querySelector('.pt-cant');
+    chk.onchange = () => { E.extras[cod] = chk.checked ? Math.max(1, E.extras[cod] || 1) : 0; el.classList.toggle('on', chk.checked); if (cant) cant.hidden = !chk.checked; recotizar(); };
+    cant?.addEventListener('click', (ev) => {
+      ev.preventDefault();
+      const d = ev.target.closest('[data-mas]') ? 1 : ev.target.closest('[data-menos]') ? -1 : 0;
+      if (!d) return;
+      E.extras[cod] = Math.min(5, Math.max(1, (E.extras[cod] || 1) + d));
+      cant.querySelector('b').textContent = E.extras[cod];
+      recotizar();
+    });
+  });
+  app.querySelector('[data-volver]').onclick = () => ir(2);
+  app.querySelector('[data-seguir]').onclick = () => ir(4);
+}
+
+// ── Paso 4: datos del cliente y pago ──
+function pasoDatos() {
+  const c = E.cliente, ext = c.documento_tipo !== 'rut';
+  const modo = INFO.portal_pago;
+  if (!E.pago) E.pago = modo === 'mostrador' ? 'mostrador' : 'online';
+  if (!E.proveedor) E.proveedor = INFO.proveedores[0];
+  const PROV = { webpay: 'Webpay (tarjetas de crédito, débito y prepago)', mercadopago: 'Mercado Pago' };
+  const v = (k) => esc(c[k] || '');
+  app.innerHTML = `${pasosHtml()}
+    <div class="pt-dos"><form class="tarjeta" id="fd" novalidate><div class="bloque">
+      <h2>Datos del conductor principal</h2>
+      <div class="pt-seg" role="group" aria-label="Documento"><button type="button" data-doc="rut" aria-pressed="${!ext}">Tengo RUT chileno</button><button type="button" data-doc="pasaporte" aria-pressed="${c.documento_tipo === 'pasaporte'}">Pasaporte</button><button type="button" data-doc="dni" aria-pressed="${c.documento_tipo === 'dni'}">DNI (Argentina)</button></div>
+      <div class="pt-form">
+        <label class="etiqueta">${ext ? (c.documento_tipo === 'dni' ? 'Número de DNI' : 'Número de pasaporte') : 'RUT'}<input class="campo" name="documento" value="${v('documento')}" ${ext ? '' : 'placeholder="12.345.678-9" inputmode="text"'} autocomplete="off" required><span class="pt-err" id="err-doc" hidden></span></label>
+        ${ext ? `<label class="etiqueta">Nacionalidad<input class="campo" name="nacionalidad" value="${v('nacionalidad')}" autocomplete="country-name"></label>` : '<span></span>'}
+        <label class="etiqueta">Nombre<input class="campo" name="nombre" value="${v('nombre')}" autocomplete="given-name" required></label>
+        <label class="etiqueta">Apellidos<input class="campo" name="apellidos" value="${v('apellidos')}" autocomplete="family-name" required></label>
+        <label class="etiqueta">Correo<input class="campo" type="email" name="correo" value="${v('correo')}" autocomplete="email" required></label>
+        <label class="etiqueta">Teléfono (WhatsApp)<input class="campo" type="tel" name="telefono" value="${v('telefono') || '+56 9 '}" autocomplete="tel" required></label>
+        <label class="etiqueta">Fecha de nacimiento<input class="campo" type="date" name="fecha_nacimiento" value="${v('fecha_nacimiento')}" max="${masDias(hoyIso(), -365 * 18)}" required></label>
+        <span></span>
+        <label class="etiqueta">N° de licencia de conducir<input class="campo" name="licencia_numero" value="${v('licencia_numero')}" autocomplete="off"></label>
+        <label class="etiqueta">Clase de licencia<select class="campo" name="licencia_clase">${['', 'B', 'A1', 'A2', 'A3', 'A4', 'C', 'Internacional', ...(ext ? ['B1', 'Otra'] : [])].map((x) => `<option value="${x}"${c.licencia_clase === x ? ' selected' : ''}>${x || 'Elegir…'}</option>`).join('')}</select></label>
+        <label class="etiqueta">Vencimiento de la licencia<input class="campo" type="date" name="licencia_vence" value="${v('licencia_vence')}" min="${hoyIso()}"></label>
+      </div>
+      <h2 style="margin-top:8px">Pago</h2>
+      <div class="pt-pagos">
+        ${modo !== 'mostrador' ? `<label class="pt-pago${E.pago === 'online' ? ' on' : ''}"><input type="radio" name="pago" value="online"${E.pago === 'online' ? ' checked' : ''}><div><b>Pagar ahora en línea</b><small>Tu reserva queda confirmada al instante.</small>
+          ${INFO.proveedores.length > 1 ? `<span class="pt-prov">${INFO.proveedores.map((p) => `<label class="pt-chk"><input type="radio" name="proveedor" value="${p}"${E.proveedor === p ? ' checked' : ''}> ${esc(PROV[p] || p)}</label>`).join('')}</span>` : `<small>${esc(PROV[INFO.proveedores[0]] || '')}</small>`}
+          ${INFO.simulado ? '<small class="chip sim" style="align-self:flex-start;margin-top:4px">Modo de prueba: el pago es simulado</small>' : ''}</div><span class="monto" data-total>${clp(E.cot.total)}</span></label>` : ''}
+        ${modo !== 'obligatorio' ? `<label class="pt-pago${E.pago === 'mostrador' ? ' on' : ''}"><input type="radio" name="pago" value="mostrador"${E.pago === 'mostrador' ? ' checked' : ''}><div><b>Pagar en el mesón al retirar</b><small>Te confirmaremos la reserva; paga con tarjeta al llegar.</small></div></label>` : ''}
+      </div>
+      <label class="pt-chk"><input type="checkbox" name="acepta"> Acepto las condiciones del arriendo, la garantía de ${clp(E.cot.garantia)} y el tratamiento de mis datos para esta reserva.</label>
+      <p class="aviso error pt-msg" hidden></p>
+      <div class="rc-entre pt-acciones-pie"><button type="button" class="btn" data-volver>← Volver</button><button type="submit" class="btn pt-primario grande" id="btn-conf">${E.pago === 'online' ? 'Pagar' : 'Reservar'} · <span data-total>${clp(E.cot.total)}</span></button></div>
+    </div></form>${resumenHtml()}</div>`;
+  const f = app.querySelector('#fd');
+  const guardar = () => { Object.assign(E.cliente, Object.fromEntries([...new FormData(f)].filter(([k]) => !['pago', 'proveedor', 'acepta'].includes(k)))); };
+  f.querySelectorAll('[data-doc]').forEach((b) => b.onclick = () => { guardar(); E.cliente.documento_tipo = b.dataset.doc; pasoDatos(); });
+  f.addEventListener('change', (ev) => {
+    if (ev.target.name === 'pago') { E.pago = ev.target.value; f.querySelectorAll('.pt-pago').forEach((x) => x.classList.toggle('on', x.querySelector('input[name="pago"]').checked)); f.querySelector('#btn-conf').firstChild.textContent = E.pago === 'online' ? 'Pagar · ' : 'Reservar · '; }
+    if (ev.target.name === 'proveedor') E.proveedor = ev.target.value;
+    if (ev.target.name === 'fecha_nacimiento') { E.cliente.fecha_nacimiento = ev.target.value; recotizar(); }
+  });
+  const docInp = f.documento, errDoc = f.querySelector('#err-doc');
+  docInp.addEventListener('blur', () => {
+    if (E.cliente.documento_tipo !== 'rut' || !docInp.value.trim()) return;
+    const okRut = validarRut(docInp.value);
+    if (okRut) docInp.value = fmtRut(docInp.value);
+    docInp.toggleAttribute('aria-invalid', !okRut);
+    errDoc.hidden = okRut; errDoc.textContent = okRut ? '' : 'El RUT no es válido (revisa el dígito verificador).';
+  });
+  app.querySelector('[data-volver]').onclick = () => { guardar(); ir(3); };
+  f.onsubmit = async (ev) => {
+    ev.preventDefault();
+    guardar();
+    if (E.cliente.documento_tipo === 'rut' && !validarRut(E.cliente.documento)) return marcarError({ message: 'El RUT no es válido. Revisa el dígito verificador.', campo: 'documento' }, f);
+    if (!f.acepta.checked) return marcarError({ message: 'Debes aceptar las condiciones del arriendo para continuar.', campo: 'acepta' }, f);
+    const btn = f.querySelector('#btn-conf'); btn.disabled = true;
+    try {
+      const r = await pedir(`empresa/${encodeURIComponent(SLUG)}/reservar`, { busqueda: E.busq, categoria_id: E.cat.id, extras: extrasLista(), cliente: E.cliente, pago: E.pago, proveedor: E.proveedor, acepta: true });
+      E.final = r;
+      ir(5);
+    } catch (e) {
+      btn.disabled = false;
+      marcarError(e, f);
+      if (e.estado === 409) setTimeout(async () => { try { E.resultados = await pedir(`empresa/${encodeURIComponent(SLUG)}/buscar`, E.busq); } catch { /* nada */ } }, 0);
+    }
+  };
+}
+
+// ── Paso 5: resultado (y redirección al pago si corresponde) ──
+function pasoFinal() {
+  const r = E.final;
+  const urlPortal = r.url_portal;
+  const confirmada = r.estado === 'confirmada';
+  if (r.redirigir?.url) {
+    const red = r.redirigir;
+    app.innerHTML = `<div class="tarjeta pt-ok"><div class="ic pend">${IC.reloj}</div><h2>Te llevamos al pago</h2><p class="muted">Reserva <b class="mono">${esc(r.folio)}</b> · ${clp(r.total)}</p>
+      <form id="fpago" method="${(red.metodo || 'GET').toUpperCase() === 'POST' ? 'post' : 'get'}" action="${esc(red.url)}" target="_top">${Object.entries(red.campos || {}).map(([k, v]) => `<input type="hidden" name="${esc(k)}" value="${esc(v)}">`).join('')}
+      <button class="btn pt-primario grande" type="submit">Continuar al pago</button></form>
+      <a class="peq" href="${urlPortal}" target="_top">Ver mi reserva</a></div>`;
+    if (!EMBED) setTimeout(() => app.querySelector('#fpago').submit(), 600);
+    return;
+  }
+  app.innerHTML = `${pasosHtml()}<div class="tarjeta pt-ok">
+    <div class="ic ${confirmada ? '' : 'pend'}">${confirmada ? IC.ok : IC.reloj}</div>
+    <h2>${confirmada ? '¡Reserva confirmada!' : 'Reserva recibida'}</h2>
+    <p class="folio">Folio <b class="mono">${esc(r.folio)}</b> · total <b class="monto">${clp(r.total)}</b></p>
+    <p class="muted" style="max-width:520px">${esc(r.mensaje)}</p>
+    <p class="muted peq" style="max-width:520px">Guarda este enlace: desde ahí puedes ver tu reserva, subir tu cédula o pasaporte y licencia antes de retirar, y descargar tu contrato.</p>
+    <a class="btn pt-primario grande" href="${urlPortal}" target="_top">Ver mi reserva y subir documentos</a>
+    <button type="button" class="btn peq" id="nueva">Hacer otra reserva</button></div>`;
+  app.querySelector('#nueva').onclick = () => { Object.assign(E, { cat: null, extras: {}, final: null, pago: null }); ir(1); };
+}
+
+function pintar() {
+  if (E.paso >= 2 && !E.resultados) E.paso = 1;
+  if (E.paso >= 3 && E.paso < 5 && !E.cat) E.paso = 2;
+  ({ 1: pasoBusqueda, 2: pasoResultados, 3: pasoExtras, 4: pasoDatos, 5: pasoFinal })[E.paso]();
+  avisarAltura();
+}
+
+try {
+  INFO = await pedir(`empresa/${encodeURIComponent(SLUG)}`);
+  aplicarMarca();
+  history.replaceState({ paso: 1 }, '', location.pathname + location.search);
+  pintar();
+} catch (e) {
+  app.innerHTML = `<div class="tarjeta pt-ok"><h2>No encontramos este rentacar</h2><p class="muted">${esc(e.message)}</p></div>`;
+}
+</script>
+</body>
+</html>

@@ -146,8 +146,10 @@ export function crearCalendario(raiz, { alAbrirNueva, alCambiar }) {
     arr.tip.innerHTML = `Soltar en <b>${esc(v ? patente(v.patente) : '')}</b> · ${rango} · ${conf ? `${esc(conf.txt)} ✕` : 'disponible ✓'}${conf ? '' : otraCat ? ` · otra categoría (${esc(v.categoria)}), se recotiza` : ' · misma tarifa'}`;
     if (arr.tip.parentElement !== pista) pista.appendChild(arr.tip);
     const w = pista.getBoundingClientRect().width, x = (b / cols.length) * w + 8, tw = arr.tip.offsetWidth;
-    arr.tip.style.left = `${x + tw > w ? Math.max(0, (a / cols.length) * w - tw - 8) : x}px`;
-    arr.tip.style.top = '6px';
+    const xi = (a / cols.length) * w;
+    if (x + tw <= w) { arr.tip.style.left = `${x}px`; arr.tip.style.top = '6px'; }
+    else if (xi - 8 >= tw) { arr.tip.style.left = `${xi - tw - 8}px`; arr.tip.style.top = '6px'; }
+    else { arr.tip.style.left = `${Math.max(0, Math.min(xi, w - tw))}px`; arr.tip.style.top = 'calc(100% - 4px)'; } // sin espacio a los lados: bajo la barra
   });
   const terminar = async (e, cancelado = false) => {
     if (!arr || (e && e.pointerId !== arr.id)) return;

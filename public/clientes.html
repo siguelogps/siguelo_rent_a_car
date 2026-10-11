@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Clientes</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/reservas.css">
+</head>
+<body>
+<main>
+  <div class="pagina-cab">
+    <div><h1>Clientes</h1><p>Personas y empresas que arriendan, con sus documentos, conductores adicionales e historial.</p></div>
+    <div class="acciones"><button type="button" class="btn primario" id="nuevo" hidden>+ Nuevo cliente</button></div>
+  </div>
+  <div class="tarjeta">
+    <div class="bloque" style="padding-bottom:12px">
+      <div class="rc-entre" style="flex-wrap:wrap">
+        <div class="filtros-fila" id="filtros"></div>
+        <input class="campo" id="q" placeholder="Buscar por nombre, RUT, pasaporte, correo o teléfono" style="flex:0 1 380px;width:100%" autocomplete="off" aria-label="Buscar clientes">
+      </div>
+    </div>
+    <div class="tabla-env"><table class="tabla" id="tabla"><tbody><tr><td class="rc-cargando">Cargando…</td></tr></tbody></table></div>
+  </div>
+</main>
+<script type="module">
+import { iniciarPagina, api, esc, fecha, puede, toastError } from '/comun.js';
+import { docEtiqueta, estadoLicencia } from '/js/reservas-util.js';
+import { abrirFormCliente } from '/js/reservas-clientes.js';
+
+await iniciarPagina({ activo: 'clientes', titulo: 'Clientes' });
+const $ = (i) => document.getElementById(i);
+const url = new URLSearchParams(location.search);
+const st = { filtro: url.get('filtro') || '', q: url.get('q') || '' };
+$('q').value = st.q;
+$('nuevo').hidden = !puede('clientes', 'editar');
+$('nuevo').onclick = async () => { const c = await abrirFormCliente(); if (c) location.href = `/clientes/${c.id}`; };
+
+async function cargar() {
+  const qs = new URLSearchParams({ ...(st.q ? { q: st.q } : {}), ...(st.filtro === 'lista_negra' ? { lista_negra: '1' } : st.filtro === 'licencia' ? { licencia_vencida: '1' } : st.filtro === 'empresa' ? { tipo: 'empresa' } : {}) });
+  try {
+    const { clientes, totales } = await api(`clientes?${qs}`);
+    $('filtros').innerHTML = [['', 'Todos', totales.total], ['lista_negra', 'Lista negra', totales.lista_negra], ['licencia', 'Licencia vencida o sin licencia', totales.licencia_vencida], ['empresa', 'Empresas', null]]
+      .map(([k, t, n]) => `<button type="button" class="filtro" data-f="${k}" aria-pressed="${st.filtro === k}">${t}${n != null ? ` <span class="n">${n}</span>` : ''}</button>`).join('');
+    $('tabla').innerHTML = `<thead><tr><th>Cliente</th><th>Documento</th><th>Contacto</th><th>Licencia</th><th>Arriendos</th><th>Último arriendo</th><th></th></tr></thead>
+      <tbody>${clientes.map((c) => {
+        const lic = c.tipo === 'empresa' ? null : estadoLicencia(c.licencia_vence);
+        return `<tr class="clic" data-id="${c.id}"><td><b>${esc(`${c.nombre} ${c.apellidos || ''}`)}</b><div class="peq muted">${c.tipo === 'empresa' ? 'Empresa' : esc(c.nacionalidad || '')}${c.ciudad ? ` · ${esc(c.ciudad)}` : ''}</div></td>
+          <td class="mono">${docEtiqueta(c.documento_tipo, c.documento)}</td>
+          <td>${esc(c.telefono || '')}<div class="peq muted">${esc(c.correo || '')}</div></td>
+          <td>${lic ? `<span class="rc-venc ${lic.clase === 'ok' ? 'ok' : lic.clase === 'error' ? 'vencido' : 'pronto'}"><span class="f">${c.licencia_vence ? fecha(c.licencia_vence) : '—'}</span><small>${c.licencia_clase ? `clase ${esc(c.licencia_clase)}` : ''}${lic.mal ? ` · ${lic.clase === 'error' ? 'vencida' : 'sin registrar'}` : ''}</small></span>` : '<span class="muted">—</span>'}</td>
+          <td class="mono">${c.arriendos}</td><td class="mono">${c.ultimo_arriendo ? fecha(c.ultimo_arriendo) : '—'}</td>
+          <td>${c.lista_negra ? `<span class="chip error" title="${esc(c.lista_negra_motivo || '')}">Lista negra</span>` : ''}</td></tr>`;
+      }).join('') || '<tr><td colspan="7" class="vacio">No hay clientes con estos filtros.</td></tr>'}</tbody>`;
+  } catch (e) { toastError(e); }
+}
+$('filtros').onclick = (e) => { const b = e.target.closest('[data-f]'); if (!b) return; st.filtro = b.dataset.f; cargar(); };
+let t = null;
+$('q').oninput = () => { clearTimeout(t); t = setTimeout(() => { st.q = $('q').value.trim(); cargar(); }, 250); };
+$('tabla').onclick = (e) => { const tr = e.target.closest('tr[data-id]'); if (tr) location.href = `/clientes/${tr.dataset.id}`; };
+cargar();
+</script>
+</body>
+</html>

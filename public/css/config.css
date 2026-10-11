@@ -112,3 +112,4 @@
 .cf-codigo-pre { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .cf-codigo-pre select { min-width: 260px; }
 .cf-colores-portal { display: flex; flex-wrap: wrap; gap: 14px 28px; }
+.cf-indicadores { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }

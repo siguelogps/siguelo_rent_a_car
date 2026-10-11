@@ -12,7 +12,7 @@ export async function iniciarTareas() {
   // Los módulos se registran al importarse (src/api/*.js ya se cargaron en crearApp)
   for (const t of tareas) {
     const correr = async () => { try { await t.fn(); } catch (e) { console.error(`[tarea ${t.nombre}]`, e.message); } };
-    setTimeout(correr, 15e3);
+    setTimeout(correr, t.nombre === 'indicadores' ? 3e3 : 15e3);
     setInterval(correr, t.cadaMs).unref();
   }
   if (tareas.length) console.log(`Tareas programadas: ${tareas.map((t) => t.nombre).join(', ')}`);

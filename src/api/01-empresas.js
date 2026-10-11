@@ -34,7 +34,7 @@ export async function crearEmpresa(b) {
       `INSERT INTO empresas (nombre, slug, rut, razon_social, giro, direccion, comuna, ciudad, telefono, correo, ajustes)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) RETURNING *`,
       [b.nombre, slug, b.rut || null, b.razon_social || b.nombre, b.giro || 'Arriendo de vehículos', b.direccion || null, b.comuna || null, b.ciudad || null, b.telefono || null, b.correo || null,
-        JSON.stringify({ tolerancia_min: 59, precio_litro: 1390, cargo_servicio_combustible: 5000, lavado: 15000, triangulo: 12000, garantia_dias_retencion: 30, valor_uf: 39512, edad_minima: 21, hora_corte_atraso: true, ...(b.ajustes || {}) })]);
+        JSON.stringify({ tolerancia_min: 59, precio_litro: 1390, cargo_servicio_combustible: 5000, lavado: 15000, triangulo: 12000, garantia_dias_retencion: 30, edad_minima: 21, hora_corte_atraso: true, ...(b.ajustes || {}) })]);
     const [s] = await tx.query('INSERT INTO sucursales (empresa_id, nombre, direccion, comuna, ciudad) VALUES ($1,$2,$3,$4,$5) RETURNING id', [e.id, b.sucursal || 'Casa matriz', b.direccion || null, b.comuna || null, b.ciudad || null]);
     await tx.query('INSERT INTO usuarios (empresa_id, nombre, correo, clave_hash, rol, sucursal_id) VALUES ($1,$2,$3,$4,$5,$6)',
       [e.id, b.admin_nombre || 'Administrador', String(b.admin_correo).toLowerCase(), hashClave(b.admin_clave), 'administrador', s.id]);

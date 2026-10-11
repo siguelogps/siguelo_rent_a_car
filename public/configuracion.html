@@ -88,13 +88,34 @@ async function empresa() {
             ${ajuste('tolerancia_min', 'Tolerancia de atraso', 'min', 'Minutos de gracia antes de cobrar un día adicional')}${ajuste('edad_minima', 'Edad mínima del conductor', 'años')}
             ${ajuste('precio_litro', 'Precio litro de combustible', '$')}${ajuste('cargo_servicio_combustible', 'Cargo servicio de combustible', '$')}
             ${ajuste('lavado', 'Lavado especial', '$')}${ajuste('triangulo', 'Triángulo / accesorio faltante', '$')}
-            ${ajuste('garantia_dias_retencion', 'Días de retención de garantía', 'días')}${ajuste('valor_uf', 'Valor UF', '$')}
+            ${ajuste('garantia_dias_retencion', 'Días de retención de garantía', 'días')}
             <label class="etiqueta ancho">Pago en el portal de reservas<select class="campo" name="portal_pago"${dis}>${[['obligatorio', 'Obligatorio: se paga en línea al reservar'], ['opcional', 'Opcional: el cliente elige pagar en línea o en el mesón'], ['mostrador', 'Mesón: no se cobra en línea']].map(([v, t]) => `<option value="${v}"${(aj.portal_pago || 'opcional') === v ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
           </div>
           ${ed ? '<div class="cf-pie"><button class="btn primario" type="submit">Guardar ajustes</button></div>' : ''}
         </form>
+        <div class="tarjeta bloque" id="indicadores">
+          <h2>Indicadores económicos ${ed ? '<button class="btn peq" type="button" id="ind-act">Actualizar ahora</button>' : ''}</h2>
+          <p class="ayuda">Se leen solos cada día desde fuentes oficiales (CMF y Banco Central de Chile). No se ingresan a mano.</p>
+          <div class="cf-indicadores" id="ind-lista"><p class="muted">Cargando…</p></div>
+        </div>
       </div>
     </div>`;
+  const pintarInd = (ind) => {
+    panel.querySelector('#ind-lista').innerHTML = ['uf', 'dolar', 'utm'].map((k) => {
+      const i = ind[k];
+      const nombre = { uf: 'UF', dolar: 'Dólar observado', utm: 'UTM' }[k];
+      if (!i) return `<div class="kpi"><span>${nombre}</span><b class="muted" style="font-size:16px">Sin leer todavía</b><small>se reintenta automáticamente</small></div>`;
+      const v = Number(i.valor).toLocaleString('es-CL', { minimumFractionDigits: k === 'utm' ? 0 : 2, maximumFractionDigits: 2 });
+      return `<div class="kpi"><span>${nombre}</span><b class="mono" style="font-size:22px">$${v}</b><small${i.antiguo ? ' class="mal"' : ''}>${k === 'utm' ? `mes de ${fecha(i.fecha).slice(3)}` : fecha(i.fecha)}${i.antiguo ? ' · valor antiguo' : ''} · ${esc(i.fuente)}</small></div>`;
+    }).join('');
+  };
+  api('indicadores').then(pintarInd).catch(() => {});
+  panel.querySelector('#ind-act')?.addEventListener('click', async (ev) => {
+    ev.target.disabled = true;
+    try { const r = await api('indicadores/actualizar', { body: {} }); pintarInd(r.indicadores); const err = Object.values(r.resultado).filter((x) => x.error); toast(err.length ? `No se pudieron leer algunos indicadores: ${err[0].error}` : 'Indicadores actualizados', err.length ? 'error' : 'ok'); }
+    catch (e2) { toastError(e2); }
+    ev.target.disabled = false;
+  });
   const fd = panel.querySelector('#f-datos');
   fd.onsubmit = async (ev) => {
     ev.preventDefault();

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Verificación de contrato</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/reservas.css">
+</head>
+<body>
+<div class="rs-publico">
+  <header class="rs-pub-cab" id="cab"><img src="/img/logo-pin.png" alt="" style="height:30px"><div><b>Verificación de contrato</b><small>Síguelo Rentacar</small></div></header>
+  <div class="rs-pub-cuerpo" style="width:min(680px,100%)" id="cuerpo"><p class="rc-cargando">Verificando…</p></div>
+  <footer class="rs-pub-pie"><span>Verificación de documentos con</span><img src="/img/logo-siguelo.png" alt="Síguelo GPS"><span>Rentacar</span></footer>
+</div>
+<script type="module">
+import { esc, fecha, hora } from '/comun.js';
+const codigo = decodeURIComponent(location.pathname.split('/').pop() || '');
+const cuerpo = document.getElementById('cuerpo'), cab = document.getElementById('cab');
+const fh = (v) => (v ? `${fecha(v)} ${hora(v)}` : '—');
+const buscador = (txt = '') => `<form class="tarjeta bloque" id="buscar"><h2>Verificar otro código</h2><div class="rc-fila"><input class="campo mono" name="c" value="${esc(txt)}" placeholder="XXXX-XXXX-XXXX" style="flex:1;text-transform:uppercase" aria-label="Código de verificación"><button class="btn primario">Verificar</button></div></form>`;
+
+try {
+  const r = await fetch(`/api/verificar/${encodeURIComponent(codigo)}`);
+  const d = await r.json();
+  if (!r.ok) throw new Error(d.error || 'Código no encontrado');
+  const e = d.empresa;
+  cab.innerHTML = `${e.logo ? `<img class="logo-e" src="${esc(e.logo)}" alt="${esc(e.nombre)}">` : `<span class="marca-e" style="background:#0F5F58">${esc(e.nombre.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase())}</span>`}<div><b>${esc(e.nombre)}</b><small>Verificación de contrato</small></div>`;
+  const EST = {
+    vigente: ['', '✓', 'Contrato válido y firmado', 'El documento existe en los registros de la empresa y su firma fue registrada electrónicamente.'],
+    anulado: ['rs-mal-grande', '✕', 'Contrato anulado', `Este contrato fue anulado el ${fh(d.anulado_en)}${d.anulado_motivo ? `: ${esc(d.anulado_motivo)}` : ''}. No tiene validez.`],
+    pendiente_firma: ['rs-pend-grande', '…', 'Contrato pendiente de firma', 'El contrato fue emitido pero aún no ha sido firmado por el arrendatario.']
+  }[d.estado];
+  cuerpo.innerHTML = `<div class="tarjeta bloque rs-verif">
+      <div class="rs-ok-grande ${EST[0]}">${EST[1]}</div>
+      <h1>${EST[2]}</h1>
+      <p class="muted">${EST[3]}</p>
+      <div class="rc-fila" style="justify-content:center">${d.estado === 'vigente' ? '<span class="chip ok">Vigente</span>' : d.estado === 'anulado' ? '<span class="chip error">Anulado</span>' : '<span class="chip aviso">Pendiente de firma</span>'}<span class="chip">Código <span class="mono">${esc(d.codigo)}</span></span></div>
+      <div class="rc-sep" style="width:100%"></div>
+      <dl class="rs-verif-datos">
+        <div><dt>Contrato</dt><dd class="mono">${esc(d.folio)}</dd></div>
+        <div><dt>Arrendador</dt><dd>${esc(e.razon_social || e.nombre)}${e.rut ? `<br><span class="peq muted mono">RUT ${esc(e.rut)}</span>` : ''}</dd></div>
+        <div><dt>Vehículo</dt><dd>${d.patente ? `<span class="pat">${esc(d.patente)}</span> ` : ''}${esc(d.vehiculo || '')}</dd></div>
+        <div><dt>Período de arriendo</dt><dd class="mono">${fh(d.inicio)}<br>${fh(d.fin)}</dd></div>
+        <div><dt>Firmante</dt><dd>${esc(d.firmante || '—')}${d.firmante_documento ? `<br><span class="peq muted mono">${esc(d.firmante_documento)}</span>` : ''}</dd></div>
+        <div><dt>Firmado el</dt><dd class="mono">${fh(d.firmado_en)}</dd></div>
+        <div class="ancho"><dt>Huella del PDF firmado (SHA-256)</dt><dd class="rs-hash">${esc(d.hash_sha256 || '—')}</dd></div>
+      </dl>
+      <p class="peq muted" style="text-align:left">Para comprobar que una copia no fue alterada, calcula la huella SHA-256 del PDF y compárala con la de arriba.</p>
+    </div>${buscador()}`;
+  document.title = `Contrato ${d.folio} · ${EST[2]}`;
+} catch (err) {
+  cuerpo.innerHTML = `<div class="tarjeta bloque rs-verif"><div class="rs-ok-grande rs-mal-grande">✕</div><h1>Código no encontrado</h1><p class="muted">${esc(err.message)}. Revisa que el código esté bien escrito.</p></div>${buscador(codigo)}`;
+}
+const f = document.getElementById('buscar');
+f.onsubmit = (e) => { e.preventDefault(); const c = f.c.value.trim().toUpperCase(); if (c) location.href = `/verificar/${encodeURIComponent(c)}`; };
+</script>
+</body>
+</html>

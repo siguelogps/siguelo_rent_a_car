@@ -91,8 +91,9 @@ function arriba() { if (EMBED && parent !== window) parent.postMessage({ tipo: '
 
 const PASOS = ['Búsqueda', 'Vehículo', 'Extras', 'Tus datos', 'Listo'];
 const pasosHtml = () => `<nav class="pt-pasos" aria-label="Pasos de la reserva">${PASOS.map((p, i) => {
-  const n = i + 1, cls = n < E.paso && E.paso < 5 ? 'hecho' : n === E.paso ? 'actual' : '';
-  return `${i ? '<span class="sep"></span>' : ''}<button type="button" class="${cls}" data-ir="${n}" ${cls === 'hecho' ? '' : 'tabindex="-1"'} ${n === E.paso ? 'aria-current="step"' : ''}><i>${n < E.paso && E.paso < 5 ? '✓' : n}</i><span class="txt">${p}</span></button>`;
+  const n = i + 1, cls = n < E.paso ? 'hecho' : n === E.paso ? 'actual' : '';
+  const clic = cls === 'hecho' && E.paso < 5;
+  return `${i ? '<span class="sep"></span>' : ''}<button type="button" class="${cls}" data-ir="${n}" ${clic ? '' : 'tabindex="-1" data-fijo'} ${n === E.paso ? 'aria-current="step"' : ''}><i>${n < E.paso ? '✓' : n}</i><span class="txt">${p}</span></button>`;
 }).join('')}</nav>`;
 
 function ir(paso, { historial = true } = {}) {
@@ -102,7 +103,7 @@ function ir(paso, { historial = true } = {}) {
   arriba();
 }
 addEventListener('popstate', (ev) => { const p = ev.state?.paso || 1; if (E.paso === 5) return; if (p <= 2 || (p === 3 && E.cat) || (p === 4 && E.cat)) ir(p, { historial: false }); });
-app.addEventListener('click', (ev) => { const b = ev.target.closest('.pt-pasos button.hecho'); if (b) ir(Number(b.dataset.ir)); });
+app.addEventListener('click', (ev) => { const b = ev.target.closest('.pt-pasos button.hecho:not([data-fijo])'); if (b) ir(Number(b.dataset.ir)); });
 
 function marcarError(err, cont = app) {
   cont.querySelectorAll('[aria-invalid]').forEach((x) => x.removeAttribute('aria-invalid'));
@@ -123,8 +124,8 @@ function pasoBusqueda() {
       <label class="etiqueta c6">Sucursal de retiro<select class="campo" name="sucursal_retiro_id">${ops(b.sucursal_retiro_id)}</select></label>
       <label class="etiqueta c6" id="lbl-dev" ${otra ? '' : 'hidden'}>Sucursal de devolución<select class="campo" name="sucursal_devolucion_id">${ops(b.sucursal_devolucion_id || b.sucursal_retiro_id)}</select></label>
       <div class="etiqueta c6" id="otra-box" ${otra ? 'hidden' : ''} style="justify-content:flex-end"><label class="pt-chk"><input type="checkbox" id="otra"> Devolver en otra sucursal</label></div>
-      <div class="etiqueta c6">Retiro<div class="pt-fechahora"><input class="campo" type="date" name="retiro_fecha" value="${b.retiro_fecha}" min="${hoyIso()}" aria-label="Fecha de retiro"><select class="campo" name="retiro_hora" aria-label="Hora de retiro">${horas(b.retiro_hora)}</select></div></div>
-      <div class="etiqueta c6">Devolución<div class="pt-fechahora"><input class="campo" type="date" name="devolucion_fecha" value="${b.devolucion_fecha}" min="${hoyIso()}" aria-label="Fecha de devolución"><select class="campo" name="devolucion_hora" aria-label="Hora de devolución">${horas(b.devolucion_hora)}</select></div></div>
+      <div class="etiqueta c6"><span>Retiro<span class="pt-fh" data-fh="retiro_fecha"></span></span><div class="pt-fechahora"><input class="campo" type="date" name="retiro_fecha" value="${b.retiro_fecha}" min="${hoyIso()}" aria-label="Fecha de retiro"><select class="campo" name="retiro_hora" aria-label="Hora de retiro">${horas(b.retiro_hora)}</select></div></div>
+      <div class="etiqueta c6"><span>Devolución<span class="pt-fh" data-fh="devolucion_fecha"></span></span><div class="pt-fechahora"><input class="campo" type="date" name="devolucion_fecha" value="${b.devolucion_fecha}" min="${hoyIso()}" aria-label="Fecha de devolución"><select class="campo" name="devolucion_hora" aria-label="Hora de devolución">${horas(b.devolucion_hora)}</select></div></div>
       <label class="etiqueta c4">Tipo de vehículo (opcional)<select class="campo" name="categoria_id"><option value="">Todos</option>${INFO.categorias.map((c) => `<option value="${c.id}"${Number(b.categoria_id) === c.id ? ' selected' : ''}>${esc(c.nombre)}</option>`).join('')}</select></label>
       <label class="etiqueta c4">Código de descuento<input class="campo" name="codigo_descuento" value="${esc(b.codigo_descuento || '')}" autocomplete="off" style="text-transform:uppercase"></label>
       <div class="acciones c4"><button class="btn pt-primario grande" type="submit" style="flex:1">Buscar vehículos</button></div>
@@ -137,7 +138,7 @@ function pasoBusqueda() {
     </div>`;
   const f = app.querySelector('#fb');
   f.querySelector('#otra').onchange = (ev) => { f.querySelector('#lbl-dev').hidden = !ev.target.checked; f.querySelector('#otra-box').hidden = ev.target.checked; };
-  f.retiro_fecha.onchange = () => { if (f.devolucion_fecha.value <= f.retiro_fecha.value) f.devolucion_fecha.value = masDias(f.retiro_fecha.value, 3); f.devolucion_fecha.min = f.retiro_fecha.value; };
+  f.retiro_fecha.onchange = () => { if (f.devolucion_fecha.value <= f.retiro_fecha.value) { f.devolucion_fecha.value = masDias(f.retiro_fecha.value, 3); f.devolucion_fecha.dispatchEvent(new Event('change')); } f.devolucion_fecha.min = f.retiro_fecha.value; };
   f.onsubmit = async (ev) => {
     ev.preventDefault();
     const datos = Object.fromEntries(new FormData(f));
@@ -268,11 +269,11 @@ function pasoDatos() {
         <label class="etiqueta">Apellidos<input class="campo" name="apellidos" value="${v('apellidos')}" autocomplete="family-name" required></label>
         <label class="etiqueta">Correo<input class="campo" type="email" name="correo" value="${v('correo')}" autocomplete="email" required></label>
         <label class="etiqueta">Teléfono (WhatsApp)<input class="campo" type="tel" name="telefono" value="${v('telefono') || '+56 9 '}" autocomplete="tel" required></label>
-        <label class="etiqueta">Fecha de nacimiento<input class="campo" type="date" name="fecha_nacimiento" value="${v('fecha_nacimiento')}" max="${masDias(hoyIso(), -365 * 18)}" required></label>
+        <label class="etiqueta"><span>Fecha de nacimiento<span class="pt-fh" data-fh="fecha_nacimiento"></span></span><input class="campo" type="date" name="fecha_nacimiento" value="${v('fecha_nacimiento')}" max="${masDias(hoyIso(), -365 * 18)}" required></label>
         <span></span>
         <label class="etiqueta">N° de licencia de conducir<input class="campo" name="licencia_numero" value="${v('licencia_numero')}" autocomplete="off"></label>
         <label class="etiqueta">Clase de licencia<select class="campo" name="licencia_clase">${['', 'B', 'A1', 'A2', 'A3', 'A4', 'C', 'Internacional', ...(ext ? ['B1', 'Otra'] : [])].map((x) => `<option value="${x}"${c.licencia_clase === x ? ' selected' : ''}>${x || 'Elegir…'}</option>`).join('')}</select></label>
-        <label class="etiqueta">Vencimiento de la licencia<input class="campo" type="date" name="licencia_vence" value="${v('licencia_vence')}" min="${hoyIso()}"></label>
+        <label class="etiqueta"><span>Vencimiento de la licencia<span class="pt-fh" data-fh="licencia_vence"></span></span><input class="campo" type="date" name="licencia_vence" value="${v('licencia_vence')}" min="${hoyIso()}"></label>
       </div>
       <h2 style="margin-top:8px">Pago</h2>
       <div class="pt-pagos">
@@ -337,7 +338,7 @@ function pasoFinal() {
   app.innerHTML = `${pasosHtml()}<div class="tarjeta pt-ok">
     <div class="ic ${confirmada ? '' : 'pend'}">${confirmada ? IC.ok : IC.reloj}</div>
     <h2>${confirmada ? '¡Reserva confirmada!' : 'Reserva recibida'}</h2>
-    <p class="folio">Folio <b class="mono">${esc(r.folio)}</b> · total <b class="monto">${clp(r.total)}</b></p>
+    <p class="pt-folio">Folio <b class="mono">${esc(r.folio)}</b> · total <b class="monto">${clp(r.total)}</b></p>
     <p class="muted" style="max-width:520px">${esc(r.mensaje)}</p>
     <p class="muted peq" style="max-width:520px">Guarda este enlace: desde ahí puedes ver tu reserva, subir tu cédula o pasaporte y licencia antes de retirar, y descargar tu contrato.</p>
     <a class="btn pt-primario grande" href="${urlPortal}" target="_top">Ver mi reserva y subir documentos</a>
@@ -345,10 +346,22 @@ function pasoFinal() {
   app.querySelector('#nueva').onclick = () => { Object.assign(E, { cat: null, extras: {}, final: null, pago: null }); ir(1); };
 }
 
+// Los campos de fecha nativos muestran el formato del navegador: se agrega la fecha en dd-mm-aaaa al lado de la etiqueta
+const DIAS_SEM = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+function hintsFecha() {
+  app.querySelectorAll('[data-fh]').forEach((h) => {
+    const inp = app.querySelector(`input[name="${h.dataset.fh}"]`);
+    if (!inp) return;
+    const upd = () => { const v = inp.value; h.textContent = /^\d{4}-\d{2}-\d{2}$/.test(v) ? `${DIAS_SEM[new Date(`${v}T12:00:00Z`).getUTCDay()]} ${fecha(v)}` : ''; };
+    inp.addEventListener('input', upd); inp.addEventListener('change', upd); upd();
+  });
+}
+
 function pintar() {
   if (E.paso >= 2 && !E.resultados) E.paso = 1;
   if (E.paso >= 3 && E.paso < 5 && !E.cat) E.paso = 2;
   ({ 1: pasoBusqueda, 2: pasoResultados, 3: pasoExtras, 4: pasoDatos, 5: pasoFinal })[E.paso]();
+  hintsFecha();
   avisarAltura();
 }
 

@@ -45,12 +45,12 @@ function pintar() {
     const actual = e.id === yo.empresa?.id;
     return `<tr><td><div class="rc-fila" style="flex-wrap:nowrap">${e.logo_clave ? `<img class="rc-empresa-logo" src="/api/logo/${esc(e.slug)}" alt="">` : `<span class="rc-empresa-logo" style="background:${esc(e.color || '#0F5F58')}">${esc(ini)}</span>`}
       <div><b>${esc(e.nombre)}</b>${actual ? ' <span class="chip marca">activa en tu sesión</span>' : ''}<div class="peq muted mono">${e.rut ? rut(e.rut) : 'sin RUT'}</div></div></div></td>
-      <td><a class="mono peq" href="/reservar/${esc(e.slug)}" target="_blank" rel="noopener">/reservar/${esc(e.slug)}</a></td>
+      <td style="white-space:nowrap"><a class="mono peq" href="/reservar/${esc(e.slug)}" target="_blank" rel="noopener">/reservar/${esc(e.slug)}</a></td>
       <td><select class="campo" data-plan="${e.id}" aria-label="Plan">${[...new Set([...PLANES, e.plan])].map((p) => `<option value="${esc(p)}"${p === e.plan ? ' selected' : ''}>${esc(PLAN[p] || p)}</option>`).join('')}</select></td>
       <td class="mono">${e.vehiculos}</td><td class="mono">${e.usuarios}</td>
       <td>${e.marcha_blanca ? '<span class="chip rc-marcha">● Activa</span>' : '<span class="chip ok">Operación real</span>'}</td>
       <td><label class="cf-switch-et"><span class="switch"><input type="checkbox" data-activa="${e.id}"${e.activa ? ' checked' : ''} aria-label="Empresa activa"><span></span></span><span>${e.activa ? 'Activa' : 'Suspendida'}</span></label></td>
-      <td class="mono peq">${fecha(e.creado_en)}</td>
+      <td class="mono peq" style="white-space:nowrap">${fecha(e.creado_en)}</td>
       <td style="text-align:right"><button class="btn peq ${actual ? '' : 'primario'}" data-entrar="${e.id}">${actual ? 'Ir al inicio' : 'Entrar'}</button></td></tr>`;
   }).join('') || '<tr><td colspan="9" class="rc-vacio">Sin empresas</td></tr>';
 }

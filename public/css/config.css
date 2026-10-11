@@ -80,7 +80,7 @@
 .cf-nivel.no { color: #B8BEC7; }
 
 /* Portal */
-.cf-snippet { position: relative; background: var(--ink); color: #E8EAED; border-radius: 10px; padding: 14px 16px; font: 13px/1.6 var(--mono); overflow-x: auto; white-space: pre; }
+.cf-snippet { position: relative; background: var(--ink); color: #E8EAED; border-radius: 10px; padding: 14px 96px 14px 16px; font: 13px/1.6 var(--mono); white-space: pre-wrap; word-break: break-all; }
 .cf-snippet .btn { position: absolute; right: 8px; top: 8px; }
 .cf-enlace { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .cf-enlace .campo { flex: 1; min-width: 220px; font-family: var(--mono); font-size: 13px; }

@@ -44,7 +44,7 @@ function marca(e) {
   const ini = e.nombre.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
   document.getElementById('cab').innerHTML = `${e.logo ? `<img class="pt-logo" src="/api/logo/${encodeURIComponent(e.slug)}" alt="${esc(e.nombre)}">` : `<span class="pt-logo-txt">${esc(ini)}</span>`}
     <div class="pt-marca"><b>${esc(e.nombre)}</b><span>Mi reserva</span></div>
-    <div class="pt-cab-der">${e.telefono ? `<a href="tel:${esc(e.telefono.replace(/\s/g, ''))}">${esc(e.telefono)}</a>` : ''}<a href="/reservar/${encodeURIComponent(e.slug)}">Nueva reserva</a></div>`;
+    <div class="pt-cab-der">${e.telefono ? `<a href="tel:${esc(e.telefono.replace(/\s/g, ''))}" class="tel-txt">${esc(e.telefono)}</a>` : ''}<a href="/reservar/${encodeURIComponent(e.slug)}">Nueva reserva</a></div>`;
   document.title = `Mi reserva · ${e.nombre}`;
 }
 
@@ -103,11 +103,11 @@ async function cargar() {
         </div></section>` : ''}
       </div>
 
-      <aside class="pt-resumen tarjeta"><div class="bloque">
+      <aside class="pt-resumen tarjeta pt-fin"><div class="bloque">
         <h2>Detalle del precio</h2>
         <table class="rc-lineas">${r.lineas.map((l) => `<tr class="${l.monto < 0 ? 'desc' : ''}"><td>${esc(l.concepto)}<small>${esc(l.detalle || '')}</small></td><td>${clp(l.monto)}</td></tr>`).join('')}
           <tr class="total"><td>Total</td><td>${clp(r.total)}</td></tr></table>
-        ${d.pagos.length ? `<div class="rc-danos">${d.pagos.map((p) => `<div class="rc-dano"><div><b>${p.concepto === 'arriendo' ? 'Pago del arriendo' : p.concepto === 'garantia' ? 'Garantía' : esc(p.concepto)}</b><small>${esc(PROV[p.metodo] || p.metodo)} · ${fecha(p.creado_en)}</small></div><span class="monto">${clp(p.monto)}</span><span class="chip ${['pagado', 'capturado', 'simulado', 'autorizado'].includes(p.estado) ? 'ok' : ''}">${esc(ESTADO_PAGO[p.estado] || p.estado)}</span></div>`).join('')}</div>` : ''}
+        ${d.pagos.length ? `<div style="display:flex;flex-direction:column;gap:6px">${d.pagos.map((p) => `<div class="pt-pagolin"><div><b>${p.concepto === 'arriendo' ? 'Pago del arriendo' : p.concepto === 'garantia' ? 'Garantía' : esc(p.concepto)}</b><small>${esc(PROV[p.metodo] || p.metodo)} · ${fecha(p.creado_en)}</small></div><div class="der"><span class="monto">${clp(p.monto)}</span><span class="chip ${['pagado', 'capturado', 'simulado', 'autorizado'].includes(p.estado) ? 'ok' : ''}">${esc(ESTADO_PAGO[p.estado] || p.estado)}</span></div></div>`).join('')}</div>` : ''}
         ${d.saldo > 0 ? `<div class="pt-saldo"><div><span>Pendiente de pago</span><b class="monto">${clp(d.saldo)}</b></div>
           ${d.puede_pagar ? `<div class="rc-fila">${d.proveedores.map((p) => `<button type="button" class="btn primario" data-pagar="${p}">Pagar con ${esc(PROV[p] || p)}</button>`).join('')}</div>` : ''}</div>
           ${d.pago_simulado && d.puede_pagar ? '<p class="pt-nota">Modo de prueba: el pago en línea es simulado.</p>' : ''}` : ''}

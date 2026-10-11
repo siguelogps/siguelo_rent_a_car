@@ -1,7 +1,7 @@
 /* Síguelo Rentacar · motor de reservas para el sitio web del rentacar.
    Uso (pegar donde quieras que aparezca el buscador):
      <script src="https://<servidor>/embed.js" data-rentacar="andes-rent"></script>
-   Opcionales: data-codigo="PRIMAVERA10" (código de descuento precargado), data-alto-minimo="640".
+   Opcionales: data-codigo="PRIMAVERA10" (código de descuento precargado), data-alto-minimo="520".
    Crea un iframe responsivo hacia /embed/<rentacar> que ajusta su alto solo (postMessage). */
 (function () {
   var s = document.currentScript;
@@ -10,7 +10,7 @@
   if (!slug) { console.error('Síguelo Rentacar: falta el atributo data-rentacar en el script de reservas'); return; }
   var origen = new URL(s.src, location.href).origin;
   var codigo = s.getAttribute('data-codigo');
-  var minimo = parseInt(s.getAttribute('data-alto-minimo') || '640', 10);
+  var minimo = parseInt(s.getAttribute('data-alto-minimo') || '520', 10);
   var f = document.createElement('iframe');
   f.src = origen + '/embed/' + encodeURIComponent(slug) + (codigo ? '?codigo=' + encodeURIComponent(codigo) : '');
   f.title = 'Reserva tu vehículo';

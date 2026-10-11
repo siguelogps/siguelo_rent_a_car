@@ -48,7 +48,7 @@ async function empresa() {
   const ed = puede('configuracion', 'editar');
   const dis = ed ? '' : ' disabled';
   const ini = e.nombre.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
-  const campo = (k, t, extra = '') => `<label class="etiqueta">${t}<input class="campo" name="${k}" value="${esc(e[k] ?? '')}"${dis} ${extra}></label>`;
+  const campo = (k, t, extra = '') => `<label class="etiqueta">${t}<input class="campo" name="${k}" value="${esc(k === 'rut' && e.rut ? rut(e.rut) : e[k] ?? '')}"${dis} ${extra}></label>`;
   const ajuste = (k, t, suf, ayuda = '') => `<label class="etiqueta" title="${esc(ayuda)}">${t}<span class="cf-sufijo"><input class="campo" type="number" min="0" name="${k}" value="${esc(aj[k] ?? '')}"${dis}><em>${suf}</em></span></label>`;
   panel.innerHTML = `
     <div class="cf-marcha ${e.marcha_blanca ? '' : 'off'}" id="mb">
@@ -302,7 +302,10 @@ function campoInt(i, f, ed) {
   const ancho = /url|endpoint|remitente|geocerca|cliente/.test(f.clave) ? ' ancho' : '';
   if (f.opciones) return `<label class="etiqueta${ancho}">${esc(f.etiqueta)}<select class="campo" name="${f.clave}"${dis}>${f.opciones.map((o) => `<option${String(v) === o ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`;
   if (f.tipo === 'archivo') return `<div class="etiqueta ancho">${esc(f.etiqueta)}<div class="rc-fila"><input type="hidden" name="${f.clave}" value="${esc(v)}"><span class="chip ${v ? 'ok' : ''}" data-arch="${f.clave}">${v ? `Archivo cargado (#${esc(v)})` : 'Sin archivo'}</span>${ed ? `<label class="btn peq cf-archivo">Subir archivo<input type="file" data-subir="${f.clave}"></label>` : ''}</div></div>`;
-  return `<label class="etiqueta${ancho}">${esc(f.etiqueta)}<input class="campo${f.secreto ? ' mono' : ''}" name="${f.clave}" type="${f.secreto ? 'password' : f.tipo === 'numero' ? 'number' : 'text'}" value="${esc(v)}" placeholder="${esc(f.ejemplo || '')}" autocomplete="off"${dis}></label>`;
+  // En pantalla nunca se nombra al proveedor de la plataforma GPS: su servidor por defecto se muestra genérico y no se reenvía si no se edita.
+  const oculto = /wialon/i.test(String(v));
+  const ej = /wialon/i.test(f.ejemplo || '') ? '' : (f.ejemplo || '');
+  return `<label class="etiqueta${ancho}">${esc(f.etiqueta)}<input class="campo${f.secreto ? ' mono' : ''}" name="${f.clave}" type="${f.secreto ? 'password' : f.tipo === 'numero' ? 'number' : 'text'}" value="${oculto ? '' : esc(v)}" placeholder="${oculto ? 'Servidor estándar de la plataforma GPS' : esc(ej)}"${oculto ? ' data-oculto' : ''} autocomplete="off"${dis}></label>`;
 }
 function tarjetaInt(i, ed) {
   const pr = i.estado_prueba || '';
@@ -322,6 +325,7 @@ function conectarInt(i, ed) {
   const form = card.querySelector('form');
   card.querySelector('[data-guardar]')?.addEventListener('click', async () => {
     const d = leerForm(form);
+    form.querySelectorAll('[data-oculto]').forEach((x) => { if (!x.value.trim()) delete d[x.name]; });
     try { const n = await api(`integraciones/${i.tipo}`, { method: 'PUT', body: d }); toast(`${i.nombre}: datos guardados`, 'ok'); reemplazarInt(n, ed); } catch (e) { toastError(e); }
   });
   card.querySelector('[data-probar]').onclick = async (ev) => {

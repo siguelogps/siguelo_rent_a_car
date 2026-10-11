@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ingresar · Síguelo Rentacar</title>
+<link rel="icon" href="/img/logo-pin.png">
+<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css">
+</head>
+<body>
+<div class="login">
+  <form class="caja" id="f">
+    <img src="/img/logo-siguelo.png" alt="Síguelo GPS" style="height:36px;align-self:flex-start">
+    <div><h1 style="font-size:20px">Rentacar</h1><p class="muted peq">Administración de arriendo de vehículos</p></div>
+    <label class="etiqueta">Correo<input class="campo" name="correo" type="email" autocomplete="username" required></label>
+    <label class="etiqueta">Clave<input class="campo" name="clave" type="password" autocomplete="current-password" required></label>
+    <div class="aviso error" id="err" hidden></div>
+    <button class="btn primario grande" type="submit">Ingresar</button>
+    <p class="peq muted">¿Problemas para ingresar? Escribe a soporte@siguelogps.cl</p>
+  </form>
+</div>
+<script type="module">
+import { api } from '/comun.js';
+const f = document.getElementById('f'), err = document.getElementById('err');
+f.onsubmit = async (e) => {
+  e.preventDefault();
+  err.hidden = true;
+  try {
+    const r = await api('ingresar', { body: { correo: f.correo.value, clave: f.clave.value } });
+    const volver = new URLSearchParams(location.search).get('volver');
+    location.href = volver && volver.startsWith('/') && !volver.startsWith('//') ? volver : r.destino;
+  } catch (e2) { err.textContent = e2.message; err.hidden = false; }
+};
+</script>
+</body>
+</html>

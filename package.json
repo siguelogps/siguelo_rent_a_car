@@ -4,11 +4,30 @@
   "private": true,
   "description": "Síguelo Rentacar: administración de arriendo de vehículos (producto de Síguelo GPS)",
   "scripts": {
-    "capturas": "node scripts/capturas.js"
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test test/",
+    "migrar": "node scripts/migrar.js",
+    "sembrar-demo": "node scripts/sembrar-demo.js",
+    "crear-superadmin": "node scripts/crear-superadmin.js",
+    "capturas": "node scripts/capturas.cjs"
   },
-  "engines": { "node": ">=20" },
+  "engines": {
+    "node": ">=22"
+  },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1149.0",
+    "@electric-sql/pglite": "^0.5.8",
     "@fontsource/ibm-plex-mono": "^5.0.0",
-    "@fontsource/ibm-plex-sans": "^5.0.0"
-  }
+    "@fontsource/ibm-plex-sans": "^5.0.0",
+    "dotenv": "^18.0.7",
+    "exceljs": "^4.4.0",
+    "express": "^5.3.0",
+    "nodemailer": "^10.1.0",
+    "pdfkit": "^0.20.2",
+    "pg": "^8.23.1",
+    "qrcode": "^1.5.4"
+  },
+  "type": "module",
+  "main": "src/server.js"
 }

@@ -262,3 +262,7 @@
 }
 /* .barra también es la barra superior en app.css: se neutraliza dentro de los gráficos */
 .barras-v .barra { position: static; padding: 0; border: 0; background: none; z-index: auto; height: 100%; }
+img.rc-empresa-logo { object-fit: contain; background: #fff; border: 1px solid var(--line); }
+a.rc-marcha { text-decoration: none; }
+.rc-vacio { padding: 32px; text-align: center; color: var(--muted); }
+.rc-cargando { padding: 32px; text-align: center; color: var(--muted); }

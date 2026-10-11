@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Inicio</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css">
+</head>
+<body>
+<main>
+  <div class="pagina-cab">
+    <div><h1 id="saludo">Hola</h1><p id="hoy"></p></div>
+    <div class="acciones"><a class="btn" href="/patio">Entregas y devoluciones</a><a class="btn primario" href="/reservas?nueva=1">+ Nueva reserva</a></div>
+  </div>
+  <div class="kpis" id="kpis"></div>
+  <div class="columnas-2">
+    <div class="tarjeta"><div class="bloque"><h2>Retiros de hoy</h2></div><div id="retiros"></div></div>
+    <div class="tarjeta"><div class="bloque"><h2>Devoluciones de hoy</h2></div><div id="devoluciones"></div></div>
+  </div>
+  <div class="columnas-2">
+    <div class="tarjeta"><div class="bloque"><h2>Vencimientos y mantenciones <a class="btn peq" href="/vehiculos">Ver flota</a></h2><div id="venc" class="rc-danos"></div></div></div>
+    <div class="tarjeta"><div class="bloque"><h2>Alertas de la plataforma GPS <a class="btn peq" href="/gps">Ver mapa</a></h2><div id="alertas" class="rc-danos"></div></div></div>
+  </div>
+</main>
+<script type="module">
+import { iniciarPagina, api, esc, fecha, hora, pat, diasHasta, chipEstado } from '/comun.js';
+const yo = await iniciarPagina({ activo: 'inicio', titulo: 'Inicio' });
+document.getElementById('saludo').textContent = `Hola, ${yo.usuario.nombre.split(' ')[0]}`;
+document.getElementById('hoy').textContent = new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
+const d = await api('inicio');
+const ocup = d.flota.total ? Math.round(d.flota.arrendados * 100 / d.flota.total) : 0;
+document.getElementById('kpis').innerHTML = `
+  <div class="kpi"><span>Retiros hoy</span><b>${d.retiros.length}</b><small>confirmados</small></div>
+  <div class="kpi"><span>Devoluciones hoy</span><b>${d.devoluciones.length}</b><small>en curso que vuelven hoy</small></div>
+  <div class="kpi"><span>Atrasadas</span><b style="${d.atrasadas.length ? 'color:var(--red)' : ''}">${d.atrasadas.length}</b><small class="${d.atrasadas.length ? 'mal' : ''}">${d.atrasadas.map((r) => esc(r.folio)).join(', ') || 'ninguna'}</small></div>
+  <div class="kpi"><span>Ocupación</span><b>${ocup} %</b><small>${d.flota.arrendados} de ${d.flota.total} vehículos</small></div>
+  <div class="kpi"><span>Disponibles</span><b>${d.flota.disponibles}</b><small>${d.flota.taller} en taller o fuera de servicio</small></div>
+  <div class="kpi"><span>Cotizaciones abiertas</span><b>${d.cotizaciones}</b><small>por confirmar</small></div>`;
+const fila = (r, campo) => `<a class="item" href="/reservas/${r.id}" style="text-decoration:none"><div class="item-txt"><b>${esc(r.cliente)}</b><span>${r.patente ? pat(r.patente) : 'sin vehículo'} ${esc(r.marca || '')} ${esc(r.modelo || '')} · ${esc(campo === 'inicio' ? r.sucursal_retiro : r.sucursal_devolucion)}</span></div><div class="item-der"><b class="mono">${hora(r[campo])}</b>${chipEstado(r.estado)}</div></a>`;
+document.getElementById('retiros').innerHTML = d.retiros.map((r) => fila(r, 'inicio')).join('') || '<p class="rc-vacio">Sin retiros para hoy</p>';
+document.getElementById('devoluciones').innerHTML = [...d.atrasadas.filter((a) => !d.devoluciones.some((x) => x.id === a.id)), ...d.devoluciones].map((r) => fila(r, 'fin')).join('') || '<p class="rc-vacio">Sin devoluciones para hoy</p>';
+document.getElementById('venc').innerHTML = [
+  ...d.vencimientos.map((v) => { const n = diasHasta(v.fecha); return `<a class="rc-alerta-venc" href="/vehiculos/${v.id}" style="text-decoration:none"><span class="ic ${n < 0 ? 'rojo' : 'ambar'}">${n < 0 ? '!' : n}</span><div><b>${esc(v.tipo)} · ${pat(v.patente)}</b><small>${n < 0 ? `vencida el ${fecha(v.fecha)}` : `vence el ${fecha(v.fecha)} (en ${n} días)`}</small></div></a>`; }),
+  ...d.mantenciones.map((v) => `<a class="rc-alerta-venc" href="/mantencion" style="text-decoration:none"><span class="ic ambar">km</span><div><b>Mantención ${v.proxima.toLocaleString('es-CL')} km · ${pat(v.patente)}</b><small>${v.km >= v.proxima ? `pasada por ${(v.km - v.proxima).toLocaleString('es-CL')} km` : `faltan ${(v.proxima - v.km).toLocaleString('es-CL')} km`} según la plataforma GPS</small></div></a>`)
+].join('') || '<p class="rc-vacio">Todo al día</p>';
+const TIPOS = { geocerca: 'Salida de zona permitida', velocidad: 'Exceso de velocidad', detenido_fuera_horario: 'Detenido fuera de horario', sin_senal: 'Sin señal', combustible: 'Combustible' };
+document.getElementById('alertas').innerHTML = d.alertas.map((a) => `<div class="rc-alerta-venc"><span class="ic rojo">!</span><div><b>${esc(TIPOS[a.tipo] || a.tipo)} · ${pat(a.patente)}</b><small>${esc(a.detalle || '')} · ${fecha(a.ocurrido_en)} ${hora(a.ocurrido_en)}</small></div></div>`).join('')
+  + (d.multas.sin_contrato ? `<a class="rc-alerta-venc" href="/tag-multas" style="text-decoration:none"><span class="ic azul">${d.multas.sin_contrato}</span><div><b>Multas sin contrato asignado</b><small>revisar en TAG y multas</small></div></a>` : '')
+  || '<p class="rc-vacio">Sin alertas pendientes</p>';
+</script>
+</body>
+</html>

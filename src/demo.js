@@ -156,6 +156,9 @@ export async function sembrarDemo({ clave = 'demo1234' } = {}) {
           ['en_curso', 'devuelta', 'cerrada'].includes(estado) ? inicio : null, ['devuelta', 'cerrada'].includes(estado) ? fin : null]);
     });
   }
+  // La reserva atrasada de ejemplo (RKDS90) debía volver hace 5 horas, a cualquier hora en que se siembre
+  await q(`UPDATE reservas SET fin = now() - interval '5 hours', inicio = now() - interval '5 hours' - interval '4 days', retiro_real = now() - interval '5 hours' - interval '4 days'
+           WHERE empresa_id = $1 AND vehiculo_id = $2 AND estado = 'en_curso'`, [E, veh.RKDS90.id]);
   // Mantención en curso (bloqueo en el calendario)
   const otFolio = await siguienteFolio(E, 'OT');
   const [ot] = await q(`INSERT INTO ordenes_trabajo (empresa_id, folio, vehiculo_id, tipo, motivo, km_programado, taller, costo, estado, inicio, km_al_ingreso) VALUES ($1,$2,$3,'preventiva','Mantención 20.000 km',20000,'Taller Automotriz Lyon',185000,'en_taller',$4,20012) RETURNING id`, [E, otFolio, veh.SYPC11.id, at(-1, 0)]);

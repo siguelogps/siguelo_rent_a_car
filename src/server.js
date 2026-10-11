@@ -11,8 +11,8 @@ if (aplicadas.length) console.log(`Migraciones aplicadas: ${aplicadas.join(', ')
 const hay = await uno('SELECT count(*)::int AS n FROM empresas');
 if (!hay.n && config.sembrarDemo) {
   const { sembrarDemo } = await import('./demo.js');
-  await sembrarDemo();
-  console.log('Datos de prueba creados: administrador demo@siguelogps.cl / demo1234');
+  await sembrarDemo({ clave: process.env.DEMO_CLAVE || 'demo1234' });
+  console.log(`Datos de prueba creados: administrador demo@siguelogps.cl${process.env.DEMO_CLAVE ? ' (clave en DEMO_CLAVE)' : ' / demo1234'}`);
 }
 
 const app = await crearApp();

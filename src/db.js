@@ -13,7 +13,9 @@ async function abrirPg(url) {
   pg.types.setTypeParser(20, (v) => (v === null ? null : Number(v)));      // BIGINT → number (montos CLP e ids caben)
   pg.types.setTypeParser(1700, (v) => (v === null ? null : Number(v)));    // NUMERIC → number
   pg.types.setTypeParser(1082, (v) => v);                                  // DATE → 'AAAA-MM-DD' (sin corrimiento de zona)
-  const ssl = /localhost|127\.0\.0\.1/.test(url) || /sslmode=disable/.test(url) ? false : { rejectUnauthorized: false };
+  // Sin SSL en local y en redes internas (p. ej. Render: host «dpg-xxxx-a» sin dominio); con SSL hacia afuera.
+  const host = (() => { try { return new URL(url).hostname; } catch { return ''; } })();
+  const ssl = /localhost|127\.0\.0\.1/.test(host) || !host.includes('.') || /sslmode=disable/.test(url) ? false : { rejectUnauthorized: false };
   const pool = new pg.Pool({ connectionString: url, ssl, max: Number(process.env.PG_POOL_MAX) || 10 });
   const envolver = (c) => ({ query: async (sql, p = []) => (await c.query(sql, p)).rows });
   return {

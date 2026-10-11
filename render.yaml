@@ -19,6 +19,10 @@ services:
         generateValue: true
       - key: SEMBRAR_DEMO
         value: "1"
+      - key: DEMO_CLAVE
+        generateValue: true
+      - key: PERMITIR_ALMACENAMIENTO_BD
+        value: "1"
 databases:
   - name: siguelo-rentacar-db
     plan: basic-256mb

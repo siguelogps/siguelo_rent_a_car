@@ -160,5 +160,12 @@ export async function sembrarDemo({ clave = 'demo1234' } = {}) {
   const [ot] = await q(`INSERT INTO ordenes_trabajo (empresa_id, folio, vehiculo_id, tipo, motivo, km_programado, taller, costo, estado, inicio, km_al_ingreso) VALUES ($1,$2,$3,'preventiva','Mantención 20.000 km',20000,'Taller Automotriz Lyon',185000,'en_taller',$4,20012) RETURNING id`, [E, otFolio, veh.SYPC11.id, at(-1, 0)]);
   await q(`INSERT INTO bloqueos (empresa_id, vehiculo_id, inicio, fin, motivo, orden_trabajo_id) VALUES ($1,$2,$3,$4,'Mantención 20.000 km',$5)`, [E, veh.SYPC11.id, at(-1, 0), at(1, 12), ot.id]);
   await q(`INSERT INTO bloqueos (empresa_id, vehiculo_id, inicio, fin, motivo) VALUES ($1,$2,$3,$4,'Fuera de servicio: falla de embrague')`, [E, veh.RFDL49.id, at(-3, 0), at(4, 0)]);
+  // Datos de prueba de cada módulo: src/demo-extra/*.js exporta sembrar(empresaId)
+  const fs = await import('node:fs'), path = await import('node:path'), url = await import('node:url');
+  const dir = path.join(path.dirname(url.fileURLToPath(import.meta.url)), 'demo-extra');
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.js')).sort()) {
+    const m = await import(url.pathToFileURL(path.join(dir, f)).href);
+    if (m.sembrar) await m.sembrar(E);
+  }
   return e;
 }

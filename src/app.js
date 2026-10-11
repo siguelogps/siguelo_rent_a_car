@@ -36,6 +36,7 @@ export async function crearApp() {
 
   // Archivos estáticos y fuentes (IBM Plex, sin depender de Google Fonts)
   app.use('/node_modules/@fontsource', express.static(path.join(RAIZ, 'node_modules/@fontsource'), { maxAge: '30d' }));
+  app.use('/vendor/leaflet', express.static(path.join(RAIZ, 'node_modules/leaflet/dist'), { maxAge: '30d' }));
   app.use(express.static(PUBLICO, { extensions: ['html'], index: false, maxAge: process.env.NODE_ENV === 'production' ? '1h' : 0 }));
 
   // URLs limpias de las páginas con parámetro: /reservas/123 → reserva.html, /verificar/ABC → verificar.html, etc.

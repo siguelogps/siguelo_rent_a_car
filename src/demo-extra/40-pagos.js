@@ -105,7 +105,8 @@ export async function sembrar(E) {
   if (dev && dev.vehiculo_id) {
     const [v] = await q('SELECT km FROM vehiculos WHERE id = $1', [dev.vehiculo_id]);
     const devolucion = new Date(new Date(dev.fin).getTime() + 104 * 6e4); // devolvió 1 h 44 min tarde
-    await q('UPDATE reservas SET devolucion_real = $2 WHERE id = $1', [dev.id, devolucion]);
+    // Si otro módulo (patio) ya sembró la devolución, se respetan sus datos
+    await q('UPDATE reservas SET devolucion_real = $2 WHERE id = $1 AND devolucion_real IS NULL', [dev.id, devolucion]);
     const kmDev = v?.km || 48320, kmEnt = kmDev - 1554;
     const insp = (tipo, km, comb, checklist, cuando) => q(`INSERT INTO inspecciones (empresa_id, reserva_id, vehiculo_id, tipo, estado, km, km_gps, combustible, combustible_gps, checklist, sucursal_id, realizado_por, iniciado_en, completado_en, firmante_nombre)
         VALUES ($1,$2,$3,$4,'completa',$5,$5,$6,$6,$7,$8,$9,$10,$10,$11) ON CONFLICT (reserva_id, tipo) DO NOTHING`,
@@ -114,11 +115,14 @@ export async function sembrar(E) {
     await insp('devolucion', kmDev, 5, { repuesto: true, gata: true, triangulos: 1, extintor: true, documentos: true, tag: true, limpieza: 'sucio' }, devolucion);
     const [veh] = await q('SELECT patente FROM vehiculos WHERE id = $1', [dev.vehiculo_id]);
     const tags = [['Autopista Central', 'Pórtico P5 Lo Espejo', 1840], ['Costanera Norte', 'Pórtico Kennedy', 2210], ['Vespucio Sur', 'Pórtico La Florida', 1530], ['Autopista Central', 'Pórtico P3 San Bernardo', 1840], ['Costanera Norte', 'Pórtico Lo Saldes', 2210]];
-    for (const [k, [autopista, portico, monto]] of tags.entries()) {
+    const [hayTag] = await q('SELECT count(*)::int AS n FROM tag_transitos WHERE reserva_id = $1', [dev.id]);
+    for (const [k, [autopista, portico, monto]] of (hayTag.n ? [] : tags.entries())) {
       await q(`INSERT INTO tag_transitos (empresa_id, patente, vehiculo_id, fecha_hora, portico, autopista, concesionaria, monto, origen, huella, reserva_id, estado)
                VALUES ($1,$2,$3,$4,$5,$6,$6,$7,'dashboard',$8,$9,'asignado') ON CONFLICT (empresa_id, huella) DO NOTHING`,
         [E, veh.patente, dev.vehiculo_id, new Date(new Date(dev.inicio).getTime() + (k + 1) * 0.6 * DIA), portico, autopista, monto, `demo-liq-${dev.id}-${k}`, dev.id]);
     }
+    const [hayInc] = await q('SELECT count(*)::int AS n FROM incidentes WHERE reserva_id = $1', [dev.id]);
+    if (hayInc.n) return;
     const folioInc = await siguienteFolio(E, 'INC');
     await q(`INSERT INTO incidentes (empresa_id, folio, reserva_id, vehiculo_id, cliente_id, tipo, estado, descripcion, presupuesto, taller, deducible, creado_por)
              VALUES ($1,$2,$3,$4,$5,'dano','presupuestado','abolladura puerta del. der.',280000,'Desabolladuría Sur',$6,$7)`,

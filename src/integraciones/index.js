@@ -60,6 +60,7 @@ export const TIPOS = {
       { clave: 'certificado_archivo_id', etiqueta: 'Certificado digital (.pfx)', tipo: 'archivo' },
       { clave: 'caf_boleta_archivo_id', etiqueta: 'CAF boletas (39)', tipo: 'archivo' },
       { clave: 'caf_factura_archivo_id', etiqueta: 'CAF facturas (33)', tipo: 'archivo' },
+      { clave: 'caf_nota_credito_archivo_id', etiqueta: 'CAF notas de crédito (61)', tipo: 'archivo' },
       { clave: 'resolucion_numero', etiqueta: 'N° resolución SII', defecto: '0' },
       { clave: 'resolucion_fecha', etiqueta: 'Fecha resolución SII', ejemplo: '2014-08-22' }
     ]

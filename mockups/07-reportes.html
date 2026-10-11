@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Reportes · Síguelo Rentacar</title>
+<link rel="stylesheet" href="../public/app.css"><link rel="stylesheet" href="../public/rentacar.css"><link rel="stylesheet" href="maqueta.css">
+</head>
+<body data-activo="reportes" data-titulo="Reportes">
+<main class="contenido">
+  <div class="pagina-cab">
+    <div><h1>Reportes</h1><p>Septiembre 2026 · todas las sucursales · 18 vehículos</p></div>
+    <div class="acciones">
+      <div class="segmentado"><button>Semana</button><button aria-pressed="true">Mes</button><button>Trimestre</button><button>Año</button></div>
+      <select class="campo"><option>Septiembre 2026</option></select>
+      <button class="btn primario">Exportar Excel</button>
+    </div>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi"><span>Ocupación</span><b>74 %</b><small>+6 pts vs. agosto</small></div>
+    <div class="kpi"><span>Ingreso del mes</span><b class="mono" style="font-size:22px">$28.450.000</b><small>arriendos + cargos</small></div>
+    <div class="kpi"><span>Ingreso por día disponible</span><b class="mono" style="font-size:22px">$56.300</b><small>505 días disponibles</small></div>
+    <div class="kpi"><span>Días ociosos</span><b>131</b><small class="mal">RFDL-49 suma 22</small></div>
+    <div class="kpi"><span>Costo de mantención</span><b class="mono" style="font-size:22px">$2.180.000</b><small>7 órdenes de trabajo</small></div>
+    <div class="kpi"><span>Devoluciones a tiempo</span><b>91 %</b><small>6 atrasos de 68</small></div>
+  </div>
+
+  <div class="columnas-2">
+    <div class="tarjeta bloque">
+      <h2>Ingreso por día <span class="peq muted" style="font-weight:400">miles de $</span></h2>
+      <div class="barras-v" id="ingreso" style="height:200px"></div>
+      <div class="barras-pie" id="ingreso-pie"></div>
+    </div>
+    <div class="tarjeta bloque">
+      <h2>Ocupación por categoría</h2>
+      <div class="rc-graf" id="ocup"></div>
+      <div class="rc-leyenda"><span><i style="background:var(--marca);border-color:var(--marca-ambar)"></i>Arrendado</span><span><i style="background:#F5C98A;border-color:#D97706"></i>Mantención</span><span><i style="background:var(--line-2);border-color:#C4C9D1"></i>Ocioso</span></div>
+    </div>
+  </div>
+
+  <div class="tarjeta bloque">
+    <h2>Ocupación por vehículo y día <span class="rc-leyenda"><span><i style="background:var(--line-2);border:0"></i>Ocioso</span><span><i style="background:var(--marca);border:0"></i>Arrendado</span><span><i style="background:repeating-linear-gradient(135deg,#FEF3E2 0 3px,#F5C98A 3px 6px);border:0"></i>Mantención</span></span></h2>
+    <div class="rc-calor" id="calor"></div>
+  </div>
+
+  <div class="columnas-2" style="grid-template-columns:minmax(0,1.5fr) minmax(0,1fr)">
+    <div class="tarjeta">
+      <div class="bloque" style="padding-bottom:6px"><h2>Ingreso por vehículo</h2></div>
+      <div class="tabla-env"><table class="tabla" id="porveh">
+        <thead><tr><th>Vehículo</th><th>Días arrendado</th><th>Días ociosos</th><th style="text-align:right">Ingreso</th><th style="text-align:right">Por día disp.</th><th style="text-align:right">Mantención</th></tr></thead><tbody></tbody>
+      </table></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:18px;min-width:0">
+      <div class="tarjeta">
+        <div class="bloque" style="padding-bottom:6px"><h2>Daños por cliente <span class="peq muted" style="font-weight:400">últimos 12 meses</span></h2></div>
+        <table class="tabla">
+          <thead><tr><th>Cliente</th><th>Arriendos</th><th>Incidentes</th><th style="text-align:right">Cobrado</th></tr></thead>
+          <tbody>
+            <tr><td>Ignacio Vargas<div class="peq muted mono">15.201.788-K</div></td><td>3</td><td><span class="chip error">2</span></td><td class="monto" style="text-align:right">$615.000</td></tr>
+            <tr><td>Constructora Aconcagua SpA<div class="peq muted mono">76.543.210-3</div></td><td>11</td><td><span class="chip error">2</span></td><td class="monto" style="text-align:right">$480.000</td></tr>
+            <tr><td>Valentina Soto Riquelme<div class="peq muted mono">16.482.903-0</div></td><td>5</td><td><span class="chip aviso">1</span></td><td class="monto" style="text-align:right">$280.000</td></tr>
+            <tr><td>John Miller<div class="peq muted mono">Pasaporte 584392017</div></td><td>1</td><td><span class="chip aviso">1</span></td><td class="monto" style="text-align:right">$95.000</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="tarjeta bloque">
+        <h2>Cumplimiento de devoluciones</h2>
+        <div class="rc-ocup"><span>A tiempo</span><div class="b"><i style="width:91%;background:var(--green)"></i></div><span class="n">62</span></div>
+        <div class="rc-ocup"><span>Atraso &lt; 3 h</span><div class="b"><i style="width:6%;background:#D97706"></i></div><span class="n">4</span></div>
+        <div class="rc-ocup"><span>Atraso ≥ 3 h</span><div class="b"><i style="width:3%;background:var(--red)"></i></div><span class="n">2</span></div>
+        <div class="rc-ocup"><span>No se presentó</span><div class="b"><i style="width:4%;background:var(--ink)"></i></div><span class="n">3</span></div>
+      </div>
+    </div>
+  </div>
+</main>
+<script type="module">
+import './maqueta.js';
+// datos de ejemplo deterministas
+let s = 7; const r = () => (s = (s * 9301 + 49297) % 233280) / 233280;
+const ingreso = Array.from({ length: 30 }, (_, i) => Math.round(620 + r() * 520 + ([4, 5, 11, 12, 17, 18, 19, 25, 26].includes(i) ? 420 : 0)));
+document.getElementById('ingreso').innerHTML = ingreso.map((v, i) => `<div class="barra"><i style="height:${v / 17}%;background:${[17, 18, 19].includes(i) ? 'var(--marca-ambar)' : '#2F5BD3'}"></i></div>`).join('');
+document.getElementById('ingreso-pie').innerHTML = ingreso.map((_, i) => `<span>${i % 3 === 0 ? i + 1 : ''}</span>`).join('');
+document.getElementById('ocup').innerHTML = [['Citycar', 82, 0], ['Sedán', 76, 4], ['SUV', 79, 8], ['Camioneta 4x4', 88, 0], ['Van', 31, 6]]
+  .map(([c, a, m]) => `<div class="rc-ocup"><span>${c}</span><div class="b"><i style="width:${a}%;background:var(--marca)"></i><i style="width:${m}%;background:#F5C98A"></i></div><span class="n">${a} %</span></div>`).join('');
+const autos = ['SXLR-27', 'RTKP-42', 'TJHV-18', 'PBVX-61', 'RKDS-90', 'SGFT-35', 'TFZB-73', 'SYPC-11', 'RVLW-56', 'PKHG-24', 'SJRT-80', 'RFDL-49'];
+const ocup = [0.88, 0.7, 0.8, 0.72, 0.85, 0.6, 0.82, 0.7, 0.78, 0.95, 0.75, 0.25];
+document.getElementById('calor').innerHTML = `<span></span>${Array.from({ length: 31 }, (_, i) => `<span class="peq muted" style="text-align:center;font-size:10px">${i < 30 && i % 2 === 0 ? i + 1 : ''}</span>`).join('')}` +
+  autos.map((p, k) => `<span class="lbl">${p}</span>${Array.from({ length: 31 }, (_, d) => d === 30 ? '<span></span>' : (k === 7 && d >= 20 && d <= 23) || (k === 11 && d >= 8 && d <= 12) ? '<i class="m"></i>' : `<i class="${r() < ocup[k] ? 'l3' : ''}"></i>`).join('')}`).join('');
+const pv = [['PKHG-24', 'Mitsubishi L200', 29, 1, 3540000, 0], ['TFZB-73', 'Toyota RAV4', 25, 5, 2960000, 0], ['SXLR-27', 'Kia Morning', 26, 4, 1480000, 0], ['RKDS-90', 'Nissan Versa', 25, 5, 1720000, 85000], ['SYPC-11', 'MG ZS', 21, 5, 2110000, 420000], ['SGFT-35', 'Toyota Yaris', 18, 12, 1260000, 0], ['RFDL-49', 'Hyundai H1', 3, 22, 420000, 690000]];
+const clp = (n) => '$' + n.toLocaleString('es-CL');
+document.querySelector('#porveh tbody').innerHTML = pv.map(([p, m, a, o, ing, man]) => `<tr><td><span class="pat">${p}</span> <span class="peq muted">${m}</span></td><td class="mono">${a}</td><td class="mono" style="${o > 10 ? 'color:var(--red);font-weight:600' : ''}">${o}</td><td class="monto" style="text-align:right">${clp(ing)}</td><td class="monto" style="text-align:right">${clp(Math.round(ing / (30 - (man > 400000 ? 4 : 0))))}</td><td class="monto" style="text-align:right;${man ? '' : 'color:var(--muted)'}">${clp(man)}</td></tr>`).join('');
+</script>
+</body>
+</html>

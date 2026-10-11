@@ -120,7 +120,7 @@
 
 /* ── Flota y vencimientos ── */
 .rc-venc { display: inline-flex; flex-direction: column; gap: 1px; line-height: 1.2; }
-.rc-venc .f { font: 500 12px var(--mono); }
+.rc-venc .f { font: 500 12px var(--mono); white-space: nowrap; }
 .rc-venc small { font-size: 11px; font-weight: 600; }
 .rc-venc.ok small { color: var(--green); }
 .rc-venc.pronto small { color: #B45309; }
@@ -214,7 +214,7 @@
 .rc-comp .lado small { font-weight: 400; color: var(--muted); font-size: 12px; }
 .rc-comp .rc-foto.nuevo { outline: 3px solid var(--red); outline-offset: -3px; }
 .rc-circulo { position: absolute; border: 3px solid var(--red); border-radius: 50%; box-shadow: 0 0 0 2px rgba(255,255,255,.7); }
-.rc-circulo-et { position: absolute; background: var(--red); color: #fff; font: 600 11px var(--mono); padding: 2px 6px; border-radius: 5px; }
+.rc-circulo-et { white-space: nowrap; position: absolute; background: var(--red); color: #fff; font: 600 11px var(--mono); padding: 2px 6px; border-radius: 5px; }
 .rc-difs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
 .rc-dif { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; background: var(--card); }
 .rc-dif span { font-size: 12px; color: var(--muted); }
@@ -260,3 +260,5 @@
   .rc-comp { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
   .rc-difs { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+/* .barra también es la barra superior en app.css: se neutraliza dentro de los gráficos */
+.barras-v .barra { position: static; padding: 0; border: 0; background: none; z-index: auto; height: 100%; }

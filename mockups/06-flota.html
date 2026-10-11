@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Flota · Síguelo Rentacar</title>
+<link rel="stylesheet" href="../public/app.css"><link rel="stylesheet" href="../public/rentacar.css"><link rel="stylesheet" href="maqueta.css">
+</head>
+<body data-activo="flota" data-titulo="Vehículos">
+<main class="contenido">
+  <div class="pagina-cab">
+    <div><h1>Flota</h1><p>18 vehículos · km y combustible actualizados desde la plataforma GPS hace 2 min</p></div>
+    <div class="acciones"><button class="btn">Importar Excel</button><button class="btn">Exportar Excel</button><button class="btn primario">+ Agregar vehículo</button></div>
+  </div>
+
+  <div class="columnas-3" style="grid-template-columns:repeat(3,minmax(0,1fr))">
+    <div class="rc-alerta-venc" style="border-color:#F2C9C4"><span class="ic rojo">!</span><div><b>Revisión técnica vencida · RKDS-90</b><small>Venció el 08-10-2026 · bloqueado para nuevas reservas hasta renovarla</small></div><button class="btn peq" style="margin-left:auto">Renovar</button></div>
+    <div class="rc-alerta-venc"><span class="ic ambar">km</span><div><b>Mantención de 20.000 km · TFZB-73</b><small>Faltan 340 km según la plataforma GPS · tiene reserva hasta el 15-10</small></div><button class="btn peq" style="margin-left:auto">Crear OT</button></div>
+    <div class="rc-alerta-venc"><span class="ic azul">5</span><div><b>5 vencimientos en los próximos 30 días</b><small>2 revisiones técnicas · 1 seguro · 2 mantenciones por fecha</small></div><button class="btn peq" style="margin-left:auto">Ver</button></div>
+  </div>
+
+  <div class="tarjeta">
+    <div class="bloque" style="padding-bottom:12px">
+      <div class="rc-entre" style="flex-wrap:wrap">
+        <div class="filtros-fila">
+          <button class="filtro" aria-pressed="true">Todos <span class="n">18</span></button>
+          <button class="filtro">Disponible <span class="n">4</span></button>
+          <button class="filtro">Arrendado <span class="n">9</span></button>
+          <button class="filtro">Reservado <span class="n">2</span></button>
+          <button class="filtro">En mantención <span class="n">2</span></button>
+          <button class="filtro">Fuera de servicio <span class="n">1</span></button>
+          <button class="filtro">Con vencimientos <span class="n">6</span></button>
+        </div>
+        <div class="rc-fila"><select class="campo"><option>Todas las categorías</option></select><select class="campo"><option>Todas las sucursales</option></select></div>
+      </div>
+    </div>
+    <div class="tabla-env">
+      <table class="tabla" id="tabla">
+        <thead><tr><th>Vehículo</th><th>Estado</th><th>Ubicación</th><th>Km (GPS)</th><th>Comb.</th><th>Rev. técnica</th><th>Permiso circ.</th><th>SOAP</th><th>Seguro</th><th>Próxima mantención</th></tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+  </div>
+</main>
+<script type="module">
+import './maqueta.js';
+const HOY = new Date(2026, 9, 11);
+const venc = (f) => {
+  const [d, m, a] = f.split('-').map(Number);
+  const dias = Math.round((new Date(a, m - 1, d) - HOY) / 864e5);
+  const c = dias < 0 ? 'vencido' : dias <= 30 ? 'pronto' : 'ok';
+  const t = dias < 0 ? `vencida hace ${-dias} días` : dias <= 30 ? `en ${dias} días` : 'vigente';
+  return `<span class="rc-venc ${c}"><span class="f">${f}</span><small>${t}</small></span>`;
+};
+const comb = (n) => `<span class="rc-comb">${Array.from({ length: 8 }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</span>`;
+const mant = (falta, cada, txt) => {
+  const pct = Math.max(4, 100 - (falta / cada) * 100);
+  const c = falta <= 0 ? 'vencido' : falta < 1000 ? 'pronto' : '';
+  return `<div class="rc-km"><span class="peq">${txt}</span><div class="rc-km-barra ${c}"><i style="width:${Math.min(pct, 100)}%"></i></div><small class="peq ${c ? '' : 'muted'}" style="${c === 'pronto' ? 'color:#B45309;font-weight:600' : c === 'vencido' ? 'color:var(--red);font-weight:600' : ''}">${falta <= 0 ? `pasada por ${(-falta).toLocaleString('es-CL')} km` : `faltan ${falta.toLocaleString('es-CL')} km`}</small></div>`;
+};
+const filas = [
+  ['SXLR-27', 'Kia Morning 2024', 'Citycar', 'st-arrendado', 'Arrendado', 'En ruta · Viña del Mar', 1, 21480, 6, '14-06-2027', '31-03-2027', '31-03-2027', '15-01-2027', [8520, 10000, '30.000 km']],
+  ['RTKP-42', 'Suzuki Swift 2023', 'Citycar', 'st-disponible', 'Disponible', 'Aeropuerto SCL', 1, 39210, 8, '29-10-2026', '31-03-2027', '31-03-2027', '15-01-2027', [790, 10000, '40.000 km']],
+  ['TJHV-18', 'Hyundai Grand i10 2025', 'Citycar', 'st-arrendado', 'Arrendado', 'En ruta · Rancagua', 1, 8930, 5, '22-09-2028', '31-03-2027', '31-03-2027', '15-01-2027', [1070, 10000, '10.000 km']],
+  ['PBVX-61', 'Hyundai Accent 2023', 'Sedán', 'st-reservado', 'Reservado', 'Aeropuerto SCL', 1, 48320, 7, '22-05-2027', '31-03-2027', '31-03-2027', '28-10-2026', [1680, 10000, '50.000 km']],
+  ['RKDS-90', 'Nissan Versa 2024', 'Sedán', 'st-atrasada', 'Arrendado · atrasado', 'En ruta · Santiago Centro', 1, 30115, 3, '08-10-2026', '31-03-2027', '31-03-2027', '15-01-2027', [4885, 10000, '35.000 km']],
+  ['SGFT-35', 'Toyota Yaris 2025', 'Sedán', 'st-disponible', 'Disponible', 'Providencia', 1, 12400, 8, '03-11-2026', '31-03-2027', '31-03-2027', '15-01-2027', [2600, 15000, '15.000 km']],
+  ['TFZB-73', 'Toyota RAV4 2024', 'SUV', 'st-arrendado', 'Arrendado', 'En ruta · Pucón', 1, 19660, 4, '17-07-2027', '31-03-2027', '31-03-2027', '15-01-2027', [340, 10000, '20.000 km']],
+  ['SYPC-11', 'MG ZS 2025', 'SUV', 'st-mantencion', 'En mantención', 'Taller Automotriz Lyon', 1, 20012, 5, '11-03-2028', '31-03-2027', '31-03-2027', '15-01-2027', [-12, 10000, '20.000 km · OT-214']],
+  ['RVLW-56', 'Chery Tiggo 7 Pro 2024', 'SUV', 'st-arrendado', 'Arrendado', 'En ruta · La Serena', 1, 27845, 6, '02-02-2027', '31-03-2027', '31-03-2027', '15-01-2027', [2155, 10000, '30.000 km']],
+  ['PKHG-24', 'Mitsubishi L200 2023', 'Camioneta 4x4', 'st-arrendado', 'Arrendado', 'En ruta · Calama', 1, 61230, 5, '19-12-2026', '31-03-2027', '31-03-2027', '28-10-2026', [3770, 10000, '65.000 km']],
+  ['SJRT-80', 'Toyota Hilux 2024', 'Camioneta 4x4', 'st-reservado', 'Reservado', 'Puerto Montt', 1, 33500, 8, '05-04-2027', '31-03-2027', '31-03-2027', '15-01-2027', [1500, 10000, '35.000 km']],
+  ['RFDL-49', 'Hyundai H1 2022', 'Van', 'st-fuera', 'Fuera de servicio', 'Providencia · sin señal 3 días', 0, 88410, 2, '27-11-2026', '31-03-2027', '31-03-2027', '15-01-2027', [1590, 10000, '90.000 km']]
+];
+document.querySelector('#tabla tbody').innerHTML = filas.map(([pat, mod, cat, st, et, ub, gps, km, cb, rt, pc, soap, seg, m]) => `
+  <tr class="clic">
+    <td><div class="rc-fila" style="flex-wrap:nowrap"><span class="pat">${pat}</span><div style="line-height:1.25"><b style="font-weight:500">${mod}</b><div class="peq muted">${cat}</div></div></div></td>
+    <td><span class="chip ${st}">${et}</span></td>
+    <td><span class="rc-fila" style="flex-wrap:nowrap;gap:6px"><span class="rc-gps-punto ${gps ? '' : 'off'}"></span><span class="peq">${ub}</span></span></td>
+    <td class="mono">${km.toLocaleString('es-CL')}</td>
+    <td>${comb(cb)}</td>
+    <td>${venc(rt)}</td><td>${venc(pc)}</td><td>${venc(soap)}</td><td>${venc(seg)}</td>
+    <td>${mant(...m)}</td>
+  </tr>`).join('');
+</script>
+</body>
+</html>

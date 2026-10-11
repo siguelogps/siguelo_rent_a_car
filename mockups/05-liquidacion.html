@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Liquidación R-1050 · Síguelo Rentacar</title>
+<link rel="stylesheet" href="../public/app.css"><link rel="stylesheet" href="../public/rentacar.css"><link rel="stylesheet" href="maqueta.css">
+</head>
+<body data-activo="liquidacion" data-titulo="Liquidaciones">
+<main class="contenido">
+  <a href="#" class="peq muted" style="text-decoration:none">‹ Liquidaciones pendientes</a>
+  <div class="pagina-cab">
+    <div>
+      <div class="rc-fila"><h1>Liquidación · <span class="mono">R-1050</span></h1><span class="chip aviso">Por aprobar</span></div>
+      <p>Contrato <span class="mono">CT-2026-0418</span> · Valentina Soto Riquelme · <span class="mono">16.482.903-0</span> · PBVX-61 · 11-10-2026 al 16-10-2026</p>
+    </div>
+    <div class="acciones">
+      <button class="btn">Descargar PDF</button>
+      <button class="btn">Agregar cargo</button>
+      <button class="btn primario">Aprobar, cobrar y liberar saldo</button>
+    </div>
+  </div>
+
+  <div class="columnas" style="grid-template-columns:minmax(0,1fr) 400px">
+    <div style="display:flex;flex-direction:column;gap:18px;min-width:0">
+      <div class="tarjeta">
+        <div class="bloque" style="padding-bottom:6px"><h2>Cargos calculados al cierre <span class="peq muted" style="font-weight:400">Cada cargo indica de dónde sale el dato. Puedes editarlo o condonarlo con motivo.</span></h2></div>
+        <div class="tabla-env">
+        <table class="tabla rc-liq">
+          <thead><tr><th style="width:44px">Incluir</th><th>Concepto</th><th>Cálculo</th><th>Origen</th><th class="monto">Monto</th></tr></thead>
+          <tbody>
+            <tr><td><label class="switch"><input type="checkbox" checked><span></span></label></td><td><b>Día extra por atraso</b></td><td>Devolvió 13:44, pactado 12:00 (tolerancia 59 min) · 1 día × <span class="mono">$32.990</span></td><td><span class="chip">Check-in</span></td><td class="monto">$32.990</td></tr>
+            <tr><td><label class="switch"><input type="checkbox" checked><span></span></label></td><td><b>Kilómetros extra</b></td><td>1.554 km recorridos − 1.250 incluidos = 304 km × <span class="mono">$180</span></td><td><span class="chip teal">Plataforma GPS</span></td><td class="monto">$54.720</td></tr>
+            <tr><td><label class="switch"><input type="checkbox" checked><span></span></label></td><td><b>Combustible faltante</b></td><td>3/8 de 45 L ≈ 17 L × <span class="mono">$1.390</span> + cargo de servicio <span class="mono">$5.000</span></td><td><span class="chip teal">Plataforma GPS</span></td><td class="monto">$28.630</td></tr>
+            <tr><td><label class="switch"><input type="checkbox" checked><span></span></label></td><td><b>TAG</b></td><td>14 tránsitos · Autopista Central, Costanera Norte, Vespucio Sur</td><td><span class="chip rev">Importación TAG</span></td><td class="monto">$18.640</td></tr>
+            <tr><td><label class="switch"><input type="checkbox"><span></span></label></td><td><b>Multas</b></td><td class="muted">Ninguna registrada a la fecha · se pueden cargar hasta 90 días después</td><td><span class="chip rev">Importación multas</span></td><td class="monto muted">$0</td></tr>
+            <tr><td><label class="switch"><input type="checkbox" checked><span></span></label></td><td><b>Daño · abolladura puerta del. der.</b><span class="origen">Incidente INC-0087</span></td><td>Presupuesto Desabolladuría Sur <span class="mono">$280.000</span> · deducible pactado UF 10 (<span class="mono">$395.120</span>) → se cobra el menor</td><td><span class="chip error">Incidente</span></td><td class="monto">$280.000</td></tr>
+            <tr><td><label class="switch"><input type="checkbox" checked><span></span></label></td><td><b>Triángulo faltante</b></td><td>Checklist: entregó 2, devolvió 1</td><td><span class="chip">Check-in</span></td><td class="monto">$12.000</td></tr>
+            <tr><td><label class="switch"><input type="checkbox" checked><span></span></label></td><td><b>Lavado</b></td><td>Limpieza: «requiere lavado» en la devolución</td><td><span class="chip">Check-in</span></td><td class="monto">$15.000</td></tr>
+            <tr class="sub"><td></td><td colspan="3">Total cargos adicionales <span class="muted" style="font-weight:400">(IVA incluido)</span></td><td class="monto">$441.980</td></tr>
+            <tr><td></td><td colspan="3" class="muted">Arriendo ya pagado el 02-10-2026 · Webpay Plus · autorización 184503</td><td class="monto muted">$238.455</td></tr>
+            <tr class="tot"><td></td><td colspan="3">Total del contrato</td><td class="monto">$680.435</td></tr>
+          </tbody>
+        </table>
+        </div>
+      </div>
+
+      <div class="tarjeta bloque">
+        <h2>Garantía</h2>
+        <div class="rc-resumen-gar">
+          <div><span>Garantía retenida</span><b class="monto">$500.000</b><small class="muted">Visa ···· 4821 · Webpay Plus</small></div>
+          <div class="op">−</div>
+          <div><span>Se captura (cargos)</span><b class="monto">$441.980</b><small class="muted">captura parcial diferida</small></div>
+          <div class="op">=</div>
+          <div class="res"><span>Se libera al cliente</span><b class="monto">$58.020</b><small class="muted">visible en su tarjeta en 1 a 5 días hábiles</small></div>
+        </div>
+        <div class="aviso info"><b>Marcha blanca:</b> al aprobar se registra la liquidación, pero la captura y la liberación en Webpay Plus quedan en espera hasta activar «Cobros» en Configuración › Integraciones.</div>
+      </div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:18px;min-width:0">
+      <div class="rc-gar">
+        <div class="rc-entre"><span>Estado de la garantía</span><span class="rc-proveedor" style="background:#2B2F36;border-color:#4A515C;color:#fff"><i style="background:#E4002B"></i>Webpay Plus</span></div>
+        <div class="monto">$500.000</div>
+        <div class="rc-gar-barra"><i class="on"></i><i class="on"></i><i class="on"></i><i></i></div>
+        <div class="rc-gar-pasos"><span>Solicitada</span><span>Retenida</span><b>Captura parcial</b><span>Saldo liberado</span></div>
+        <div style="font-size:12px;color:#AEB4BE">Retenida el 09-10-2026 · vence el 08-11-2026 · quedan 23 días para capturar</div>
+      </div>
+
+      <div class="tarjeta bloque">
+        <h2>Documento tributario</h2>
+        <div class="segmentado"><button aria-pressed="true">Boleta electrónica</button><button>Factura electrónica</button></div>
+        <dl class="rc-datos" style="grid-template-columns:1fr 1fr">
+          <div><dt>Receptor</dt><dd>Valentina Soto R.</dd></div>
+          <div><dt>RUT</dt><dd class="mono">16.482.903-0</dd></div>
+          <div><dt>Monto</dt><dd class="monto">$441.980</dd></div>
+          <div><dt>Emisión</dt><dd>vía SimpleAPI</dd></div>
+        </dl>
+        <p class="ayuda">Los cargos por daño (deducible) se pueden emitir aparte o como nota de cobro, según la configuración de la empresa.</p>
+        <button class="btn">Emitir boleta al aprobar</button>
+      </div>
+
+      <div class="tarjeta bloque">
+        <h2>Aviso al cliente</h2>
+        <div class="rc-check" style="padding:0;min-height:40px"><span class="caja si"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><path d="M5 12l4 4L19 7"/></svg></span><span>Correo con la liquidación en PDF</span></div>
+        <div class="rc-check" style="padding:0;min-height:40px"><span class="caja si"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><path d="M5 12l4 4L19 7"/></svg></span><span>WhatsApp con el resumen y el enlace</span></div>
+        <div class="aviso neutro peq">Detenidos por marcha blanca. Quedarán en la bandeja de salida.</div>
+      </div>
+    </div>
+  </div>
+</main>
+<script type="module">import './maqueta.js';</script>
+</body>
+</html>

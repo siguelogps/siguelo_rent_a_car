@@ -1,0 +1,88 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Devolución R-1050 · Síguelo Rentacar</title>
+<link rel="stylesheet" href="../public/app.css"><link rel="stylesheet" href="../public/rentacar.css"><link rel="stylesheet" href="maqueta.css">
+</head>
+<body data-activo="patio" data-titulo="Entregas y devoluciones">
+<main class="contenido">
+  <a href="#" class="peq muted" style="text-decoration:none">‹ Entregas y devoluciones de hoy</a>
+  <div class="pagina-cab">
+    <div>
+      <div class="rc-fila"><h1>Devolución · <span class="mono">R-1050</span></h1><span class="pat grande" style="font-size:18px">PBVX-61</span><span class="chip st-devuelta">Check-in en revisión</span></div>
+      <p>Valentina Soto Riquelme · Hyundai Accent 2023 · recibido por Jorge Salinas (patio) en Sucursal Puerto Montt</p>
+    </div>
+    <div class="acciones">
+      <button class="btn">Ver contrato CT-2026-0418</button>
+      <button class="btn">Pedir firma de devolución</button>
+      <button class="btn primario">Confirmar y pasar a liquidación</button>
+    </div>
+  </div>
+
+  <div class="rc-difs">
+    <div class="rc-dif"><span>Kilometraje (plataforma GPS)</span><div class="par"><s>48.320</s>→<b>49.874</b></div><em class="mal">+1.554 km · 304 km sobre los 1.250 incluidos</em></div>
+    <div class="rc-dif"><span>Combustible (plataforma GPS)</span><div class="par"><s>7/8</s>→<b>4/8</b></div><em class="mal">Faltan 3/8 · aprox. 18 litros</em></div>
+    <div class="rc-dif"><span>Hora de devolución</span><div class="par"><s>12:00</s>→<b>13:44</b></div><em class="mal">1 h 44 min de atraso · tolerancia 59 min</em></div>
+    <div class="rc-dif"><span>Daños</span><div class="par"><s>3</s>→<b>4</b></div><em class="mal">1 daño nuevo → genera incidente</em></div>
+  </div>
+
+  <div class="columnas" style="grid-template-columns:minmax(0,1fr) 430px">
+    <div class="tarjeta bloque">
+      <h2>Fotos lado a lado <div class="segmentado"><button aria-pressed="true">Exterior</button><button>Esquinas</button><button>Interior y tablero</button></div></h2>
+      <div class="rc-comp" id="comp"></div>
+    </div>
+
+    <div style="display:flex;flex-direction:column;gap:18px;min-width:0">
+      <div class="tarjeta bloque">
+        <h2>Esquema de daños</h2>
+        <div class="columnas-2" style="gap:10px">
+          <div><div class="peq muted" style="margin-bottom:4px">Entrega · 11-10</div><div class="rc-esquema" id="esq1"></div></div>
+          <div><div class="peq b" style="margin-bottom:4px">Devolución · 16-10</div><div class="rc-esquema" id="esq2" style="border-color:var(--marca-ambar)"></div></div>
+        </div>
+        <div class="rc-danos">
+          <div class="rc-dano" style="border-color:#F2C9C4;background:#FFF8F7"><span class="n abolladura nuevo">4</span><div><b>Abolladura puerta delantera der.</b><small>Nuevo · 8 cm · «golpe en estacionamiento» (nota del patio)</small></div><span class="chip error">Nuevo</span></div>
+          <div class="rc-dano"><span class="n raya">1</span><div><b>Raya puerta trasera izq.</b><small>Sin cambios respecto de la entrega</small></div><span class="chip">Igual</span></div>
+          <div class="rc-dano"><span class="n trizadura">2</span><div><b>Trizadura parabrisas</b><small>Sin cambios · 3 cm</small></div><span class="chip">Igual</span></div>
+        </div>
+      </div>
+
+      <div class="tarjeta bloque">
+        <h2>Checklist <span class="chip aviso">1 diferencia</span></h2>
+        <table class="tabla">
+          <tr><th>Elemento</th><th>Entrega</th><th>Devolución</th></tr>
+          <tr><td>Neumático de repuesto</td><td>✓</td><td>✓</td></tr>
+          <tr><td>Triángulos</td><td>2</td><td><b style="color:var(--red)">1 · falta uno</b></td></tr>
+          <tr><td>Extintor, gata, documentos, TAG</td><td>✓</td><td>✓</td></tr>
+          <tr><td>Limpieza</td><td>Polvo en tablero</td><td>Requiere lavado</td></tr>
+        </table>
+      </div>
+
+      <div class="aviso info"><b>Al confirmar se crea el incidente INC-0087</b> (abolladura) ligado al contrato CT-2026-0418, con las fotos de entrega y devolución, y pasa a la liquidación con el deducible del cliente.</div>
+    </div>
+  </div>
+</main>
+<script type="module">
+import './maqueta.js';
+import { foto, esquema } from './fotos.js';
+const ent = 'Entrega · 11-10-2026 14:02 · Aeropuerto SCL';
+const dev = 'Devolución · 16-10-2026 13:44 · Puerto Montt';
+const sello = (s) => `<div class="sello" style="font-size:10px;padding:5px 8px">${s}</div>`;
+const filas = [
+  ['frente', 'Frente', 'Sin diferencias', ''],
+  ['derecho', 'Costado derecho', '<span style="color:var(--red)">Daño nuevo detectado</span>', 'abolladura'],
+  ['izquierdo', 'Costado izquierdo', 'Raya preexistente (1) · sin cambios', ''],
+  ['atras', 'Atrás', 'Sin diferencias', '']
+];
+document.getElementById('comp').innerHTML = `
+  <div></div><div class="rc-comp-cab">${ent}</div><div class="rc-comp-cab" style="color:var(--ink)">${dev}</div>
+  ${filas.map(([t, n, d, dano]) => `
+    <div class="lado">${n}<small>${d}</small></div>
+    <div class="rc-foto">${foto(t)}${sello('11-10-2026 14:02 · -33.3968, -70.7937')}</div>
+    <div class="rc-foto ${dano ? 'nuevo' : ''}">${foto(t, { dano: dano || null })}${dano ? '<span class="rc-circulo" style="left:44%;top:55%;width:22%;height:24%"></span><span class="rc-circulo-et" style="left:60%;top:45%">4 · abolladura</span>' : ''}${sello('16-10-2026 13:44 · -41.4693, -72.9424')}</div>`).join('')}`;
+const base = [{ x: 55, y: 262, n: 1, tipo: 'raya' }, { x: 200, y: 186, n: 2, tipo: 'trizadura' }, { x: 312, y: 360, n: 3, tipo: 'abolladura' }];
+document.getElementById('esq1').innerHTML = esquema(base, { etiquetas: false });
+document.getElementById('esq2').innerHTML = esquema([...base, { x: 300, y: 165, n: 4, tipo: 'abolladura', nuevo: true }], { etiquetas: false });
+</script>
+</body>
+</html>

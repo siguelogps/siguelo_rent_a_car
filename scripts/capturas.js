@@ -26,7 +26,8 @@ const servidor = http.createServer((req, res) => {
   const nav = await chromium.launch(fs.existsSync('/opt/pw-browsers/chromium') && !process.env.PLAYWRIGHT_BROWSERS_PATH ? { executablePath: '/opt/pw-browsers/chromium' } : {});
   fs.mkdirSync(path.join(RAIZ, 'mockups/capturas'), { recursive: true });
   for (const f of paginas) {
-    const ancho = f.includes('celular') ? 1440 : 1440;
+    const html = fs.readFileSync(path.join(RAIZ, 'mockups', f), 'utf8');
+    const ancho = Number((html.match(/name="captura-ancho" content="(\d+)"/) || [])[1] || 1440);
     const pag = await nav.newPage({ viewport: { width: ancho, height: 900 }, deviceScaleFactor: 1.5, locale: 'es-CL' });
     await pag.goto(`${base}/mockups/${f}`, { waitUntil: 'networkidle' });
     await pag.evaluate(() => document.fonts.ready);

@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="captura-ancho" content="1820">
+<title>Entrega en celular · Síguelo Rentacar</title>
+<link rel="stylesheet" href="../public/app.css"><link rel="stylesheet" href="../public/rentacar.css"><link rel="stylesheet" href="maqueta.css">
+</head>
+<body>
+<div class="lienzo">
+  <div class="lienzo-cab"><img src="../public/img/logo-siguelo.png" alt="Síguelo GPS"><div><h1>Entrega del vehículo (check-out) · celular del personal de patio</h1><p>Reserva R-1050 · PBVX-61 Hyundai Accent · Aeropuerto SCL · el mismo flujo se usa en la devolución (check-in)</p></div></div>
+  <div class="telefonos" id="telefonos"></div>
+</div>
+<script type="module">
+import { foto, esquema } from './fotos.js';
+const ok = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round"><path d="M5 12l4 4L19 7"/></svg>';
+const cam = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/></svg>';
+const sello = (h) => `11-10-2026 ${h}<br>-33.3968, -70.7937 · Aeropuerto SCL`;
+const cab = (paso, titulo) => `
+  <div class="rc-movil-cab">
+    <div class="rc-entre"><span>‹ Entrega · R-1050</span><span class="pat">PBVX-61</span></div>
+    <h2>${titulo}</h2>
+    <div class="rc-progreso">${[1, 2, 3, 4, 5].map((i) => `<i class="${i < paso ? 'hecho' : i === paso ? 'actual' : ''}"></i>`).join('')}</div>
+    <div class="rc-pasos-movil">${['Km y combustible', 'Fotos', 'Daños', 'Checklist', 'Firma'].map((t, i) => i + 1 === paso ? `<b>${t}</b>` : `<span>${t}</span>`).join('')}</div>
+  </div>`;
+const tel = (n, titulo, html) => `<div class="tel-env"><p><span>${n}</span>${titulo}</p><div class="tel"><div class="tel-pantalla"><div class="tel-estado"><span>14:06</span><span>5G ▮▮▮</span></div><div class="tel-scroll"><div class="rc-movil">${html}</div></div></div></div></div>`;
+
+const FOTOS = [['frente', 'Frente', '14:01'], ['atras', 'Atrás', '14:01'], ['izquierdo', 'Costado izq.', '14:02'], ['derecho', 'Costado der.', '14:02'], ['esq-fi', 'Esq. del. izq.', '14:03'], ['esq-fd', 'Esq. del. der.', '14:03'], ['esq-ti', 'Esq. tras. izq.', '14:04']];
+const PEND = [['Esq. tras. der.', true], ['Interior', false], ['Odómetro', false], ['Combustible', false]];
+
+const p1 = cab(2, 'Fotos obligatorias') + `
+  <div class="rc-movil-cuerpo">
+    <div class="rc-camara">${foto('esq-td').replace('<svg', '<svg class="esc"')}<div class="guia"></div><div class="guia-txt">Encuadra la esquina trasera derecha</div><div class="sello">${sello('14:05:32')}</div></div>
+    <div class="rc-entre"><b>7 de 11 fotos</b><span class="peq muted">Fecha, hora y ubicación quedan estampadas</span></div>
+    <div class="rc-fotos-guia">
+      ${FOTOS.map(([t, et, h]) => `<div class="rc-foto">${foto(t)}<span class="et">${et}</span><span class="ok">${ok}</span><div class="sello">${h} · -33.3968</div></div>`).join('')}
+      ${PEND.map(([et, sig]) => `<div class="rc-foto pend ${sig ? 'siguiente' : ''}">${cam}${et}</div>`).join('')}
+    </div>
+  </div>
+  <div class="rc-movil-pie"><button class="btn primario">${cam.replace('<svg', '<svg width="20" height="20"')} Tomar foto</button></div>`;
+
+const DANOS = [
+  { x: 55, y: 262, n: 1, tipo: 'raya' },
+  { x: 200, y: 186, n: 2, tipo: 'trizadura' },
+  { x: 312, y: 352, n: 3, tipo: 'abolladura' }
+];
+const p2 = cab(3, 'Esquema de daños') + `
+  <div class="rc-movil-cuerpo" style="gap:10px">
+    <div class="rc-tipos-dano"><button aria-pressed="true"><i style="background:var(--blue)"></i>Raya</button><button><i style="background:var(--purple)"></i>Abolladura</button><button><i style="background:var(--red)"></i>Trizadura</button></div>
+    <div class="rc-esquema">${esquema(DANOS)}</div>
+    <p class="peq muted" style="text-align:center">Toca el auto donde está el daño y agrega foto y nota</p>
+    <div class="rc-danos">
+      <div class="rc-dano"><span class="n raya">1</span><div><b>Raya puerta trasera izq.</b><small>Preexistente · contrato C-0977</small></div><span class="th">${foto('detalle', { color: '#B9C1CB', dano: 'raya' })}</span></div>
+      <div class="rc-dano"><span class="n trizadura">2</span><div><b>Trizadura parabrisas</b><small>Preexistente · 3 cm, lado copiloto</small></div><span class="th">${foto('detalle', { color: '#5A6B7D' })}</span></div>
+    </div>
+  </div>
+  <div class="rc-movil-pie"><button class="btn">Anterior</button><button class="btn primario">Siguiente</button></div>`;
+
+const CHECK = [['Neumático de repuesto', 'si'], ['Gata y llave de ruedas', 'si'], ['Triángulos (2)', 'si'], ['Extintor', 'si', 'vence 08-2027'], ['Documentos (padrón, SOAP, permiso)', 'si'], ['TAG instalado', 'si'], ['Limpieza interior y exterior', 'no', 'Polvo en tablero · se anota']];
+const p3 = cab(1, 'Km, combustible y checklist') + `
+  <div class="rc-movil-cuerpo" style="gap:10px">
+    <div class="columnas-2" style="gap:8px">
+      <div class="rc-gps-dato"><span class="origen"><span class="rc-gps-punto"></span>Plataforma GPS · hace 1 min</span><span class="v">48.320 <small>km</small></span><span class="peq muted">Odómetro del tablero: confirmar</span></div>
+      <div class="rc-gps-dato"><span class="origen"><span class="rc-gps-punto"></span>Plataforma GPS · hace 1 min</span><span class="v">7/8</span><div class="rc-nivel">${Array.from({ length: 8 }, (_, i) => `<i class="${i < 7 ? 'on' : ''}"></i>`).join('')}</div><div class="rc-nivel-et"><span>E</span><span>F</span></div></div>
+    </div>
+    <div class="rc-fila"><button class="btn primario" style="flex:1">✓ Coincide con el tablero</button><button class="btn">Corregir</button></div>
+    <div class="tarjeta">
+      ${CHECK.map(([t, e, n]) => `<div class="rc-check"><span class="caja ${e}">${e === 'si' ? ok : e === 'no' ? '✕' : ''}</span><span>${t}${n ? `<br><small>${n}</small>` : ''}</span></div>`).join('')}
+    </div>
+  </div>
+  <div class="rc-movil-pie"><button class="btn">Anterior</button><button class="btn primario">Siguiente</button></div>`;
+
+const p4 = cab(5, 'Firma del cliente') + `
+  <div class="rc-movil-cuerpo" style="gap:10px">
+    <div class="tarjeta bloque" style="padding:14px;gap:8px">
+      <div class="rc-entre peq"><span class="muted">Km de salida</span><b class="mono">48.320 km</b></div>
+      <div class="rc-entre peq"><span class="muted">Combustible</span><b class="mono">7/8</b></div>
+      <div class="rc-entre peq"><span class="muted">Fotos</span><b>11 de 11 ✓</b></div>
+      <div class="rc-entre peq"><span class="muted">Daños preexistentes</span><b>3 marcados</b></div>
+      <div class="rc-entre peq"><span class="muted">Checklist</span><b>6 de 7 · 1 observación</b></div>
+      <div class="rc-entre peq"><span class="muted">Devolución</span><b class="mono">16-10-2026 12:00</b></div>
+    </div>
+    <p class="peq" style="color:var(--ink-2)">Declaro recibir el vehículo en el estado descrito, con las fotos y daños registrados, y acepto las condiciones del contrato <b class="mono">CT-2026-0418</b>.</p>
+    <div style="position:relative">
+      <svg class="firma-canvas" viewBox="0 0 330 160" style="height:160px"><path d="M30,112 C45,60 60,50 66,80 C70,100 58,124 74,110 C92,92 96,62 110,70 C122,78 108,112 126,104 C146,94 150,74 166,82 C178,88 170,110 188,104 C214,94 226,70 240,86 C250,98 262,98 300,80" fill="none" stroke="#15181D" stroke-width="2.6" stroke-linecap="round"/><path d="M24,128 H306" stroke="#C4C9D1" stroke-dasharray="4 4"/></svg>
+      <button class="btn peq" style="position:absolute;right:8px;top:8px">Borrar</button>
+    </div>
+    <div class="rc-entre peq"><span>Valentina Soto Riquelme</span><span class="mono">16.482.903-0</span></div>
+    <div class="aviso neutro peq">El contrato firmado (PDF con QR) se enviará por correo y WhatsApp al activar las comunicaciones.</div>
+  </div>
+  <div class="rc-movil-pie"><button class="btn primario">Firmar y entregar llaves</button></div>`;
+
+document.getElementById('telefonos').innerHTML = tel(1, 'Km y combustible desde la plataforma GPS + checklist', p3) + tel(2, 'Fotos guiadas con fecha, hora y ubicación', p1) + tel(3, 'Esquema del auto para marcar daños', p2) + tel(4, 'Firma del cliente en pantalla', p4);
+</script>
+</body>
+</html>

@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Resultado del pago</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/pagos.css">
+<meta name="robots" content="noindex">
+</head>
+<body>
+<div class="pg-publico"><div class="pg-resultado" id="caja"><p class="muted">Cargando…</p></div></div>
+<script type="module">
+// Página pública de retorno después de Webpay Plus o Mercado Pago (con la marca del rentacar).
+const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const clp = (n) => `$${Math.round(Number(n) || 0).toLocaleString('es-CL')}`;
+const fechaHora = (v) => new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(new Date(v)).replace(/\//g, '-').replace(',', '');
+const ICONO = {
+  ok: '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l4 4L19 7"/></svg>',
+  mal: '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>',
+  espera: '<svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>'
+};
+const caja = document.getElementById('caja');
+const p = new URLSearchParams(location.search);
+const pie = '<div class="pie">Pago seguro gestionado con <img src="/img/logo-siguelo.png" alt="Síguelo GPS"></div>';
+
+if (p.get('error')) {
+  caja.innerHTML = `<div class="icono mal">${ICONO.mal}</div><h1>No pudimos confirmar el pago</h1><p class="muted">${esc(p.get('error'))}</p><p class="peq muted">Si se descontó dinero de tu tarjeta, contacta al rentacar con este mensaje.</p>${pie}`;
+} else {
+  try {
+    const r = await fetch(`/api/pagos/publico/${encodeURIComponent(p.get('pago') || '')}?t=${encodeURIComponent(p.get('t') || '')}`);
+    if (!r.ok) throw new Error('No encontramos este pago');
+    const d = await r.json();
+    const e = d.empresa;
+    const ok = ['pagado', 'simulado', 'retenido', 'capturado', 'autorizado'].includes(d.estado);
+    const espera = d.estado === 'pendiente';
+    const garantia = d.concepto === 'garantia';
+    const titulo = ok ? (garantia ? 'Garantía retenida' : '¡Pago recibido!') : espera ? 'Pago en proceso' : d.estado === 'anulado' ? 'Pago anulado' : 'Pago rechazado';
+    const texto = ok ? (garantia ? 'El monto queda retenido en tu tarjeta (no es un cobro). Se libera al devolver el vehículo, descontados los cargos pendientes.' : 'Gracias, tu pago quedó registrado.')
+      : espera ? 'Tu pago aún está en proceso. Te avisaremos cuando se confirme.' : esc(d.motivo || 'El pago no se completó. Puedes intentarlo nuevamente o usar otro medio de pago.');
+    document.title = `${titulo} · ${e.nombre}`;
+    const marca = e.logo ? `<img src="/api/logo/${esc(e.slug)}" alt="${esc(e.nombre)}">` : `<span class="ini" style="background:${esc(e.color || '#0F5F58')}">${esc(e.nombre.split(/\s+/).map((x) => x[0]).slice(0, 2).join('').toUpperCase())}</span><span>${esc(e.nombre)}</span>`;
+    const filas = [['Concepto', `${esc(d.concepto_nombre)}${d.reserva_folio ? ` · reserva ${esc(d.reserva_folio)}` : ''}`], ['Medio de pago', esc(d.metodo)],
+      d.tarjeta ? ['Tarjeta', `···· ${esc(d.tarjeta)}${d.tipo_pago ? ` · ${esc(d.tipo_pago)}` : ''}${d.cuotas > 1 ? ` · ${d.cuotas} cuotas` : ''}`] : null,
+      d.autorizacion && !d.simulado ? ['Autorización', `<span class="mono">${esc(d.autorizacion)}</span>`] : null,
+      ['Fecha', fechaHora(d.fecha)], ['N° de pago', `<span class="mono">${d.id}</span>`]].filter(Boolean);
+    caja.innerHTML = `<div class="marca">${marca}</div>
+      <div class="icono ${ok ? 'ok' : espera ? 'espera' : 'mal'}">${ok ? ICONO.ok : espera ? ICONO.espera : ICONO.mal}</div>
+      <h1>${titulo}</h1><div class="monto">${clp(d.monto)}</div><p class="muted">${texto}</p>
+      ${d.simulado ? '<div class="aviso info peq"><b>Simulado: marcha blanca.</b> Este pago es de prueba: no se cobró a ninguna tarjeta.</div>' : ''}
+      <dl>${filas.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('')}</dl>
+      ${d.url_retorno ? `<a class="btn primario" href="${esc(d.url_retorno)}">Volver</a>` : ''}
+      ${e.telefono || e.correo ? `<p class="peq muted">¿Dudas? ${esc([e.telefono, e.correo].filter(Boolean).join(' · '))}</p>` : ''}${pie}`;
+  } catch (err) {
+    caja.innerHTML = `<div class="icono mal">${ICONO.mal}</div><h1>No encontramos este pago</h1><p class="muted">${esc(err.message)}</p>${pie}`;
+  }
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Liquidación</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/pagos.css">
+</head>
+<body>
+<main>
+  <a href="/liquidaciones" class="pg-volver" id="volver">‹ Liquidaciones pendientes</a>
+  <div class="pagina-cab">
+    <div>
+      <div class="rc-fila"><h1 id="titulo">Liquidación</h1><span id="chip-estado"></span></div>
+      <p id="subtitulo"></p>
+    </div>
+    <div class="acciones" id="acciones"></div>
+  </div>
+  <div id="contenido"><p class="rc-vacio">Calculando la liquidación…</p></div>
+</main>
+<script type="module">
+import { iniciarPagina, api, esc, clp, fecha, fechaHora, rut, pat, modal, toast, toastError, confirmar, leerForm, descargar, puede } from '/comun.js';
+import { barraGarantia, proveedor, diasRestantes, METODOS } from '/js/pagos.js';
+
+const yo = await iniciarPagina({ activo: 'liquidaciones', titulo: 'Liquidaciones' });
+const reservaId = Number(location.pathname.split('/').pop());
+const editar = puede('liquidaciones', 'editar');
+const $ = (s) => document.querySelector(s);
+const CHIP_ORIGEN = { 'Check-in': '', 'Plataforma GPS': 'teal', 'Importación TAG': 'rev', 'Importación multas': 'rev', Incidente: 'error', Manual: 'marca' };
+const ESTADO = { borrador: ['Por aprobar', 'aviso'], aprobada: ['Aprobada · saldo por cobrar', 'error'], cobrada: ['Cobrada', 'ok'], anulada: ['Anulada', 'sin'] };
+const DTE_EST = { pendiente: ['Pendiente', 'aviso'], retenido: ['Retenido', 'aviso'], emitido: ['Enviado al SII', 'info'], aceptado: ['Aceptado', 'ok'], reparos: ['Con reparos', 'aviso'], rechazado: ['Rechazado', 'error'], error: ['Error', 'error'] };
+const check = '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3.5"><path d="M5 12l4 4L19 7"/></svg>';
+
+let v = null;
+const opciones = { documento: 'boleta', emitir: true, avisar_correo: true, avisar_whatsapp: true, receptor: null };
+
+async function cargar(datos = null) {
+  v = datos || await api(`liquidaciones/${reservaId}`);
+  if (v.cliente?.tipo === 'empresa' && opciones.documento === 'boleta' && !datos) opciones.documento = 'factura';
+  pintar();
+}
+
+function pintar() {
+  const { reserva: r, cliente: c, vehiculo: ve, liquidacion: lq, resumen: s, garantia: g } = v;
+  const borrador = lq.estado === 'borrador';
+  const mb = v.empresa.marcha_blanca;
+  $('#volver').textContent = borrador ? '‹ Liquidaciones pendientes' : '‹ Historial de liquidaciones';
+  $('#volver').href = borrador ? '/liquidaciones' : '/liquidaciones#historial';
+  $('#titulo').innerHTML = `Liquidación · <span class="mono">${esc(r.folio)}</span>`;
+  const [et, ec] = ESTADO[lq.estado] || [lq.estado, ''];
+  $('#chip-estado').innerHTML = `<span class="chip ${ec}">${et}</span>`;
+  const nombre = [c?.nombre, c?.apellidos].filter(Boolean).join(' ');
+  $('#subtitulo').innerHTML = [v.contrato ? `Contrato <span class="mono">${esc(v.contrato.folio)}</span>` : `<span class="mono">${esc(lq.folio)}</span>`, esc(nombre),
+    c?.documento ? `<span class="mono">${c.documento_tipo === 'rut' ? rut(c.documento) : esc(c.documento)}</span>` : '', ve ? esc(ve.patente.replace(/^([A-Z]{4})(\d{2})$/, '$1-$2')) : '', `${fecha(r.inicio)} al ${fecha(r.fin)}`].filter(Boolean).join(' · ');
+  document.title = `Liquidación ${r.folio} · ${yo.empresa?.nombre || ''}`;
+  $('#acciones').innerHTML = `<button type="button" class="btn" id="b-pdf">Descargar PDF</button>${borrador && editar ? '<button type="button" class="btn" id="b-agregar">Agregar cargo</button><button type="button" class="btn primario" id="b-aprobar">Aprobar, cobrar y liberar saldo</button>' : ''}`;
+
+  // Tabla de cargos
+  const filas = lq.lineas.map((l) => {
+    const excluida = !l.incluir;
+    return `<tr class="${excluida ? 'excluida' : ''}${borrador && editar ? ' clic' : ''}" data-codigo="${esc(l.codigo)}">
+      <td><label class="switch" onclick="event.stopPropagation()"><input type="checkbox" data-incluir="${esc(l.codigo)}"${l.incluir ? ' checked' : ''}${borrador && editar ? '' : ' disabled'} aria-label="Incluir ${esc(l.concepto)}"><span></span></label></td>
+      <td><b>${esc(l.concepto)}</b>${l.sub ? `<span class="origen">${esc(l.sub)}</span>` : ''}${l.editado && l.motivo ? `<span class="pg-marca">${l.incluir ? 'Editado' : 'Condonado'}: ${esc(l.motivo)}</span>` : ''}${l.aviso ? `<span class="pg-aviso">${esc(l.aviso)}</span>` : ''}</td>
+      <td class="${!l.monto && !l.monto_calculado ? 'muted' : ''}">${esc(l.calculo).replace(/(\$[\d.]+)/g, '<span class="mono">$1</span>')}</td>
+      <td><span class="chip ${CHIP_ORIGEN[l.origen] ?? ''}">${esc(l.origen)}</span></td>
+      <td class="monto${excluida || !l.monto ? ' muted' : ''}">${l.editado && l.monto !== l.monto_calculado && l.incluir ? `<s>${clp(l.monto_calculado)}</s>` : ''}${clp(excluida ? (l.monto || l.monto_calculado) : l.monto)}</td></tr>`;
+  }).join('');
+  const arr = v.arriendo;
+  const filaArr = arr.pagado ? `<tr><td></td><td colspan="3" class="muted">Arriendo ya pagado${arr.ultimo ? ` el ${fecha(arr.ultimo.fecha)} · ${esc(arr.ultimo.metodo)}${arr.ultimo.autorizacion && !arr.ultimo.simulado ? ` · autorización ${esc(arr.ultimo.autorizacion)}` : arr.ultimo.simulado ? ' · simulado' : ''}` : ''}</td><td class="monto muted">${clp(arr.pagado)}</td></tr>` : '';
+
+  // Garantía (resumen)
+  const tieneG = s.garantia > 0;
+  const resumenG = tieneG ? `<div class="rc-resumen-gar">
+      <div><span>Garantía retenida</span><b class="monto">${clp(s.garantia)}</b><small class="muted">${g?.tarjeta ? `${esc(g.marca || 'Tarjeta')} ···· ${esc(g.tarjeta)} · ` : ''}${esc(g?.metodo_nombre || '')}</small></div>
+      <div class="op">−</div>
+      <div><span>${borrador ? 'Se captura (cargos)' : 'Capturado (cargos)'}</span><b class="monto">${clp(s.captura)}</b><small class="muted">${s.captura < s.garantia ? 'captura parcial diferida' : 'captura total'}</small></div>
+      <div class="op">=</div>
+      ${s.saldo > 0 ? `<div class="res pg-res-saldo"><span>Saldo por cobrar</span><b class="monto">${clp(s.saldo)}</b><small class="muted">los cargos superan la garantía · se envía enlace de pago</small></div>`
+        : `<div class="res"><span>${borrador ? 'Se libera al cliente' : 'Liberado al cliente'}</span><b class="monto">${clp(s.libera)}</b><small class="muted">visible en su tarjeta en 1 a 5 días hábiles</small></div>`}
+    </div>` : `<div class="aviso neutro">Esta reserva no tiene garantía retenida. ${s.total_cargos > 0 ? `Al aprobar, los cargos (<b class="monto">${clp(s.total_cargos)}</b>) quedan como saldo por cobrar con un enlace de pago para el cliente.` : 'No hay cargos que cobrar.'}</div>`;
+  const avisoMb = borrador && (mb || !v.cobros_activos) ? `<div class="aviso info"><b>${mb ? 'Marcha blanca' : 'Cobros desactivados'}:</b> al aprobar se registra la liquidación, pero la captura y la liberación en ${esc(g?.metodo_nombre || 'Webpay Plus')} quedan como «Simulado» (no se llama al proveedor) hasta activar «Cobros» en Configuración › Integraciones.</div>` : '';
+  const resultado = !borrador ? `<div class="tarjeta bloque"><h2>Resultado de la aprobación</h2><div class="pg-hecho">
+      <div><span>Aprobada</span><b>${fechaHora(lq.aprobado_en)}</b></div>
+      <div><span>Capturado de la garantía</span><b class="monto">${clp(lq.garantia_capturada)}</b></div>
+      <div><span>Liberado al cliente</span><b class="monto">${clp(lq.garantia_liberada)}</b></div>
+      ${lq.saldo_por_cobrar ? `<div><span>Saldo por cobrar</span><b class="monto" style="color:var(--red)">${clp(lq.saldo_por_cobrar)}</b></div>` : ''}
+      ${v.saldo_pago?.link_token && v.saldo_pago.estado === 'pendiente' ? `<div class="pg-enlace"><input class="campo" readonly value="${esc(`${location.origin}/api/pagos/link/${v.saldo_pago.link_token}`)}"><button type="button" class="btn peq" id="b-copiar">Copiar enlace</button></div>` : ''}
+      ${lq.opciones?.simulado ? '<div class="aviso info peq"><b>Simulado: marcha blanca.</b> La captura y la liberación no se enviaron al proveedor.</div>' : ''}
+    </div></div>` : '';
+
+  // Estado de la garantía (tarjeta oscura)
+  const n = diasRestantes(g?.vence_retencion);
+  const tarjetaG = g ? `<div class="rc-gar">
+      <div class="rc-entre"><span>Estado de la garantía</span>${proveedor(g.metodo).replace('class="rc-proveedor"', 'class="rc-proveedor" style="background:#2B2F36;border-color:#4A515C;color:#fff"')}</div>
+      <div class="monto">${clp(g.monto)}</div>
+      ${barraGarantia(borrador && g.etapa === 'retenida' && s.total_cargos > 0 ? 'capturada' : g.etapa === 'capturada' && g.monto_liberado > 0 ? 'liberada' : g.etapa)}
+      <div class="pg-gar-meta">${g.etapa === 'solicitada' ? 'Solicitada: el cliente aún no autoriza la retención' : `Retenida el ${fecha(g.creado_en)}${g.vence_retencion && g.etapa === 'retenida' ? ` · vence el ${fecha(g.vence_retencion)} · ${n > 0 ? `quedan ${n} ${n === 1 ? 'día' : 'días'} para capturar` : 'vencida'}` : ''}${g.etapa === 'capturada' ? ` · capturados ${clp(g.monto_capturado)}, liberados ${clp(g.monto_liberado)}` : ''}${g.etapa === 'liberada' ? ' · liberada completa' : ''}`}${g.simulado ? ' · <b style="color:var(--marca)">Simulado: marcha blanca</b>' : ''}</div>
+      ${g.etapa === 'retenida' && v.empresa.dias_retencion > 7 ? `<div class="pg-gar-meta" style="color:#FFB4A8">Retención configurada en ${v.empresa.dias_retencion} días: con débito o prepago Transbank permite capturar solo hasta 7 días.</div>` : ''}
+    </div>` : `<div class="rc-gar"><div class="rc-entre"><span>Estado de la garantía</span></div><div class="monto">${clp(0)}</div><div class="pg-gar-meta">Sin garantía registrada para esta reserva${r.garantia ? ` (pactada ${clp(r.garantia)})` : ''}</div></div>`;
+
+  // Documento tributario
+  const rec = opciones.receptor || v.receptor_sugerido;
+  const factura = opciones.documento === 'factura';
+  const docBloque = borrador ? `<div class="tarjeta bloque">
+      <h2>Documento tributario</h2>
+      <div class="segmentado" id="seg-doc"><button type="button" data-doc="boleta" aria-pressed="${!factura}">Boleta electrónica</button><button type="button" data-doc="factura" aria-pressed="${factura}">Factura electrónica</button></div>
+      <dl class="rc-datos" style="grid-template-columns:1fr 1fr">
+        <div><dt>Receptor</dt><dd>${esc(rec.razonSocial || nombre)}</dd></div>
+        <div><dt>RUT</dt><dd class="mono">${rut(rec.rut)}</dd></div>
+        <div><dt>Monto</dt><dd class="monto">${clp(s.total_cargos)}</dd></div>
+        <div><dt>Emisión</dt><dd>vía SimpleAPI</dd></div>
+        ${factura ? `<div><dt>Giro</dt><dd>${esc(rec.giro || '—')}</dd></div><div><dt>Dirección</dt><dd>${esc([rec.direccion, rec.comuna].filter(Boolean).join(', ') || '—')}</dd></div>` : ''}
+      </dl>
+      ${factura && (!rec.giro || !rec.direccion || rec.rut === '66666666-6') ? '<div class="aviso error peq">Faltan datos del receptor para la factura (RUT, giro y dirección).</div>' : ''}
+      <p class="ayuda">Los cargos por daño (deducible) se pueden emitir aparte o como nota de cobro, según la configuración de la empresa. <a href="#" id="b-receptor">Editar receptor</a></p>
+      <button type="button" class="btn pg-toggle-doc" id="b-emitir" aria-pressed="${opciones.emitir}">${opciones.emitir ? `Emitir ${factura ? 'factura' : 'boleta'} al aprobar` : 'No emitir documento'}</button>
+    </div>` : `<div class="tarjeta bloque"><h2>Documento tributario</h2>${v.dte.length ? v.dte.map((d) => { const [t, cl] = DTE_EST[d.estado] || [d.estado, '']; return `<div class="rc-entre"><span>${{ 39: 'Boleta', 33: 'Factura', 61: 'Nota de crédito' }[d.tipo]} ${d.folio ? `N° <span class="mono">${d.folio}</span>` : '(sin folio)'} · <span class="monto">${clp(d.total)}</span></span><span class="chip ${cl}">${t}</span></div>${d.mensaje ? `<p class="ayuda">${esc(d.mensaje)}</p>` : ''}`; }).join('') + '<a class="btn" href="/facturacion">Ver en Facturación</a>' : '<p class="ayuda">No se emitió documento tributario.</p><a class="btn" href="/facturacion">Ir a Facturación</a>'}</div>`;
+
+  // Aviso al cliente
+  const avisos = borrador ? `<div class="tarjeta bloque">
+      <h2>Aviso al cliente</h2>
+      <label class="rc-check pg-aviso-check" style="padding:0;min-height:40px"><input type="checkbox" data-aviso="avisar_correo"${opciones.avisar_correo ? ' checked' : ''}><span class="caja${opciones.avisar_correo ? ' si' : ''}">${opciones.avisar_correo ? check : ''}</span><span>Correo con la liquidación en PDF${c?.correo ? `<br><small>${esc(c.correo)}</small>` : '<br><small>sin correo registrado</small>'}</span></label>
+      <label class="rc-check pg-aviso-check" style="padding:0;min-height:40px"><input type="checkbox" data-aviso="avisar_whatsapp"${opciones.avisar_whatsapp ? ' checked' : ''}><span class="caja${opciones.avisar_whatsapp ? ' si' : ''}">${opciones.avisar_whatsapp ? check : ''}</span><span>WhatsApp con el resumen y el enlace${c?.telefono ? `<br><small>${esc(c.telefono)}</small>` : '<br><small>sin teléfono registrado</small>'}</span></label>
+      ${mb ? '<div class="aviso neutro peq">Detenidos por marcha blanca. Quedarán en la bandeja de salida.</div>' : ''}
+    </div>` : `<div class="tarjeta bloque"><h2>Aviso al cliente</h2>${v.salidas.map((x) => `<div class="rc-entre peq"><span>${x.canal === 'correo' ? 'Correo' : 'WhatsApp'} · ${esc(x.destino)}</span><span class="chip ${x.estado === 'enviada' ? 'ok' : x.estado === 'retenida' ? 'aviso' : 'error'}">${x.estado === 'retenida' ? 'Retenido' : x.estado === 'enviada' ? 'Enviado' : x.estado}</span></div>`).join('') || '<p class="ayuda">No se enviaron avisos.</p>'}${v.salidas.some((x) => x.estado === 'retenida') ? '<div class="aviso neutro peq">Retenidos en la bandeja de salida (Configuración).</div>' : ''}</div>`;
+
+  $('#contenido').innerHTML = `<div class="columnas pg-liq-cols">
+    <div class="pg-liq-col">
+      <div class="tarjeta">
+        <div class="bloque pg-liq-cab" style="padding-bottom:6px"><h2>Cargos calculados al cierre <span class="peq muted" style="font-weight:400">Cada cargo indica de dónde sale el dato. Puedes editarlo o condonarlo con motivo.</span>${borrador && editar ? '<button type="button" class="btn peq" id="b-recalcular" title="Vuelve a leer inspecciones, TAG, multas e incidentes">Recalcular</button>' : ''}</h2></div>
+        <div class="tabla-env"><table class="tabla rc-liq">
+          <thead><tr><th style="width:44px">Incluir</th><th>Concepto</th><th>Cálculo</th><th>Origen</th><th class="monto">Monto</th></tr></thead>
+          <tbody id="lineas">${filas}
+            <tr class="sub"><td></td><td colspan="3">Total cargos adicionales <span class="muted" style="font-weight:400">(IVA incluido)</span></td><td class="monto">${clp(s.total_cargos)}</td></tr>
+            ${filaArr}
+            <tr class="tot"><td></td><td colspan="3">Total del contrato</td><td class="monto">${clp(v.total_contrato)}</td></tr>
+          </tbody></table></div>
+      </div>
+      <div class="tarjeta bloque"><h2>Garantía</h2>${resumenG}${avisoMb}</div>
+      ${resultado}
+    </div>
+    <div class="pg-liq-col">${tarjetaG}${docBloque}${avisos}</div>
+  </div>`;
+  enlazar();
+}
+
+function enlazar() {
+  $('#b-pdf').onclick = () => descargar(`/api/liquidaciones/${reservaId}/pdf`, `Liquidacion-${v.reserva.folio}.pdf`).catch(toastError);
+  $('#b-agregar')?.addEventListener('click', agregarCargo);
+  $('#b-aprobar')?.addEventListener('click', aprobar);
+  $('#b-recalcular')?.addEventListener('click', async () => { try { await cargar(await api(`liquidaciones/${reservaId}/calcular`, { body: {} })); toast('Cargos recalculados'); } catch (e) { toastError(e); } });
+  $('#b-copiar')?.addEventListener('click', async (e) => { await navigator.clipboard?.writeText(e.target.previousElementSibling.value); toast('Enlace copiado'); });
+  $('#lineas').addEventListener('change', async (e) => {
+    const cb = e.target.closest('[data-incluir]'); if (!cb) return;
+    const l = v.liquidacion.lineas.find((x) => x.codigo === cb.dataset.incluir);
+    if (!cb.checked && l.monto > 0) { cb.checked = true; return editarLinea(l, { condonar: true }); }
+    try { await cargar(await api(`liquidaciones/${reservaId}/lineas/${encodeURIComponent(l.codigo)}`, { method: 'PATCH', body: { incluir: cb.checked } })); } catch (err) { cb.checked = !cb.checked; toastError(err); }
+  });
+  $('#lineas').addEventListener('click', (e) => {
+    if (e.target.closest('.switch')) return;
+    const tr = e.target.closest('tr[data-codigo]');
+    if (tr && v.liquidacion.estado === 'borrador' && editar) editarLinea(v.liquidacion.lineas.find((x) => x.codigo === tr.dataset.codigo));
+  });
+  $('#seg-doc')?.addEventListener('click', (e) => { const b = e.target.closest('[data-doc]'); if (b) { opciones.documento = b.dataset.doc; opciones.receptor = null; pintar(); } });
+  $('#b-emitir')?.addEventListener('click', () => { opciones.emitir = !opciones.emitir; pintar(); });
+  $('#b-receptor')?.addEventListener('click', (e) => { e.preventDefault(); editarReceptor(); });
+  document.querySelectorAll('[data-aviso]').forEach((cb) => cb.addEventListener('change', () => { opciones[cb.dataset.aviso] = cb.checked; pintar(); }));
+}
+
+async function editarLinea(l, { condonar = false } = {}) {
+  const manual = l.codigo.startsWith('manual:');
+  const botones = [{ texto: 'Cancelar' }];
+  if (manual) botones.push({ texto: 'Eliminar cargo', clase: 'peligro', accion: async () => cargar(await api(`liquidaciones/${reservaId}/lineas/${encodeURIComponent(l.codigo)}`, { method: 'DELETE' })) });
+  if (l.incluir && l.monto > 0 && !manual) botones.push({ texto: 'Condonar', accion: async (c) => {
+    const f = leerForm(c);
+    if (!f.motivo) { toast('Indica el motivo para condonar', 'error'); c.querySelector('[name=motivo]').focus(); return false; }
+    return cargar(await api(`liquidaciones/${reservaId}/lineas/${encodeURIComponent(l.codigo)}`, { method: 'PATCH', body: { incluir: false, motivo: f.motivo } }));
+  } });
+  if (!condonar) botones.push({ texto: 'Guardar', clase: 'primario', accion: async (c) => {
+    const f = leerForm(c);
+    return cargar(await api(`liquidaciones/${reservaId}/lineas/${encodeURIComponent(l.codigo)}`, { method: 'PATCH', body: { monto: Number(f.monto), incluir: true, motivo: f.motivo } }));
+  } });
+  await modal({ titulo: condonar ? `Condonar · ${l.concepto}` : l.concepto, html: `<div class="pg-form">
+      <p class="muted">${esc(l.calculo)}</p>
+      <div class="rc-entre peq"><span>Origen: <span class="chip ${CHIP_ORIGEN[l.origen] ?? ''}">${esc(l.origen)}</span></span><span>Calculado: <b class="monto">${clp(l.monto_calculado)}</b></span></div>
+      ${condonar ? '' : `<label>Monto a cobrar (CLP)<input class="campo" name="monto" type="number" min="0" step="1" value="${l.monto || l.monto_calculado}"></label>`}
+      <label>Motivo ${condonar ? '(obligatorio)' : '(obligatorio si cambias el monto)'}<input class="campo" name="motivo" value="${esc(l.motivo || '')}" placeholder="${condonar ? 'Ej.: cliente frecuente, error del sistema' : 'Ej.: el cliente presentó comprobante'}"></label>
+      <p class="peq muted">Queda registrado en la bitácora con tu nombre.</p></div>`, botones });
+}
+
+async function agregarCargo() {
+  await modal({ titulo: 'Agregar cargo', html: `<div class="pg-form">
+      <label>Concepto<input class="campo" name="concepto" placeholder="Ej.: estacionamiento, llave extraviada" required></label>
+      <label>Monto (CLP, IVA incluido)<input class="campo" name="monto" type="number" min="1" step="1" required></label>
+      <label>Detalle o motivo<input class="campo" name="motivo" placeholder="Cómo se calculó o por qué se cobra"></label></div>`,
+    botones: [{ texto: 'Cancelar' }, { texto: 'Agregar', clase: 'primario', accion: async (c) => { const f = leerForm(c); return cargar(await api(`liquidaciones/${reservaId}/lineas`, { body: { ...f, monto: Number(f.monto) } })); } }] });
+}
+
+async function editarReceptor() {
+  const r = opciones.receptor || v.receptor_sugerido;
+  const res = await modal({ titulo: 'Receptor del documento', html: `<div class="pg-form">
+      <div class="fila"><label>RUT<input class="campo" name="rut" value="${esc(rut(r.rut))}"></label><label>Razón social<input class="campo" name="razonSocial" value="${esc(r.razonSocial || '')}"></label></div>
+      <div class="fila"><label>Giro<input class="campo" name="giro" value="${esc(r.giro || '')}"></label><label>Correo<input class="campo" name="correo" value="${esc(r.correo || '')}"></label></div>
+      <div class="fila"><label>Dirección<input class="campo" name="direccion" value="${esc(r.direccion || '')}"></label><label>Comuna<input class="campo" name="comuna" value="${esc(r.comuna || '')}"></label></div>
+      <p class="peq muted">Boleta a consumidor final: RUT 66.666.666-6.</p></div>`,
+    botones: [{ texto: 'Cancelar' }, { texto: 'Usar estos datos', clase: 'primario', accion: (c) => leerForm(c) }] });
+  if (res) { opciones.receptor = { ...res, rut: res.rut.replace(/\./g, '') }; pintar(); }
+}
+
+async function aprobar() {
+  const s = v.resumen, g = v.garantia;
+  const doc = opciones.emitir && s.total_cargos > 0 ? (opciones.documento === 'factura' ? 'factura' : 'boleta') : 'ninguno';
+  const pasos = [
+    g && s.garantia ? (s.captura > 0 ? `Capturar <b class="monto">${clp(s.captura)}</b> de la garantía y liberar <b class="monto">${clp(s.libera)}</b> al cliente.` : `Liberar la garantía completa (<b class="monto">${clp(s.garantia)}</b>).`) : null,
+    s.saldo > 0 ? `Crear un enlace de pago por el saldo de <b class="monto">${clp(s.saldo)}</b>.` : null,
+    'Marcar TAG, multas e incidentes incluidos como cobrados.',
+    `Cerrar la reserva ${esc(v.reserva.folio)} y dejar el vehículo disponible.`,
+    doc !== 'ninguno' ? `Emitir ${doc} electrónica por <b class="monto">${clp(s.total_cargos)}</b> vía SimpleAPI.` : null,
+    opciones.avisar_correo || opciones.avisar_whatsapp ? `Avisar al cliente por ${[opciones.avisar_correo && 'correo (con PDF)', opciones.avisar_whatsapp && 'WhatsApp'].filter(Boolean).join(' y ')}.` : null
+  ].filter(Boolean);
+  const ok = await confirmar('Aprobar, cobrar y liberar saldo', `<ol style="padding-left:18px;display:flex;flex-direction:column;gap:6px">${pasos.map((p) => `<li>${p}</li>`).join('')}</ol>${v.empresa.marcha_blanca ? '<div class="aviso info peq" style="margin-top:10px"><b>Marcha blanca:</b> cobros, documento y mensajes quedan simulados o retenidos.</div>' : ''}`, { boton: 'Aprobar' });
+  if (!ok) return;
+  try {
+    const r = await api(`liquidaciones/${reservaId}/aprobar`, { body: { documento: doc, receptor: opciones.receptor, avisar_correo: opciones.avisar_correo, avisar_whatsapp: opciones.avisar_whatsapp } });
+    toast(r.simulado ? 'Liquidación aprobada (cobro simulado: marcha blanca)' : 'Liquidación aprobada');
+    if (r.dte_error) toast(`Documento tributario: ${r.dte_error}`, 'error');
+    await cargar(r.vista);
+  } catch (e) { toastError(e); }
+}
+
+await cargar().catch((e) => { $('#contenido').innerHTML = `<div class="aviso error">${esc(e.message)}</div>`; });
+</script>
+</body>
+</html>

@@ -1,0 +1,178 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Facturación</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/pagos.css">
+</head>
+<body>
+<main>
+  <div class="pagina-cab">
+    <div><h1>Facturación</h1><p>Boletas y facturas electrónicas de arriendos y liquidaciones, emitidas ante el SII vía SimpleAPI.</p></div>
+    <div class="acciones" id="acciones"></div>
+  </div>
+  <div id="aviso-mb"></div>
+  <div class="kpis" id="kpis"></div>
+  <div class="columnas" style="grid-template-columns:minmax(0,1fr) 340px">
+    <div class="tarjeta">
+      <div class="pg-filtros" id="filtros">
+        <input class="campo" type="search" name="q" placeholder="Buscar receptor, RUT, folio o reserva…" aria-label="Buscar">
+        <select class="campo" name="tipo" aria-label="Tipo"><option value="">Todos los documentos</option><option value="39">Boletas</option><option value="33">Facturas</option><option value="61">Notas de crédito</option></select>
+        <select class="campo" name="estado" aria-label="Estado"><option value="">Todos los estados</option><option value="retenido">Retenido</option><option value="emitido">Enviado al SII</option><option value="aceptado">Aceptado</option><option value="reparos">Con reparos</option><option value="rechazado">Rechazado</option><option value="error">Error</option></select>
+        <input class="campo" type="date" name="desde" aria-label="Desde"><input class="campo" type="date" name="hasta" aria-label="Hasta">
+      </div>
+      <div class="tabla-env"><table class="tabla pg-tabla">
+        <thead><tr><th>Documento</th><th>Fecha</th><th>Receptor</th><th>Origen</th><th class="monto">Neto</th><th class="monto">IVA</th><th class="monto">Total</th><th>Estado</th></tr></thead>
+        <tbody id="filas"><tr><td colspan="8" class="rc-vacio">Cargando…</td></tr></tbody>
+      </table></div>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:18px;min-width:0">
+      <div class="tarjeta bloque"><h2>Folios disponibles <a class="btn peq" href="/configuracion#integraciones">CAF</a></h2><div id="folios" class="pg-folios" style="grid-template-columns:1fr"></div><p class="ayuda" id="folios-nota"></p></div>
+      <div class="tarjeta bloque"><h2>Cómo se calcula</h2><p class="ayuda">Los precios del rentacar incluyen IVA. Neto = total ÷ 1,19 (redondeado) e IVA = total − neto. La boleta muestra montos con IVA; la factura, montos netos. Boleta a consumidor final con RUT 66.666.666-6.</p></div>
+    </div>
+  </div>
+</main>
+<script type="module">
+import { iniciarPagina, api, esc, clp, fecha, rut, modal, toast, toastError, confirmar, leerForm, descargar, puede } from '/comun.js';
+import { selectorReserva } from '/js/pagos.js';
+
+const yo = await iniciarPagina({ activo: 'facturacion', titulo: 'Facturación' });
+const editar = puede('facturacion', 'editar');
+const $ = (s) => document.querySelector(s);
+const TIPO = { 39: 'Boleta', 33: 'Factura', 61: 'Nota de crédito' };
+const EST = { pendiente: ['Pendiente', 'aviso'], retenido: ['Retenido', 'aviso'], emitido: ['Enviado al SII', 'info'], aceptado: ['Aceptado', 'ok'], reparos: ['Con reparos', 'aviso'], rechazado: ['Rechazado', 'error'], error: ['Error', 'error'] };
+if (editar) $('#acciones').innerHTML = '<button type="button" class="btn primario" id="b-emitir">+ Emitir documento</button>';
+if (yo.empresa?.marcha_blanca) $('#aviso-mb').innerHTML = '<div class="aviso info"><b>Marcha blanca:</b> los documentos quedan «Retenidos» y no se envían al SII. Al desactivarla y activar SimpleAPI, se emiten desde aquí con «Emitir ahora».</div>';
+const filtros = $('#filtros');
+let docs = [];
+
+async function cargar() {
+  const f = leerForm(filtros);
+  const qs = new URLSearchParams(Object.entries(f).filter(([, x]) => x)).toString();
+  const d = await api(`facturacion${qs ? `?${qs}` : ''}`);
+  docs = d.documentos;
+  const t = d.totales;
+  $('#kpis').innerHTML = `
+    <div class="kpi"><span>Emitido</span><b class="monto">${clp(t.emitido)}</b><small>neto de notas de crédito</small></div>
+    <div class="kpi"><span>Boletas</span><b>${t.boletas}</b><small>${t.facturas} facturas · ${t.notas} notas de crédito</small></div>
+    <div class="kpi"><span>Retenidos</span><b>${t.retenidos}</b><small>${clp(t.retenido_monto)} por emitir</small></div>
+    <div class="kpi"><span>Con problemas</span><b style="${t.errores ? 'color:var(--red)' : ''}">${t.errores}</b><small>rechazados o con error</small></div>`;
+  $('#filas').innerHTML = docs.map((x, i) => {
+    const [et, ec] = EST[x.estado] || [x.estado, ''];
+    return `<tr class="clic${x.anulado_por ? ' anulado' : ''}" data-i="${i}">
+      <td><b>${TIPO[x.tipo]}</b> ${x.folio ? `<span class="mono">N° ${x.folio}</span>` : '<span class="muted peq">sin folio</span>'}${x.tipo === 61 && x.ref_folio ? `<span class="sub">anula ${TIPO[x.ref_tipo]} N° ${x.ref_folio}</span>` : ''}${x.anulado_por ? `<span class="sub">anulada${x.nc_folio ? ` por NC N° ${x.nc_folio}` : ''}</span>` : ''}</td>
+      <td><span class="mono">${fecha(x.emitido_en || x.creado_en)}</span></td>
+      <td>${esc(x.receptor?.razonSocial || '')}<span class="sub mono">${rut(x.receptor?.rut)}</span></td>
+      <td>${x.reserva_folio ? `<a class="mono" href="/reservas/${x.reserva_id}" onclick="event.stopPropagation()">${esc(x.reserva_folio)}</a>` : '—'}${x.liquidacion_folio ? `<span class="sub">${esc(x.liquidacion_folio)}</span>` : ''}</td>
+      <td class="monto">${clp(x.neto)}</td><td class="monto">${clp(x.iva)}</td><td class="monto">${x.tipo === 61 ? clp(-x.total) : clp(x.total)}</td>
+      <td><span class="chip ${ec}" title="${esc(x.mensaje || '')}">${et}</span>${x.respuesta?.simulado ? '<span class="sub">folio de prueba</span>' : ''}</td></tr>`;
+  }).join('') || '<tr><td colspan="8" class="rc-vacio">No hay documentos con estos filtros</td></tr>';
+}
+
+async function cargarFolios() {
+  const f = await api('facturacion/folios');
+  $('#folios').innerHTML = f.folios.map((x) => `<div class="pg-folio"><b>${esc(x.nombre)}</b>
+      ${x.quedan != null ? `<span><span class="monto">${x.quedan.toLocaleString('es-CL')}</span> folios · siguiente N° <span class="mono">${x.siguiente}</span>${x.hasta ? ` de ${x.hasta}` : ''}</span>` : '<span>Sin CAF cargado</span>'}
+      ${x.error ? `<span style="color:var(--red)">${esc(x.error)}</span>` : ''}</div>`).join('');
+  $('#folios-nota').textContent = `SimpleAPI ${f.activa ? 'activa' : 'desactivada'} · ambiente de ${f.ambiente === 'produccion' ? 'producción' : 'certificación'} · ${f.certificado ? 'certificado cargado' : 'falta el certificado digital (.pfx)'}`;
+}
+
+$('#filas').addEventListener('click', (e) => { const tr = e.target.closest('tr[data-i]'); if (tr) verDoc(docs[Number(tr.dataset.i)]); });
+let tt = null;
+filtros.addEventListener('input', (e) => { clearTimeout(tt); tt = setTimeout(() => cargar().catch(toastError), e.target.type === 'search' ? 250 : 0); });
+
+async function verDoc(d) {
+  const [et, ec] = EST[d.estado] || [d.estado, ''];
+  const r = d.receptor || {};
+  const botones = [{ texto: 'Cerrar' }, { texto: 'Descargar PDF', accion: () => descargar(`/api/facturacion/${d.id}/pdf`, `${TIPO[d.tipo]}-${d.folio || d.id}.pdf`) }];
+  if (editar && ['retenido', 'error', 'pendiente'].includes(d.estado)) botones.push({ texto: 'Emitir ahora', clase: 'primario', accion: async () => { const x = await api(`facturacion/${d.id}/emitir`, { body: {} }); toast(x.estado === 'retenido' ? x.mensaje : x.estado === 'error' ? `Error: ${x.mensaje}` : `Enviado al SII · folio ${x.folio}`, x.estado === 'error' ? 'error' : ''); await refrescar(); } });
+  if (d.estado === 'emitido' && d.track_id && !d.respuesta?.simulado) botones.push({ texto: 'Consultar SII', accion: async () => { const x = await api(`facturacion/${d.id}/consultar`, { body: {} }); toast(`Estado: ${(EST[x.estado] || [x.estado])[0]}`); await refrescar(); } });
+  if (editar && [33, 39].includes(d.tipo) && !d.anulado_por && d.estado !== 'rechazado') botones.splice(1, 0, { texto: ['retenido', 'error', 'pendiente'].includes(d.estado) ? 'Descartar' : 'Anular con nota de crédito', clase: 'peligro', accion: () => { setTimeout(() => anular(d), 0); } });
+  await modal({ titulo: `${TIPO[d.tipo]} ${d.folio ? `N° ${d.folio}` : '(sin folio)'}`, ancho: true, html: `
+    <div class="rc-entre" style="margin-bottom:10px"><span class="chip ${ec}">${et}</span>${d.track_id ? `<span class="folio">TrackID ${esc(d.track_id)}</span>` : ''}</div>
+    ${d.mensaje ? `<div class="aviso ${d.estado === 'error' || d.estado === 'rechazado' ? 'error' : 'info'} peq" style="margin-bottom:10px">${esc(d.mensaje)}</div>` : ''}
+    ${d.respuesta?.simulado ? '<div class="aviso neutro peq" style="margin-bottom:10px">Folio de prueba (datos de demostración): no fue enviado al SII.</div>' : ''}
+    <dl class="rc-datos" style="grid-template-columns:repeat(3,1fr);margin-bottom:12px">
+      <div><dt>Receptor</dt><dd>${esc(r.razonSocial || '')}</dd></div><div><dt>RUT</dt><dd class="mono">${rut(r.rut)}</dd></div><div><dt>Giro</dt><dd>${esc(r.giro || '—')}</dd></div>
+      <div><dt>Reserva</dt><dd class="mono">${esc(d.reserva_folio || '—')}</dd></div><div><dt>Liquidación</dt><dd class="mono">${esc(d.liquidacion_folio || '—')}</dd></div><div><dt>Fecha</dt><dd>${fecha(d.emitido_en || d.creado_en)}</dd></div>
+    </dl>
+    <div class="tabla-env" style="border:1px solid var(--line)"><table class="tabla"><thead><tr><th>Detalle</th><th class="monto" style="text-align:right">${d.tipo === 39 ? 'Monto (IVA incl.)' : 'Monto neto'}</th></tr></thead>
+      <tbody>${d.lineas.map((l) => `<tr><td><b>${esc(l.nombre)}</b>${l.descripcion ? `<span class="sub peq muted" style="display:block">${esc(l.descripcion)}</span>` : ''}</td><td class="monto" style="text-align:right">${clp(l.monto)}</td></tr>`).join('')}</tbody></table></div>
+    <div class="pg-totales-dte" style="margin-top:10px"><span>Neto</span><b>${clp(d.neto)}</b><span>IVA 19 %</span><b>${clp(d.iva)}</b><span class="tot">Total</span><b class="tot">${clp(d.total)}</b></div>`, botones });
+}
+
+async function anular(d) {
+  const previo = ['retenido', 'error', 'pendiente'].includes(d.estado);
+  const ok = await modal({ titulo: previo ? 'Descartar documento' : `Anular ${TIPO[d.tipo].toLowerCase()} N° ${d.folio}`, html: `<div class="pg-form">
+      <p>${previo ? 'El documento nunca llegó al SII: se descarta sin nota de crédito.' : `Se emitirá una <b>nota de crédito electrónica</b> (código 1, anula el documento) por <b class="monto">${clp(d.total)}</b>.`}</p>
+      <label>Motivo<input class="campo" name="motivo" required placeholder="Ej.: error en el receptor, cargo condonado"></label></div>`,
+    botones: [{ texto: 'Cancelar' }, { texto: previo ? 'Descartar' : 'Emitir nota de crédito', clase: 'peligro', accion: (c) => { const f = leerForm(c); if (!f.motivo) { toast('Indica el motivo', 'error'); return false; } return api(`facturacion/${d.id}/nota-credito`, { body: f }); } }] });
+  if (ok) { toast(previo ? 'Documento descartado' : ok.estado === 'retenido' ? 'Nota de crédito creada (retenida por marcha blanca)' : 'Nota de crédito emitida'); refrescar(); }
+}
+
+// ── Emitir documento ──
+async function emitir() {
+  let datos = null, tipo = 39, origen = 'arriendo';
+  const pintarLineas = (c) => {
+    const ls = origen === 'liquidacion' ? datos.lineas_liquidacion : origen === 'arriendo' ? datos.lineas_arriendo : [{ nombre: '', descripcion: '', monto: '' }];
+    c.querySelector('#lineas').innerHTML = ls.map((l) => filaLinea(l)).join('');
+    recalcular(c);
+  };
+  const filaLinea = (l) => `<tr><td><input class="campo" data-n value="${esc(l.nombre)}" placeholder="Concepto"></td><td><input class="campo" data-d value="${esc(l.descripcion || '')}" placeholder="Detalle (opcional)"></td><td class="monto"><input class="campo" data-m type="number" min="0" step="1" value="${l.monto}"></td><td><button type="button" class="btn-icono" data-quitar aria-label="Quitar">×</button></td></tr>`;
+  const recalcular = (c) => {
+    const total = [...c.querySelectorAll('[data-m]')].reduce((s, i) => s + (Math.round(Number(i.value)) || 0), 0);
+    const neto = Math.round(total / 1.19);
+    c.querySelector('#totales').innerHTML = `<span>Neto</span><b>${clp(neto)}</b><span>IVA 19 %</span><b>${clp(total - neto)}</b><span class="tot">Total (IVA incluido)</span><b class="tot">${clp(total)}</b>`;
+  };
+  const receptor = (c) => {
+    const r = tipo === 33 ? datos.receptor_factura : datos.receptor_boleta;
+    for (const k of ['rut', 'razonSocial', 'giro', 'direccion', 'comuna', 'correo']) c.querySelector(`[name=${k}]`).value = k === 'rut' ? rut(r[k] || '') : r[k] || '';
+  };
+  const ok = await modal({ titulo: 'Emitir documento tributario', ancho: true, html: `<div class="pg-form">
+      <div id="sel"></div>
+      <div id="cuerpo" style="display:none;flex-direction:column;gap:14px">
+        <div class="rc-entre" style="flex-wrap:wrap"><div class="segmentado" id="seg-tipo"><button type="button" data-t="39" aria-pressed="true">Boleta electrónica</button><button type="button" data-t="33" aria-pressed="false">Factura electrónica</button></div>
+          <div class="segmentado" id="seg-origen"><button type="button" data-o="arriendo" aria-pressed="true">Arriendo</button><button type="button" data-o="liquidacion" aria-pressed="false">Liquidación</button><button type="button" data-o="manual" aria-pressed="false">Otro cargo</button></div></div>
+        <div id="ya"></div>
+        <div class="fila"><label>RUT receptor<input class="campo" name="rut"></label><label>Razón social / nombre<input class="campo" name="razonSocial"></label></div>
+        <div class="fila"><label>Giro<input class="campo" name="giro"></label><label>Correo<input class="campo" name="correo"></label></div>
+        <div class="fila"><label>Dirección<input class="campo" name="direccion"></label><label>Comuna<input class="campo" name="comuna"></label></div>
+        <div class="tabla-env" style="border:1px solid var(--line)"><table class="tabla pg-lineas-dte"><thead><tr><th>Concepto</th><th>Detalle</th><th class="monto" style="text-align:right;width:140px">Monto IVA incl.</th><th style="width:40px"></th></tr></thead><tbody id="lineas"></tbody></table></div>
+        <div class="rc-entre"><button type="button" class="btn peq" id="b-linea">+ Agregar línea</button><div class="pg-totales-dte" id="totales"></div></div>
+        ${yo.empresa?.marcha_blanca ? '<div class="aviso info peq"><b>Marcha blanca:</b> el documento quedará «Retenido» y no se enviará al SII.</div>' : ''}
+      </div></div>`,
+    alAbrir: (c) => {
+      const cuerpo = c.querySelector('#cuerpo');
+      selectorReserva(c.querySelector('#sel'), { ruta: 'facturacion/reservas', etiqueta: 'facturado', saldoTxt: 'Por facturar', listoTxt: 'Facturado', alElegir: async (r) => {
+        if (!r) { cuerpo.style.display = 'none'; datos = null; return; }
+        datos = await api(`facturacion/desde-reserva/${r.id}`);
+        tipo = datos.cliente_tipo === 'empresa' ? 33 : 39;
+        origen = datos.lineas_liquidacion.length && datos.liquidacion?.estado !== 'borrador' ? 'liquidacion' : 'arriendo';
+        c.querySelectorAll('#seg-tipo button').forEach((b) => b.setAttribute('aria-pressed', Number(b.dataset.t) === tipo));
+        c.querySelectorAll('#seg-origen button').forEach((b) => b.setAttribute('aria-pressed', b.dataset.o === origen));
+        c.querySelector('#ya').innerHTML = datos.emitidos.length ? `<div class="aviso neutro peq">Esta reserva ya tiene: ${datos.emitidos.map((x) => `${TIPO[x.tipo]} ${x.folio ? `N° ${x.folio}` : '(retenida)'} por ${clp(x.total)}`).join(' · ')}</div>` : '';
+        cuerpo.style.display = 'flex';
+        receptor(c); pintarLineas(c);
+      } });
+      c.querySelector('#seg-tipo').onclick = (e) => { const b = e.target.closest('[data-t]'); if (!b) return; tipo = Number(b.dataset.t); c.querySelectorAll('#seg-tipo button').forEach((x) => x.setAttribute('aria-pressed', x === b)); receptor(c); };
+      c.querySelector('#seg-origen').onclick = (e) => { const b = e.target.closest('[data-o]'); if (!b) return; origen = b.dataset.o; c.querySelectorAll('#seg-origen button').forEach((x) => x.setAttribute('aria-pressed', x === b)); pintarLineas(c); };
+      c.querySelector('#b-linea').onclick = () => { c.querySelector('#lineas').insertAdjacentHTML('beforeend', filaLinea({ nombre: '', descripcion: '', monto: '' })); };
+      c.querySelector('#lineas').addEventListener('input', () => recalcular(c));
+      c.querySelector('#lineas').addEventListener('click', (e) => { if (e.target.closest('[data-quitar]')) { e.target.closest('tr').remove(); recalcular(c); } });
+    },
+    botones: [{ texto: 'Cancelar' }, { texto: 'Emitir', clase: 'primario', accion: (c) => {
+      if (!datos) { toast('Elige la reserva', 'error'); return false; }
+      const f = leerForm(c.querySelector('#cuerpo'));
+      const lineas = [...c.querySelectorAll('#lineas tr')].map((tr) => ({ nombre: tr.querySelector('[data-n]').value.trim(), descripcion: tr.querySelector('[data-d]').value.trim(), monto: Math.round(Number(tr.querySelector('[data-m]').value)) || 0 })).filter((l) => l.nombre && l.monto > 0);
+      if (!lineas.length) { toast('Agrega al menos una línea con monto', 'error'); return false; }
+      return api('facturacion', { body: { tipo, reserva_id: datos.reserva.id, liquidacion_id: origen === 'liquidacion' ? datos.liquidacion?.id : null, receptor: { rut: f.rut.replace(/\./g, ''), razonSocial: f.razonSocial, giro: f.giro, direccion: f.direccion, comuna: f.comuna, correo: f.correo }, lineas } });
+    } }] });
+  if (ok) { toast(ok.estado === 'retenido' ? 'Documento creado: retenido por marcha blanca' : ok.estado === 'error' ? `Error: ${ok.mensaje}` : `Enviado al SII · folio ${ok.folio}`, ok.estado === 'error' ? 'error' : ''); refrescar(); }
+}
+
+$('#b-emitir')?.addEventListener('click', emitir);
+const refrescar = () => Promise.all([cargar(), cargarFolios()]).catch(toastError);
+await refrescar();
+</script>
+</body>
+</html>

@@ -1,0 +1,15 @@
+/* Páginas públicas de texto (privacidad, soporte). Prefijo lg- */
+.lg-cab { background: var(--card); border-bottom: 1px solid var(--line); }
+.lg-cab-in { max-width: 820px; margin: 0 auto; padding: 14px 20px; display: flex; align-items: center; gap: 12px; }
+.lg-cab-in img { height: 30px; }
+.lg-cab-in b { display: block; font-size: 15px; }
+.lg-cab-in small { color: var(--ink-2); font-size: 12px; }
+.lg-doc { max-width: 820px; margin: 0 auto; padding: 24px 20px 48px; }
+.lg-doc .tarjeta { padding: 28px; }
+.lg-doc h1 { font-size: 24px; margin: 0 0 4px; }
+.lg-doc h2 { font-size: 17px; margin: 26px 0 8px; }
+.lg-doc p, .lg-doc li { line-height: 1.6; }
+.lg-doc ul { padding-left: 20px; }
+.lg-doc .lg-fecha { color: var(--ink-2); font-size: 13px; margin-bottom: 18px; }
+.lg-pie { text-align: center; color: var(--ink-2); font-size: 12px; padding: 0 20px 32px; }
+@media (max-width: 600px) { .lg-doc .tarjeta { padding: 18px; } }

@@ -46,6 +46,25 @@ r.post('/configuracion/mi-clave', requiere(null, 'ver', { sinEmpresa: true }), a
   res.json({ ok: true });
 });
 
+// ── Eliminar mi cuenta (exigido por App Store y Google Play) ──
+// La persona elimina su propio acceso: se borran sus datos personales (nombre, correo, teléfono, clave) y sus sesiones.
+// La fila queda anonimizada para no romper la trazabilidad de contratos, inspecciones y bitácora de la empresa.
+r.post('/configuracion/eliminar-mi-cuenta', requiere(null, 'ver', { sinEmpresa: true }), async (req, res) => {
+  const u = await uno('SELECT id, empresa_id, rol, clave_hash FROM usuarios WHERE id = $1', [req.usuario.id]);
+  if (!verificarClave(String(req.body?.clave || ''), u.clave_hash)) throw new ErrorHttp(400, 'La clave no es correcta.', { campo: 'clave' });
+  if (u.rol === 'superadmin') throw new ErrorHttp(400, 'La cuenta de superadministrador no se elimina desde aquí: escribe a soporte@siguelogps.cl.');
+  if (u.rol === 'administrador') {
+    const otros = await uno("SELECT count(*)::int AS n FROM usuarios WHERE empresa_id = $1 AND rol = 'administrador' AND activo AND id <> $2", [u.empresa_id, u.id]);
+    if (!otros.n) throw new ErrorHttp(400, 'Eres el único administrador de la empresa: antes de eliminar tu cuenta, deja a otra persona como administradora en Configuración → Usuarios.');
+  }
+  await q(`UPDATE usuarios SET nombre = 'Usuario eliminado', correo = $2, telefono = NULL, clave_hash = NULL, activo = false WHERE id = $1`,
+    [u.id, `eliminado-${u.id}-${crypto.randomBytes(4).toString('hex')}@cuentas.invalid`]);
+  await registrar(req, 'cuenta_eliminada', 'usuario', u.id);
+  await q('DELETE FROM sesiones WHERE usuario_id = $1', [u.id]);
+  res.clearCookie('rc_sesion', { path: '/' });
+  res.json({ ok: true });
+});
+
 // ── Sucursales ──
 const CAMPOS_SUC = ['nombre', 'direccion', 'comuna', 'ciudad', 'telefono', 'horario'];
 function leerSucursal(b, parcial = false) {

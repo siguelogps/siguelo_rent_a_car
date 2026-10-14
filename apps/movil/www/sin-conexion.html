@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sin conexión · Síguelo On Rent</title>
+<style>
+  :root { --ink: #15181D; --marca: #FFD500; --gris: #6B7280; }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; }
+  body { font: 15px/1.5 -apple-system, "IBM Plex Sans", Roboto, "Segoe UI", sans-serif; color: var(--ink); background: #F5F6F8;
+         display: grid; place-items: center; padding: max(24px, env(safe-area-inset-top)) 24px max(24px, env(safe-area-inset-bottom)); }
+  .caja { width: min(380px, 100%); background: #fff; border: 1px solid #E5E7EB; border-radius: 16px; padding: 28px; text-align: center; }
+  img { height: 64px; }
+  h1 { font-size: 20px; margin: 16px 0 6px; }
+  p { color: var(--gris); margin: 0 0 20px; }
+  button { width: 100%; border: 0; border-radius: 10px; padding: 14px; font: inherit; font-weight: 600; background: var(--marca); color: var(--ink); }
+  button:disabled { opacity: .6; }
+  small { display: block; margin-top: 14px; color: var(--gris); }
+</style>
+</head>
+<body>
+<div class="caja">
+  <img src="logo-pin.png" alt="Síguelo">
+  <h1>Sin conexión</h1>
+  <p>No pudimos llegar a Síguelo On Rent. Revisa que el teléfono tenga internet (datos o Wi‑Fi) e intenta de nuevo.</p>
+  <button id="reintentar">Reintentar</button>
+  <small>Las fotos de una inspección que estabas haciendo siguen en la pantalla anterior: no cierres la app.</small>
+</div>
+<script src="servidor.js"></script>
+<script>
+  var b = document.getElementById('reintentar');
+  function ir() { b.disabled = true; b.textContent = 'Conectando…'; location.replace(window.SERVIDOR_ON_RENT || '/'); }
+  b.onclick = ir;
+  window.addEventListener('online', ir);
+</script>
+</body>
+</html>

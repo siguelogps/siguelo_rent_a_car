@@ -1,4 +1,4 @@
-# Síguelo Rentacar · imagen portable (Render, Fly.io, Railway, Cloud Run, ECS, Azure Container Apps, un VPS…)
+# Síguelo On Rent · imagen portable (Render, Fly.io, Railway, Cloud Run, ECS, Azure Container Apps, un VPS…)
 FROM node:22-bookworm-slim AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./

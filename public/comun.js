@@ -2,6 +2,9 @@
 // avisos (toast), modales y chips de estado. Mismo estilo que el CRM Síguelo Gestión.
 // Uso en cada página:  import { iniciarPagina, api, clp } from '/comun.js';
 //                      const yo = await iniciarPagina({ activo: 'reservas', titulo: 'Reservas' });
+import { esNativa, guardarYCompartir, abrirArchivo } from '/nativa.js';
+
+export { esNativa, abrirArchivo };
 
 const I = (d, extra = '') => `<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"${extra}>${d}</svg>`;
 export const ICONOS = {
@@ -176,6 +179,7 @@ export function reducirImagen(archivo, maxLado = 1600, calidad = 0.82) {
 export async function descargar(ruta, nombre) {
   const r = await api(ruta, { crudo: true });
   if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(j.error || `Error ${r.status}`); }
+  if (esNativa()) return guardarYCompartir(await r.blob(), nombre); // en la app: guardar en el teléfono y compartir/abrir
   const url = URL.createObjectURL(await r.blob());
   const a = Object.assign(document.createElement('a'), { href: url, download: nombre });
   document.body.appendChild(a); a.click(); a.remove();
@@ -204,7 +208,7 @@ export async function iniciarPagina({ activo, titulo = '' } = {}) {
   app.innerHTML = `
   <nav class="menu" aria-label="Menú principal">
     <div class="menu-marca"><img class="logo" src="/img/logo-siguelo.png" alt="Síguelo GPS"><img class="marca-pin" src="/img/logo-pin.png" alt=""><button type="button" class="btn-plegar" aria-label="Plegar menú">${ICONOS.plegar}</button></div>
-    ${e ? `<div class="rc-empresa" title="${esc(e.nombre)}">${e.logo_clave ? `<img class="rc-empresa-logo" src="/api/logo/${esc(e.slug)}" alt="">` : `<span class="rc-empresa-logo" style="background:${esc(e.color || '#0F5F58')}">${esc(e.nombre.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase())}</span>`}<div><b>${esc(e.nombre)}</b><span>Rent a Car · Plan ${esc(YO.plan?.nombre || (e.plan || 'pro').replace(/^./, (c) => c.toUpperCase()))}</span></div></div>` : ''}
+    ${e ? `<div class="rc-empresa" title="${esc(e.nombre)}">${e.logo_clave ? `<img class="rc-empresa-logo" src="/api/logo/${esc(e.slug)}" alt="">` : `<span class="rc-empresa-logo" style="background:${esc(e.color || '#0F5F58')}">${esc(e.nombre.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase())}</span>`}<div><b>${esc(e.nombre)}</b><span>On Rent · Plan ${esc(YO.plan?.nombre || (e.plan || 'pro').replace(/^./, (c) => c.toUpperCase()))}</span></div></div>` : ''}
     ${YO.modo === 'backoffice' ? `<div class="menu-grupo">Backoffice Síguelo</div>${BACKOFFICE.filter(([m]) => m !== 'equipo' || YO.usuario.rol === 'superadmin').map(([m, n, href]) => `<a class="item" href="${href}" title="${n}"${m === activo ? ' aria-current="page"' : ''}>${ICONOS[m]}<span>${n}</span></a>`).join('')}`
     : MENU.map(([g, items]) => {
       const vis = items.filter(([m]) => YO.permisos[m]);
@@ -228,7 +232,7 @@ export async function iniciarPagina({ activo, titulo = '' } = {}) {
   main.classList.add('contenido');
   app.querySelector('.principal').appendChild(main);
   document.body.prepend(app);
-  document.title = `${titulo ? `${titulo} · ` : ''}${e?.nombre || 'Síguelo Rent a Car'}`;
+  document.title = `${titulo ? `${titulo} · ` : ''}${e?.nombre || 'Síguelo On Rent'}`;
 
   app.querySelector('.btn-plegar').onclick = () => { app.classList.toggle('plegada'); try { localStorage.setItem('rc_menu_plegado', app.classList.contains('plegada') ? '1' : '0'); } catch { /* sin almacenamiento */ } };
   app.querySelector('.btn-menu-movil').onclick = () => app.classList.toggle('menu-abierto');
@@ -252,6 +256,10 @@ function abrirMiCuenta() {
       ${campo('nueva', 'Clave nueva (mínimo 10 caracteres)', 'new-password')}
       ${campo('repite', 'Repite la clave nueva', 'new-password')}
       <div class="aviso error" data-err hidden></div>
+      ${YO.usuario.rol === 'superadmin' ? '' : `<details class="rc-eliminar-cuenta"><summary>Eliminar mi cuenta</summary>
+        <p class="peq muted">Se borran tu nombre, correo, teléfono y clave, y se cierran tus sesiones en todos los equipos. No se puede deshacer. Los contratos, inspecciones y movimientos que hiciste quedan en la empresa a nombre de «Usuario eliminado».</p>
+        <label class="etiqueta">Escribe tu clave para confirmar<input class="campo" type="password" name="clave_eliminar" autocomplete="current-password"></label>
+        <button type="button" class="btn peligro" data-eliminar>Eliminar mi cuenta definitivamente</button></details>`}
     </div>
     <div class="modal-pie rc-pie-cuenta"><button type="button" class="btn" data-salir>${ICONOS.salir} Salir</button><button type="submit" class="btn primario">${ICONOS.ok} Cambiar clave</button></div></form>`;
   const cerrar = () => { fondo.remove(); document.removeEventListener('keydown', tecla); };
@@ -262,6 +270,14 @@ function abrirMiCuenta() {
     const ojo = e.target.closest('.rc-ojo');
     if (ojo) { const inp = ojo.previousElementSibling; inp.type = inp.type === 'password' ? 'text' : 'password'; return; }
     if (e.target.closest('[data-salir]')) { await api('salir', { body: {} }).catch(() => {}); location.href = '/ingresar'; }
+    if (e.target.closest('[data-eliminar]')) {
+      err.hidden = true;
+      const clave = f.clave_eliminar.value;
+      if (!clave) { err.textContent = 'Escribe tu clave para confirmar.'; err.hidden = false; return; }
+      if (!await confirmar('Eliminar mi cuenta', 'Tu cuenta se elimina ahora y no podrás volver a ingresar con ella. ¿Continuar?', { boton: 'Eliminar', peligro: true })) return;
+      try { await api('configuracion/eliminar-mi-cuenta', { body: { clave } }); location.href = '/ingresar?cuenta=eliminada'; }
+      catch (e2) { err.textContent = e2.message; err.hidden = false; }
+    }
   });
   const f = fondo.querySelector('form'), err = fondo.querySelector('[data-err]');
   f.onsubmit = async (e) => {

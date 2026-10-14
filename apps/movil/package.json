@@ -1,0 +1,27 @@
+{
+  "name": "siguelo-on-rent-app",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Síguelo On Rent · app para Android y iOS (envoltorio nativo del sistema web con cámara, archivos y avisos)",
+  "type": "module",
+  "scripts": {
+    "sincronizar": "node scripts/preparar.mjs && cap sync",
+    "iconos": "python3 scripts/fuentes-iconos.py && capacitor-assets generate --iconBackgroundColor '#15181D' --iconBackgroundColorDark '#15181D' --splashBackgroundColor '#15181D' --splashBackgroundColorDark '#15181D' --android --ios",
+    "android": "cap open android",
+    "ios": "cap open ios"
+  },
+  "dependencies": {
+    "@capacitor/android": "8.5.3",
+    "@capacitor/app": "8.1.2",
+    "@capacitor/core": "8.5.3",
+    "@capacitor/filesystem": "8.1.4",
+    "@capacitor/ios": "8.5.3",
+    "@capacitor/share": "8.0.3",
+    "@capacitor/splash-screen": "8.0.2",
+    "@capacitor/status-bar": "8.0.4"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "8.5.3"
+  }
+}

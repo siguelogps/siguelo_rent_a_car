@@ -1,4 +1,4 @@
-/* Síguelo Rent a Car · motor de reservas para el sitio web del rentacar.
+/* Síguelo On Rent · motor de reservas para el sitio web del rentacar.
    Uso (pegar donde quieras que aparezca el buscador):
      <script src="https://<servidor>/embed.js" data-rentacar="andes-rent"></script>
    Opcionales: data-codigo="PRIMAVERA10" (código de descuento precargado), data-alto-minimo="520".
@@ -7,7 +7,7 @@
   var s = document.currentScript;
   if (!s) return;
   var slug = s.getAttribute('data-rentacar');
-  if (!slug) { console.error('Síguelo Rent a Car: falta el atributo data-rentacar en el script de reservas'); return; }
+  if (!slug) { console.error('Síguelo On Rent: falta el atributo data-rentacar en el script de reservas'); return; }
   var origen = new URL(s.src, location.href).origin;
   var codigo = s.getAttribute('data-codigo');
   var minimo = parseInt(s.getAttribute('data-alto-minimo') || '520', 10);

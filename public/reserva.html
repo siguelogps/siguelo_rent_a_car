@@ -3,12 +3,13 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Reserva</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/img/app/apple-touch-icon.png"><meta name="theme-color" content="#FFFFFF">
 <link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/reservas.css">
 </head>
 <body>
 <main><p class="rc-cargando">Cargando reserva…</p></main>
 <script type="module">
-import { iniciarPagina, api, esc, clp, miles, pat, fecha, hora, fechaHora, chipEstado, puede, modal, confirmar, toast, toastError, ESTADOS_VEHICULO } from '/comun.js';
+import { iniciarPagina, api, esc, clp, miles, pat, fecha, hora, fechaHora, chipEstado, puede, modal, confirmar, toast, toastError, ESTADOS_VEHICULO, esNativa, abrirArchivo } from '/comun.js';
 import { abrirFormReserva } from '/js/reservas-form.js';
 import { diasArriendo, docTxt, estadoLicencia, combustible, ORIGEN, TIPOS_DOC, atrasoTxt, copiar } from '/js/reservas-util.js';
 
@@ -222,7 +223,7 @@ function pintar(f) {
       </div>
     </div>
   </div>`;
-  document.title = `${r.folio} · ${empresa || 'Síguelo Rent a Car'}`;
+  document.title = `${r.folio} · ${empresa || 'Síguelo On Rent'}`;
   enlazar(f, contrato);
 }
 
@@ -258,9 +259,10 @@ function enlazar(f, contrato) {
         cargar();
       }
       if (a === 'vista-previa') {
-        const w = window.open('', '_blank');
+        const w = esNativa() ? null : window.open('', '_blank');
         const c = contrato || await api(`reservas/${r.id}/contrato`, { body: {} });
-        if (w) w.location.href = `/api/contratos/${c.id}/pdf`; else location.href = `/api/contratos/${c.id}/pdf`;
+        if (esNativa()) abrirArchivo(`/api/contratos/${c.id}/pdf`, `Contrato ${c.folio}.pdf`);
+        else if (w) w.location.href = `/api/contratos/${c.id}/pdf`; else location.href = `/api/contratos/${c.id}/pdf`;
         if (!contrato) cargar();
       }
       if (a === 'firmar-aqui' || a === 'copiar-firma') {

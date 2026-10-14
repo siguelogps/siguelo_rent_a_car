@@ -1,0 +1,14 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Síguelo On Rent</title>
+<style>html,body{margin:0;height:100%;background:#15181D;display:grid;place-items:center}img{width:72px}</style>
+</head>
+<body>
+<!-- La app carga el sistema desde el servidor (server.url en capacitor.config.json). Esta página solo se ve un instante. -->
+<img src="logo-pin.png" alt="Síguelo">
+<script src="servidor.js"></script>
+<script>if (window.SERVIDOR_ON_RENT) location.replace(window.SERVIDOR_ON_RENT);</script>
+</body>
+</html>

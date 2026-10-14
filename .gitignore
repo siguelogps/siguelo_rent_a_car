@@ -3,3 +3,10 @@ node_modules
 *.log
 datos/
 .claude/worktrees/
+
+# Llaves de firma de las apps (nunca al repositorio)
+*.jks
+*.keystore
+*.p12
+*.p8
+*.mobileprovision

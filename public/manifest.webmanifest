@@ -1,0 +1,23 @@
+{
+  "name": "Síguelo On Rent",
+  "short_name": "On Rent",
+  "description": "Administración de arriendo de vehículos: reservas, contratos, entregas y devoluciones, flota y cobros.",
+  "lang": "es-CL",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#F4F5F7",
+  "theme_color": "#FFFFFF",
+  "categories": ["business", "productivity"],
+  "icons": [
+    { "src": "/img/app/icono-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/img/app/icono-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/img/app/icono-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    { "name": "Patio: entregas y devoluciones", "short_name": "Patio", "url": "/patio" },
+    { "name": "Reservas", "url": "/reservas" }
+  ]
+}

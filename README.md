@@ -1,4 +1,4 @@
-# Síguelo Rent a Car
+# Síguelo On Rent
 
 Sistema de administración de rentacar (arriendo de vehículos), producto de **Síguelo GPS** para empresas de rentacar en Chile.
 Multi-empresa: cada rentacar es un cliente de Síguelo, con sus propios datos, usuarios y logo en sus documentos.
@@ -40,3 +40,6 @@ Usuarios de prueba (clave `demo1234`): `demo@siguelogps.cl` (administrador), `co
 
 ## Maquetas
 `mockups/` contiene las maquetas aprobadas (Etapa 0) y `npm run capturas` las exporta a PNG.
+
+## Apps para Android y iOS
+`apps/movil/` tiene la app «Síguelo On Rent» para Google Play y App Store (Capacitor 8), compilada por GitHub Actions (`.github/workflows/app-movil.yml`). Pasos para publicar, textos de las fichas y capturas: `apps/movil/README.md` y `apps/movil/tienda/`. `npm run capturas-tienda` regenera las capturas. El sistema web también es instalable como PWA.

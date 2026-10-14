@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Configuración</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/img/app/apple-touch-icon.png"><meta name="theme-color" content="#FFFFFF">
 <link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/config.css">
 </head>
 <body>
@@ -297,7 +298,7 @@ async function plantillas() {
     try { await api(`configuracion/plantillas/${p.id}`, { method: 'PUT', body: { nombre: d.nombre, asunto: d.asunto ?? null, cuerpo: d.cuerpo, activa: d.activa === '1' } }); toast('Plantilla guardada', 'ok'); plantillas(); } catch (e) { toastError(e); }
   });
   ed$.querySelector('#pl-rest')?.addEventListener('click', async () => {
-    if (!await confirmar('Restaurar plantilla', 'Se reemplazará el texto actual por el texto por defecto de Síguelo Rent a Car.', { boton: 'Restaurar', peligro: true })) return;
+    if (!await confirmar('Restaurar plantilla', 'Se reemplazará el texto actual por el texto por defecto de Síguelo On Rent.', { boton: 'Restaurar', peligro: true })) return;
     try { await api(`configuracion/plantillas/${p.id}/restaurar`, { body: {} }); toast('Plantilla restaurada', 'ok'); plantillas(); } catch (e) { toastError(e); }
   });
 }

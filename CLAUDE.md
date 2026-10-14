@@ -1,4 +1,4 @@
-# Síguelo Rent a Car · convenciones del proyecto
+# Síguelo On Rent · convenciones del proyecto
 
 Sistema de administración de rentacar (producto de Síguelo GPS), multi-empresa, para vender a rentacars en Chile.
 Node.js ≥ 22 (ESM), Express 5, PostgreSQL (PGlite embebido si no hay `DATABASE_URL`), frontend en HTML + JS de módulos sin framework.
@@ -13,6 +13,8 @@ Node.js ≥ 22 (ESM), Express 5, PostgreSQL (PGlite embebido si no hay `DATABASE
 - Marcha blanca: correos, WhatsApp, cobros, DTE e inmovilización no salen mientras `empresas.marcha_blanca` sea true o la integración esté apagada. Usar `puedeActuar(empresaId, tipo)` de `src/integraciones/index.js`; los mensajes van por `encolar()` / `avisar()` de `src/salidas.js` (quedan «retenida»). Los cobros en marcha blanca se registran con estado `simulado`.
 - Integraciones se configuran desde pantalla (tabla `integraciones`, cifrada), nunca en variables de entorno. Solo administradores las activan.
 - Equipo Síguelo (roles `superadmin` y `soporte`, sin empresa): entra al **backoffice** (`/empresas`, `/planes`, `/equipo`) y a un cliente solo con «Ver como» (`POST /api/empresa-activa`). Planes en la tabla `planes` (`src/planes.js`): `requiere()` bloquea los módulos que el plan no incluye y `verificarLimite()` exige los máximos de vehículos, usuarios y sucursales.
+- Nombre del producto: **Síguelo On Rent** (no «Rent a Car»; «rentacar» solo como sustantivo para las empresas clientes).
+- App móvil (`apps/movil`, Capacitor): carga el sistema desde el servidor. Lo propio de la app va en `public/nativa.js` (`esNativa()`, `abrirArchivo()`); para descargas usar siempre `descargar()` de `comun.js` y nunca `window.open` a PDF sin pasar por `abrirArchivo`. `/privacidad`, `/soporte` y «Eliminar mi cuenta» son exigidos por las tiendas.
 - Commits con mensajes en español.
 
 ## Estructura
@@ -30,4 +32,4 @@ Node.js ≥ 22 (ESM), Express 5, PostgreSQL (PGlite embebido si no hay `DATABASE
 - Pruebas: `node --test` con `test/ayuda.js` (`levantar()` → app con PGlite en memoria + demo, `como(correo)` → cliente con sesión). Usuarios demo (clave `demo1234`): demo@ (administrador), counter@, patio@, finanzas@, soporte@ (superadmin) `@siguelogps.cl`.
 
 ## Comandos
-`npm start` · `npm run dev` · `npm test` · `npm run capturas` (maquetas a PNG)
+`npm start` · `npm run dev` · `npm test` · `npm run capturas` (maquetas a PNG) · `npm run capturas-tienda` (capturas de las fichas de las apps)

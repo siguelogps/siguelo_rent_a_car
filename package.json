@@ -2,7 +2,7 @@
   "name": "siguelo-rentacar",
   "version": "0.1.0",
   "private": true,
-  "description": "Síguelo Rentacar: administración de arriendo de vehículos (producto de Síguelo GPS)",
+  "description": "Síguelo On Rent: administración de arriendo de vehículos (producto de Síguelo GPS)",
   "scripts": {
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
@@ -10,7 +10,8 @@
     "migrar": "node scripts/migrar.js",
     "sembrar-demo": "node scripts/sembrar-demo.js",
     "crear-superadmin": "node scripts/crear-superadmin.js",
-    "capturas": "node scripts/capturas.cjs"
+    "capturas": "node scripts/capturas.cjs",
+    "capturas-tienda": "node scripts/capturas-tienda.mjs"
   },
   "engines": {
     "node": ">=22"

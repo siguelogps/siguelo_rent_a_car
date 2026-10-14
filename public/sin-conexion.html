@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sin conexión · Síguelo On Rent</title>
+<link rel="icon" href="/img/logo-pin.png">
+<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css">
+</head>
+<body>
+<div class="login">
+  <div class="caja" style="text-align:center;align-items:center">
+    <img src="/img/logo-pin.png" alt="Síguelo" style="height:56px">
+    <div><h1 style="font-size:20px">Sin conexión</h1><p class="muted">No pudimos llegar a Síguelo On Rent. Revisa que el teléfono tenga internet (datos o Wi‑Fi) e intenta de nuevo.</p></div>
+    <button class="btn primario grande" style="width:100%" id="reintentar">Reintentar</button>
+  </div>
+</div>
+<script>
+  var b = document.getElementById('reintentar');
+  function ir() { b.disabled = true; b.textContent = 'Conectando…'; location.reload(); }
+  b.onclick = ir;
+  window.addEventListener('online', ir);
+</script>
+</body>
+</html>

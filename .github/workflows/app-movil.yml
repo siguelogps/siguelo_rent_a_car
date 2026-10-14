@@ -1,0 +1,179 @@
+# Compila la app «Síguelo On Rent» (apps/movil) para Android y iOS.
+#  · Android, siempre: APK de prueba para instalar en el celular + AAB sin firmar (verifica que compila para Play).
+#    Con los 4 secretos de la llave de carga: AAB y APK firmados, listos para subir a Play Console.
+#  · iOS, siempre: compila para el simulador (verifica que compila).
+#    Con los 4 secretos de App Store Connect: archiva, firma y sube la versión a TestFlight (después se envía a revisión).
+# Se ejecuta con cada cambio en apps/movil y a mano (Actions → «App móvil» → Run workflow).
+
+name: App móvil
+
+on:
+  push:
+    paths: ['apps/movil/**', '.github/workflows/app-movil.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: app-movil-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  VERSION_CODE: ${{ github.run_number }}
+  VERSION_NAME: 1.0.${{ github.run_number }}
+
+jobs:
+  android:
+    name: Android
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: apps/movil
+    env:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/movil/package-lock.json
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Preparar el proyecto (Capacitor)
+        run: |
+          npm ci
+          node scripts/preparar.mjs
+          npx cap sync android
+
+      - name: APK de prueba y AAB sin firmar
+        working-directory: apps/movil/android
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleDebug bundleRelease --no-daemon --stacktrace
+          cp app/build/outputs/apk/debug/app-debug.apk "$GITHUB_WORKSPACE/on-rent-prueba-${VERSION_NAME}.apk"
+
+      - name: Guardar el APK de prueba
+        uses: actions/upload-artifact@v4
+        with:
+          name: on-rent-prueba-${{ env.VERSION_NAME }}
+          path: on-rent-prueba-*.apk
+          retention-days: 14
+          if-no-files-found: error
+
+      - name: ¿Están los secretos de la llave de carga?
+        id: llave
+        run: |
+          if [ -n "$ANDROID_KEYSTORE_BASE64" ] && [ -n "$ANDROID_KEYSTORE_PASSWORD" ] && [ -n "$ANDROID_KEY_ALIAS" ] && [ -n "$ANDROID_KEY_PASSWORD" ]; then
+            echo "hay=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=Versión firmada para Play omitida::Faltan los secretos ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS y ANDROID_KEY_PASSWORD. Ver apps/movil/README.md."
+            echo "hay=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: AAB y APK firmados (Play Store)
+        if: steps.llave.outputs.hay == 'true'
+        working-directory: apps/movil/android
+        run: |
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/carga.jks"
+          export ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/carga.jks"
+          ./gradlew bundleRelease assembleRelease --no-daemon
+          cp app/build/outputs/bundle/release/app-release.aab "$GITHUB_WORKSPACE/on-rent-${VERSION_NAME}.aab"
+          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/on-rent-${VERSION_NAME}.apk"
+          rm -f "$RUNNER_TEMP/carga.jks"
+
+      - name: Guardar la versión para Play
+        if: steps.llave.outputs.hay == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: on-rent-play-${{ env.VERSION_NAME }}
+          path: |
+            on-rent-*.aab
+            on-rent-1.*.apk
+          retention-days: 30
+          if-no-files-found: error
+
+  ios:
+    name: iOS
+    runs-on: macos-15
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: apps/movil
+    env:
+      APPSTORE_KEY_ID: ${{ secrets.APPSTORE_KEY_ID }}
+      APPSTORE_ISSUER_ID: ${{ secrets.APPSTORE_ISSUER_ID }}
+      APPSTORE_KEY_P8_BASE64: ${{ secrets.APPSTORE_KEY_P8_BASE64 }}
+      IOS_TEAM_ID: ${{ secrets.IOS_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/movil/package-lock.json
+
+      - name: Preparar el proyecto (Capacitor)
+        run: |
+          npm ci
+          node scripts/preparar.mjs
+          npx cap sync ios
+
+      - name: Compilar para el simulador (verifica que compila)
+        working-directory: apps/movil/ios/App
+        run: |
+          xcodebuild -project App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS Simulator' -derivedDataPath "$RUNNER_TEMP/dd" \
+            CODE_SIGNING_ALLOWED=NO build | tail -40
+          test ${PIPESTATUS[0]} -eq 0
+
+      - name: ¿Están los secretos de App Store Connect?
+        id: apple
+        run: |
+          if [ -n "$APPSTORE_KEY_ID" ] && [ -n "$APPSTORE_ISSUER_ID" ] && [ -n "$APPSTORE_KEY_P8_BASE64" ] && [ -n "$IOS_TEAM_ID" ]; then
+            echo "hay=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=Subida a TestFlight omitida::Faltan los secretos APPSTORE_KEY_ID, APPSTORE_ISSUER_ID, APPSTORE_KEY_P8_BASE64 e IOS_TEAM_ID. Ver apps/movil/README.md."
+            echo "hay=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Archivar, firmar y subir a TestFlight
+        if: steps.apple.outputs.hay == 'true'
+        working-directory: apps/movil/ios/App
+        run: |
+          LLAVE="$RUNNER_TEMP/AuthKey_${APPSTORE_KEY_ID}.p8"
+          echo "$APPSTORE_KEY_P8_BASE64" | base64 -d > "$LLAVE"
+          AUTH=(-allowProvisioningUpdates -authenticationKeyPath "$LLAVE" -authenticationKeyID "$APPSTORE_KEY_ID" -authenticationKeyIssuerID "$APPSTORE_ISSUER_ID")
+          xcodebuild -project App.xcodeproj -scheme App -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/OnRent.xcarchive" \
+            DEVELOPMENT_TEAM="$IOS_TEAM_ID" CODE_SIGN_STYLE=Automatic \
+            MARKETING_VERSION="$VERSION_NAME" CURRENT_PROJECT_VERSION="$VERSION_CODE" \
+            "${AUTH[@]}" archive | tail -40
+          test ${PIPESTATUS[0]} -eq 0
+          cat > "$RUNNER_TEMP/exportar.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0"><dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>${IOS_TEAM_ID}</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+          </dict></plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/OnRent.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/exportar.plist" -exportPath "$RUNNER_TEMP/exportado" "${AUTH[@]}"
+          rm -f "$LLAVE"
+          echo "### iOS ${VERSION_NAME} (${VERSION_CODE}) subida a App Store Connect → TestFlight" >> "$GITHUB_STEP_SUMMARY"

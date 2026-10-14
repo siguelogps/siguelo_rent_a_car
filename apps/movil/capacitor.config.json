@@ -1,0 +1,31 @@
+{
+  "appId": "cl.siguelogps.onrent",
+  "appName": "Síguelo On Rent",
+  "webDir": "www",
+  "appendUserAgent": "SigueloOnRent/1",
+  "backgroundColor": "#FFFFFF",
+  "server": {
+    "url": "https://siguelo-rentacar.onrender.com/",
+    "errorPath": "sin-conexion.html",
+    "cleartext": false
+  },
+  "android": {
+    "allowMixedContent": false
+  },
+  "ios": {
+    "contentInset": "never"
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 1500,
+      "launchAutoHide": true,
+      "backgroundColor": "#15181D",
+      "showSpinner": false,
+      "androidScaleType": "CENTER_INSIDE"
+    },
+    "SystemBars": {
+      "insetsHandling": "css",
+      "style": "LIGHT"
+    }
+  }
+}

@@ -9,7 +9,7 @@ import { TIPOS_DTE, ESTADOS_DTE } from './calculo.js';
 export const txt = (s) => String(s ?? '').replace(/[−–—]/g, '-').replace(/≈/g, '~').replace(/→/g, '->').replace(/[·•]/g, '·').replace(/[^\x20-\x7E\xA0-\xFF\n]/g, '');
 
 export function nuevoPdf() {
-  const doc = new PDFDocument({ size: 'LETTER', margin: 42, info: { Producer: 'Síguelo Rent a Car' } });
+  const doc = new PDFDocument({ size: 'LETTER', margin: 42, info: { Producer: 'Síguelo On Rent' } });
   const partes = [];
   doc.on('data', (c) => partes.push(c));
   const listo = new Promise((ok) => doc.on('end', () => ok(Buffer.concat(partes))));

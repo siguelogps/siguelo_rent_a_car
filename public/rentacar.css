@@ -1,4 +1,4 @@
-/* Síguelo Rent a Car · estilos propios sobre app.css (CRM Síguelo Gestión). Prefijo rc- */
+/* Síguelo On Rent · estilos propios sobre app.css (CRM Síguelo Gestión). Prefijo rc- */
 @import url('../node_modules/@fontsource/ibm-plex-sans/400.css');
 @import url('../node_modules/@fontsource/ibm-plex-sans/500.css');
 @import url('../node_modules/@fontsource/ibm-plex-sans/600.css');
@@ -284,3 +284,26 @@ a.rc-marcha { text-decoration: none; }
 .plegada .rc-empresa-logo { width: 36px; height: 36px; }
 .rc-empresa-logo { aspect-ratio: 1; }
 img.rc-empresa-logo { object-fit: contain; padding: 2px; }
+
+/* ── App Síguelo On Rent (apps/movil): visor de fotos y márgenes seguros en iOS ── */
+.rc-visor { position: fixed; inset: 0; z-index: 3000; background: rgba(21,24,29,.94); display: grid; place-items: center; padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom)); }
+.rc-visor img { max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 6px; }
+.rc-visor-cerrar { position: absolute; top: max(12px, env(safe-area-inset-top)); right: 12px; width: 44px; height: 44px; border: 0; border-radius: 50%; background: rgba(255,255,255,.14); color: #fff; font-size: 20px; }
+html.nativa-ios body { padding-bottom: env(safe-area-inset-bottom); }
+html.nativa-ios body::before { content: ''; position: fixed; top: 0; left: 0; right: 0; height: env(safe-area-inset-top); background: var(--card); z-index: 2500; }
+html.nativa-ios .app, html.nativa-ios .pt-cab { padding-top: env(safe-area-inset-top); }
+html.nativa-ios .login { padding-top: calc(24px + env(safe-area-inset-top)); }
+html.nativa-ios .rs-pub-cab { padding-top: calc(12px + env(safe-area-inset-top)); }
+html.nativa-ios .barra { top: env(safe-area-inset-top); }
+html.nativa-ios .menu { top: env(safe-area-inset-top); height: calc(100vh - env(safe-area-inset-top)); }
+html.nativa-ios .rc-ver-como { top: calc(60px + env(safe-area-inset-top)); }
+@media (max-width: 860px) {
+  html.nativa-ios .menu { top: 0; height: auto; padding-top: calc(14px + env(safe-area-inset-top)); }
+}
+html.nativa-ios .modal-fondo { padding-top: calc(12px + env(safe-area-inset-top)); padding-bottom: calc(12px + env(safe-area-inset-bottom)); }
+html.nativa-ios .toast { bottom: calc(24px + env(safe-area-inset-bottom)); }
+html.nativa-ios .rc-movil-pie { padding-bottom: calc(18px + env(safe-area-inset-bottom)); }
+.rc-eliminar-cuenta { margin-top: 8px; border-top: 1px solid var(--line); padding-top: 12px; }
+.rc-eliminar-cuenta summary { cursor: pointer; color: var(--red); font-size: 13px; }
+.rc-eliminar-cuenta[open] { display: flex; flex-direction: column; gap: 10px; }
+.rc-eliminar-cuenta .btn { align-self: flex-start; }

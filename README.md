@@ -36,6 +36,7 @@ Usuarios de prueba (clave `demo1234`): `demo@siguelogps.cl` (administrador), `co
 ## Despliegue
 - **Render:** «New › Blueprint» con este repositorio (`render.yaml`): crea el servicio web (Docker) y PostgreSQL. Las migraciones se aplican solas al arrancar.
 - **Otro cloud:** la misma imagen (`Dockerfile`) con `DATABASE_URL` (PostgreSQL 14+) y `APP_SECRET`. Sin disco persistente: fotos y documentos van a un bucket S3 compatible (Cloudflare R2, AWS S3, B2, GCS), configurado por empresa en pantalla.
+- **Dominio:** `https://onrent.siguelogps.com` (en Render: Settings › Custom Domains › `onrent.siguelogps.com`, y en el DNS de siguelogps.com un registro CNAME `onrent` → `siguelo-rentacar.onrender.com`). Con el dominio activo, poner `URL_BASE=https://onrent.siguelogps.com` (los links de firma, verificación, portal y las apps salen con ese dominio).
 - Variables de entorno: ver `.env.example`. Todas las integraciones (plataforma GPS, Webpay, Mercado Pago, SimpleAPI, WhatsApp, SMTP, almacenamiento, TAG y multas) se cargan desde **Configuración › Integraciones**, cifradas con `APP_SECRET`.
 
 ## Maquetas
@@ -43,3 +44,4 @@ Usuarios de prueba (clave `demo1234`): `demo@siguelogps.cl` (administrador), `co
 
 ## Apps para Android y iOS
 `apps/movil/` tiene la app «Síguelo On Rent» para Google Play y App Store (Capacitor 8), compilada por GitHub Actions (`.github/workflows/app-movil.yml`). Pasos para publicar, textos de las fichas y capturas: `apps/movil/README.md` y `apps/movil/tienda/`. `npm run capturas-tienda` regenera las capturas. El sistema web también es instalable como PWA.
+**Apps con la marca del cliente** (como en Síguelo On Bus): la empresa la pide en Apps, completa nombre, ícono, logo, color y textos, y firma en línea la autorización; Síguelo la revisa y aprueba en Backoffice › Apps con marca, que dispara `.github/workflows/apps-propias.yml` (app del equipo y app de clientes para Google Play, paquete `cl.siguelogps.onrent.<empresa>.<app>`).

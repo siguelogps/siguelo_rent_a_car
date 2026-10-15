@@ -38,11 +38,11 @@ async function driver(empresaId) {
   };
 }
 
-const EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'application/pdf': 'pdf', 'image/svg+xml': 'svg' };
+const EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'application/pdf': 'pdf', 'image/svg+xml': 'svg', 'application/vnd.android.package-archive': 'apk', 'application/vnd.android.aab': 'aab' };
 
-export async function guardarArchivo({ empresaId, entidad, entidadId = null, tipo = null, nombre = null, mime = 'application/octet-stream', datos, meta = {}, usuarioId = null }) {
+export async function guardarArchivo({ empresaId, entidad, entidadId = null, tipo = null, nombre = null, mime = 'application/octet-stream', datos, meta = {}, usuarioId = null, maximoMb = 15 }) {
   if (!Buffer.isBuffer(datos)) throw new Error('datos debe ser un Buffer');
-  if (datos.length > 15 * 1024 * 1024) throw new Error('El archivo supera los 15 MB');
+  if (datos.length > maximoMb * 1024 * 1024) throw new Error(`El archivo supera los ${maximoMb} MB`);
   const d = await driver(empresaId);
   const clave = `${d.prefijo}/${empresaId}/${entidad}/${new Date().toISOString().slice(0, 7)}/${crypto.randomUUID()}.${EXT[mime] || 'bin'}`;
   await d.poner(clave, datos, mime);

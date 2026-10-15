@@ -1,0 +1,151 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Apps con marca</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/img/app/apple-touch-icon.png"><meta name="theme-color" content="#FFFFFF">
+<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/apps.css">
+</head>
+<body>
+<main>
+  <div class="pagina-cab">
+    <div><h1>Apps con marca</h1><p>Apps de los clientes con su propia marca: pedidos, solicitudes firmadas, aprobación y compilación para Google Play</p></div>
+    <div class="acciones"><div class="segmentado" role="group" aria-label="Filtro"><button data-filtro="pendientes" aria-pressed="true">Por atender</button><button data-filtro="todas" aria-pressed="false">Todas</button></div></div>
+  </div>
+  <div id="contenido"><p class="rc-cargando">Cargando…</p></div>
+</main>
+<script type="module">
+// Backoffice · Apps con marca (equipo Síguelo): habilitar el módulo a quien lo pide, revisar solicitudes, observar,
+// aprobar (dispara la compilación en GitHub Actions o muestra el comando para ejecutarla a mano), marcar lista o
+// publicada; y (superadmin) los ajustes de la compilación: token de GitHub y token de servicio para publicar versiones.
+import { iniciarPagina, api, esc, fecha, hora, modal, toast, toastError, leerForm } from '/comun.js';
+import { pasos, mb, CHIP } from '/js/apps-comun.js';
+
+const yo = await iniciarPagina({ activo: 'apps-marca', titulo: 'Apps con marca' });
+const superadmin = yo.usuario.rol === 'superadmin';
+const caja = document.getElementById('contenido');
+let filtro = 'pendientes';
+
+const comando = (p) => `gh workflow run apps-propias.yml --repo siguelogps/siguelo_rent_a_car \\\n${Object.entries(p).map(([k, v]) => `  -f ${k}=${JSON.stringify(String(v ?? ''))}`).join(' \\\n')}`;
+
+async function pintar() {
+  const d = await api('backoffice/apps');
+  const lista = d.solicitudes.filter((s) => filtro === 'todas' || !['publicada', 'borrador'].includes(s.estado));
+  const a = d.ajustes;
+  caja.innerHTML = `
+    ${d.pedidos.length ? `<div class="tarjeta bloque" style="margin-bottom:16px"><h2>Piden apps con su marca <span class="chip aviso">${d.pedidos.length}</span></h2>
+      <p class="ayuda">Al habilitarla, la empresa completa sus datos y firma la autorización en Configuración → Apps. Indica en la nota si se cobra.</p>
+      ${d.pedidos.map((p) => `<div class="ap-dato"><span><b style="color:var(--ink)">${esc(p.nombre)}</b> · ${esc(p.pedido?.usuario || '')} · ${fecha(p.pedido?.fecha)}${p.pedido?.nota ? `<br>${esc(p.pedido.nota)}` : ''}</span><b><button class="btn peq primario" data-habilitar="${p.id}" data-nombre="${esc(p.nombre)}">Habilitar</button></b></div>`).join('')}</div>` : ''}
+    <div class="tarjeta" style="margin-bottom:16px">${lista.length ? `<table class="tabla"><thead><tr><th>Empresa</th><th>Apps</th><th>Estado</th><th>Firma</th><th>Actualizada</th><th></th></tr></thead><tbody>
+      ${lista.map((s) => `<tr><td><b>${esc(s.empresa)}</b>${s.modulo ? '' : ' <span class="chip error" title="La empresa no tiene el módulo habilitado">Sin módulo</span>'}</td>
+        <td>${esc(s.datos.nombre_equipo || '—')}<br><span class="peq muted">${esc(s.datos.nombre_clientes || '')}</span></td>
+        <td><span class="chip ${CHIP[s.estado]}">${esc(s.estadoNombre)}</span></td>
+        <td>${s.firma ? `${esc(s.firma.nombre)}<br><span class="peq muted">${fecha(s.firma.fecha)}</span>` : '<span class="peq muted">Sin firmar</span>'}</td>
+        <td class="mono">${fecha(s.actualizada)}</td>
+        <td><button class="btn peq" data-ver="${s.id}">Revisar</button></td></tr>`).join('')}</tbody></table>`
+    : `<p class="bloque muted">${filtro === 'pendientes' ? 'No hay solicitudes por atender.' : 'Todavía no hay solicitudes. Se habilitan por empresa (botón Habilitar cuando la piden, o incluyendo «App con la marca del cliente» en su plan).'}</p>`}</div>
+    <div class="tarjeta bloque"><h2>Compilación y publicación</h2>
+      <p class="ayuda">Al aprobar, se dispara el workflow «Apps con marca» de GitHub Actions (<span class="mono">.github/workflows/apps-propias.yml</span>): compila la app del equipo y la de clientes con el nombre, ícono y color de la empresa, las firma con la llave de carga y sube el APK y el AAB aquí con el token de servicio. El AAB se sube a Play Console (cuenta de Síguelo).</p>
+      <div class="ap-dato"><span>GitHub</span><b>${a.github_conectado ? `Conectado · ${esc(a.github_repo)}` : 'Sin token: se mostrará el comando para ejecutarlo a mano'}</b></div>
+      <div class="ap-dato"><span>Token de servicio (secreto ON_RENT_PUBLICAR_TOKEN en GitHub)</span><b>${a.token_cargado ? `Creado el ${fecha(a.token_creado)}` : 'Sin token'}</b></div>
+      <div class="ap-dato"><span>Dominio que abren las apps</span><b class="mono">${esc(a.host)}</b></div>
+      ${superadmin ? `<div class="ap-form" id="form-gh">
+        <label class="etiqueta">Repositorio<input class="campo mono" name="github_repo" value="${esc(a.github_repo || '')}" placeholder="siguelogps/siguelo_rent_a_car"></label>
+        <label class="etiqueta">Token de GitHub (permiso «Contents: read & write» del repositorio)<input class="campo mono" name="github_token" autocomplete="off" placeholder="${a.github_conectado ? '•••••••• (déjalo vacío para mantenerlo)' : 'github_pat_…'}"></label>
+      </div>
+      <div class="rc-fila" style="justify-content:flex-end"><button class="btn" id="guardar-gh">Guardar GitHub</button><button class="btn" id="nuevo-token">${a.token_cargado ? 'Renovar token de servicio' : 'Crear token de servicio'}</button></div>` : '<p class="peq muted">Solo un superadmin cambia estos ajustes.</p>'}
+    </div>`;
+}
+
+async function revisar(id) {
+  const d = await api(`backoffice/apps/${id}`);
+  const s = d.solicitud; const x = s.datos;
+  const archivo = (a) => `/api/backoffice/apps/${s.id}/archivo/${a}`;
+  const cambios = d.cambios;
+  const dato = (k, v) => `<div class="ap-dato"><span>${k}</span><b>${v}</b></div>`;
+  const firmada = ['enviada', 'en_revision', 'compilando', 'lista', 'publicada'].includes(s.estado) && s.firma;
+  const botones = [{ texto: 'Cerrar', valor: null }];
+  const estado = (nuevo, extra = {}) => async () => { await api(`backoffice/apps/${s.id}/estado`, { body: { estado: nuevo, ...extra } }); toast('Estado actualizado. Se avisó al cliente por correo.', 'ok'); return 'recargar'; };
+  if (cambios.includes('con_observaciones')) botones.push({ texto: 'Enviar observaciones', accion: async (c) => estado('con_observaciones', { observaciones: c.querySelector('[name=observaciones]').value })() });
+  if (cambios.includes('en_revision')) botones.push({ texto: 'Pasar a revisión', accion: estado('en_revision') });
+  if (cambios.includes('lista')) botones.push({ texto: 'Marcar lista para tienda', accion: estado('lista') });
+  if (cambios.includes('publicada')) botones.push({ texto: 'Marcar publicada', accion: async (c) => estado('publicada', leerForm(c.querySelector('#urls')))() });
+  if (firmada) botones.push({ texto: ['compilando', 'lista', 'publicada'].includes(s.estado) ? 'Volver a compilar' : 'Aprobar y compilar', clase: 'primario', accion: async () => {
+    const r = await api(`backoffice/apps/${s.id}/aprobar`, { body: {} });
+    toast(r.disparada ? 'Aprobada: compilación disparada en GitHub Actions.' : 'Aprobada. Falta ejecutar la compilación a mano (ver comando).', r.disparada ? 'ok' : '');
+    return 'reabrir';
+  } });
+  const v = await modal({
+    titulo: `${d.empresa.nombre} · apps con marca`, ancho: true,
+    html: `<div style="display:flex;flex-direction:column;gap:14px">
+      <div class="rc-fila" style="gap:14px;flex-wrap:wrap;align-items:center">
+        ${s.icono_archivo_id ? `<img src="${archivo(s.icono_archivo_id)}" alt="Ícono" style="width:72px;height:72px;border-radius:16px;border:1px solid var(--line)">` : ''}
+        <div class="ap-vista" style="background:${esc(x.color || '#15181D')};flex:1">${s.logo_archivo_id ? `<img src="${archivo(s.logo_archivo_id)}" alt="">` : ''}<span>${esc(x.nombre_clientes || '')}</span></div>
+      </div>
+      ${pasos(s.estado, d.estados)}
+      ${d.modulo ? '' : '<div class="aviso error">La empresa no tiene el módulo habilitado: habilítalo antes de aprobar.</div>'}
+      <div class="ap-grilla">
+        <div>${dato('App del equipo', `${esc(x.nombre_equipo || '—')}<br><span class="ap-pk">${esc(d.paquetes.equipo)}</span>`)}${dato('App de clientes', `${esc(x.nombre_clientes || '—')}<br><span class="ap-pk">${esc(d.paquetes.clientes)}</span>`)}
+          ${dato('Color', `<span class="mono">${esc(x.color || '—')}</span>`)}${dato('Soporte', `${esc(x.correo_soporte || '')}<br>${esc(x.telefono_soporte || '')}`)}</div>
+        <div>${s.firma ? `${dato('Firmó', `${esc(s.firma.nombre)} · ${esc(s.firma.rut)}<br><span class="peq muted">${esc(s.firma.cargo)}</span>`)}${dato('Fecha · IP', `${fecha(s.firma.fecha)} ${hora(s.firma.fecha)} · <span class="mono">${esc(s.firma.ip || '')}</span>`)}
+          <div class="ap-hash" style="padding:6px 0">SHA-256 ${esc(s.firma.hash)}</div><a class="btn peq" href="/api/backoffice/apps/${s.id}/pdf" target="_blank" rel="noopener">Autorización firmada (PDF)</a>` : '<p class="muted">Sin firma.</p>'}</div>
+      </div>
+      <details><summary style="cursor:pointer"><b>Textos de la tienda</b></summary><div style="display:flex;flex-direction:column;gap:8px;padding-top:8px">
+        ${['equipo', 'clientes'].map((k) => `<div><b>${esc(x[`nombre_${k}`] || k)}</b><p class="peq">${esc(x[`desc_corta_${k}`] || '')}</p><p class="peq muted" style="white-space:pre-wrap">${esc(x[`desc_larga_${k}`] || '')}</p></div>`).join('')}</div></details>
+      ${s.capturas.length ? `<div class="ap-capturas">${s.capturas.map((c) => `<img src="${archivo(c)}" alt="Captura">`).join('')}</div>` : ''}
+      ${Object.keys(d.versiones).length ? `<div><b>Versiones compiladas</b>${Object.entries(d.versiones).map(([k, fs]) => dato(esc(x[`nombre_${k}`] || k), Object.entries(fs).map(([f, ver]) => `<a href="/api/backoffice/apps/${s.id}/${k}.${f}">${f.toUpperCase()} ${esc(ver.version)}</a> <span class="peq muted">${mb(ver.tamano)}</span>`).join(' · '))).join('')}</div>` : ''}
+      ${s.compilacion ? `<div><b>Compilación</b> <span class="peq muted">${fecha(s.compilacion.fecha)} ${hora(s.compilacion.fecha)} · ${esc(s.compilacion.motivo || '')}</span>
+        <table class="ap-parametros">${Object.entries(s.compilacion.parametros || d.parametros).map(([k, val]) => `<tr><td>${esc(k)}</td><td>${esc(val)}</td></tr>`).join('')}</table>
+        ${s.compilacion.disparada ? '' : `<p class="peq muted" style="margin:8px 0 4px">Ejecútalo a mano (GitHub → Actions → Apps con marca → Run workflow) con estos valores, o con la CLI de GitHub:</p><pre class="ap-comando">${esc(comando(s.compilacion.parametros || d.parametros))}</pre>`}</div>` : ''}
+      <div><b>Historial</b><ul class="ap-historial">${s.historial.map((h) => `<li><span class="mono peq muted">${fecha(h.fecha)} ${hora(h.fecha)}</span><span><span class="chip ${CHIP[h.estado]}">${esc(d.estados[h.estado] || h.estado)}</span> ${esc(h.usuario || '')}${h.nota ? ` · ${esc(h.nota)}` : ''}</span></li>`).join('')}</ul></div>
+      ${cambios.includes('con_observaciones') ? '<label class="etiqueta">Observaciones para el cliente<textarea class="campo" name="observaciones" rows="3" placeholder="Qué debe corregir el cliente"></textarea></label>' : ''}
+      ${cambios.includes('publicada') ? `<div class="ap-form" id="urls"><label class="etiqueta">Link Google Play · equipo<input class="campo" name="url_equipo" placeholder="https://play.google.com/store/apps/details?id=${esc(d.paquetes.equipo)}"></label><label class="etiqueta">Link Google Play · clientes<input class="campo" name="url_clientes" placeholder="https://play.google.com/store/apps/details?id=${esc(d.paquetes.clientes)}"></label></div>` : ''}
+    </div>`,
+    botones
+  });
+  if (v === 'recargar' || v === 'reabrir') await pintar();
+  if (v === 'reabrir') await revisar(id);
+}
+
+document.querySelector('.segmentado').addEventListener('click', async (ev) => {
+  const b = ev.target.closest('[data-filtro]');
+  if (!b) return;
+  filtro = b.dataset.filtro;
+  document.querySelectorAll('[data-filtro]').forEach((x) => x.setAttribute('aria-pressed', String(x === b)));
+  await pintar().catch(toastError);
+});
+
+caja.addEventListener('click', async (ev) => {
+  try {
+    const v = ev.target.closest('[data-ver]');
+    if (v) return await revisar(v.dataset.ver);
+    const h = ev.target.closest('[data-habilitar]');
+    if (h) {
+      const ok = await modal({ titulo: `Habilitar apps con marca · ${h.dataset.nombre}`, html: '<label class="etiqueta">Nota (ej.: se cobra 3 UF por única vez)<input class="campo" name="nota" maxlength="300"></label>',
+        botones: [{ texto: 'Cancelar', valor: false }, { texto: 'Habilitar', clase: 'primario', accion: async (c) => { await api(`backoffice/empresas/${h.dataset.habilitar}/app-propia`, { body: { habilitado: true, nota: c.querySelector('[name=nota]').value } }); return true; } }] });
+      if (ok === true) { toast('Habilitado: la empresa ya puede completar su solicitud', 'ok'); await pintar(); }
+      return;
+    }
+    if (ev.target.closest('#guardar-gh')) {
+      const b = leerForm(document.getElementById('form-gh'));
+      if (!b.github_token) delete b.github_token;
+      await api('backoffice/apps-ajustes', { method: 'PUT', body: b });
+      toast('Ajustes de GitHub guardados', 'ok'); await pintar(); return;
+    }
+    if (ev.target.closest('#nuevo-token')) {
+      const r = await api('backoffice/apps-token', { body: {} });
+      await modal({ titulo: 'Token de servicio', html: `<p>Cópialo ahora: no se vuelve a mostrar. En GitHub (Settings → Secrets and variables → Actions) guárdalo como secreto <b class="mono">ON_RENT_PUBLICAR_TOKEN</b> y crea la variable <b class="mono">ON_RENT_URL</b> = <span class="mono">${esc(r.url)}</span>.</p><pre class="ap-comando">${esc(r.token)}</pre>`,
+        botones: [{ texto: 'Copiar y cerrar', clase: 'primario', accion: async () => { try { await navigator.clipboard.writeText(r.token); toast('Token copiado', 'ok'); } catch { /* sin portapapeles */ } return true; } }] });
+      await pintar();
+    }
+  } catch (e) { toastError(e); }
+});
+
+try {
+  await pintar();
+  const ver = new URLSearchParams(location.search).get('ver');
+  if (ver) { history.replaceState(null, '', '/apps-marca'); await revisar(ver); }
+} catch (e) { caja.innerHTML = `<div class="aviso error">${esc(e.message)}</div>`; }
+</script>
+</body>
+</html>

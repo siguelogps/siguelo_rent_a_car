@@ -11,9 +11,9 @@ Textos listos para copiar en Google Play Console y App Store Connect. Las captur
 | Categoría | Empresa (Play: *Empresa* · App Store: principal *Negocios*, secundaria *Productividad*) |
 | Idioma principal | Español (Latinoamérica) — `es-419` |
 | Precio | Gratis (el servicio se contrata con Síguelo GPS; **no** hay compras dentro de la app) |
-| Política de privacidad | https://siguelo-rentacar.onrender.com/privacidad *(cambiar por el dominio definitivo)* |
-| Eliminar cuenta (Play) | https://siguelo-rentacar.onrender.com/privacidad#eliminar-cuenta |
-| Soporte (App Store) | https://siguelo-rentacar.onrender.com/soporte |
+| Política de privacidad | https://onrent.siguelogps.com/privacidad |
+| Eliminar cuenta (Play) | https://onrent.siguelogps.com/privacidad#eliminar-cuenta |
+| Soporte (App Store) | https://onrent.siguelogps.com/soporte |
 | Sitio web | https://www.siguelogps.cl |
 | Correo de contacto | soporte@siguelogps.cl |
 | Clasificación de contenido | Para todo público (sin violencia, sin contenido generado por usuarios públicos, sin compras) |

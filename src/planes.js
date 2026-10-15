@@ -8,7 +8,8 @@ export const MODULOS_PLAN = {
   reservas: 'Reservas y calendario', patio: 'Entregas y devoluciones (celular)', contratos: 'Contrato digital con firma y QR', clientes: 'Clientes y lista negra',
   flota: 'Flota y vencimientos', mantencion: 'Mantención', pagos: 'Pagos y garantías', liquidaciones: 'Liquidación al cierre', incidentes: 'Incidentes y daños',
   tarifas: 'Tarifas, extras y descuentos', gps: 'Plataforma GPS en vivo', inmovilizar: 'Inmovilización remota', tag_multas: 'TAG y multas',
-  facturacion: 'Boleta y factura electrónica', reportes: 'Reportes y Excel', portal: 'Portal de reservas en línea'
+  facturacion: 'Boleta y factura electrónica', reportes: 'Reportes y Excel', portal: 'Portal de reservas en línea',
+  app_propia: 'App con la marca del cliente (Google Play)'
 };
 
 const cache = new Map(); // empresaId → { plan, en }
@@ -17,8 +18,10 @@ export const limpiarCachePlanes = () => cache.clear();
 export async function planDeEmpresa(empresaId) {
   const c = cache.get(empresaId);
   if (c && Date.now() - c.en < 30e3) return c.plan;
-  const p = await uno(`SELECT p.* FROM empresas e LEFT JOIN planes p ON p.codigo = e.plan WHERE e.id = $1`, [empresaId]);
-  const plan = p?.codigo ? p : null; // empresa con un plan que ya no existe: sin restricciones (no se bloquea a un cliente por un error de catálogo)
+  const p = await uno(`SELECT p.*, e.modulos_extra FROM empresas e LEFT JOIN planes p ON p.codigo = e.plan WHERE e.id = $1`, [empresaId]);
+  // empresa con un plan que ya no existe: sin restricciones (no se bloquea a un cliente por un error de catálogo).
+  // Los módulos extra de la empresa (habilitados por Síguelo fuera del plan) se suman a los del plan.
+  const plan = p?.codigo ? { ...p, modulos: [...new Set([...(p.modulos || []), ...(p.modulos_extra || [])])] } : null;
   cache.set(empresaId, { plan, en: Date.now() });
   return plan;
 }

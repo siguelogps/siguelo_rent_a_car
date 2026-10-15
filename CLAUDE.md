@@ -14,7 +14,8 @@ Node.js ≥ 22 (ESM), Express 5, PostgreSQL (PGlite embebido si no hay `DATABASE
 - Integraciones se configuran desde pantalla (tabla `integraciones`, cifrada), nunca en variables de entorno. Solo administradores las activan.
 - Equipo Síguelo (roles `superadmin` y `soporte`, sin empresa): entra al **backoffice** (`/empresas`, `/planes`, `/equipo`) y a un cliente solo con «Ver como» (`POST /api/empresa-activa`). Planes en la tabla `planes` (`src/planes.js`): `requiere()` bloquea los módulos que el plan no incluye y `verificarLimite()` exige los máximos de vehículos, usuarios y sucursales.
 - Nombre del producto: **Síguelo On Rent** (no «Rent a Car»; «rentacar» solo como sustantivo para las empresas clientes).
-- App móvil (`apps/movil`, Capacitor): carga el sistema desde el servidor. Lo propio de la app va en `public/nativa.js` (`esNativa()`, `abrirArchivo()`); para descargas usar siempre `descargar()` de `comun.js` y nunca `window.open` a PDF sin pasar por `abrirArchivo`. `/privacidad`, `/soporte` y «Eliminar mi cuenta» son exigidos por las tiendas.
+- App móvil (`apps/movil`, Capacitor): carga el sistema desde el servidor. Lo propio de la app va en `public/nativa.js` (`esNativa()`, `abrirArchivo()`); para descargas usar siempre `descargar()` de `comun.js` y nunca `window.open` a PDF sin pasar por `abrirArchivo`. `/privacidad`, `/soporte` y «Eliminar mi cuenta» son exigidos por las tiendas. Dominio: `https://onrent.siguelogps.com`.
+- Apps con marca (como Síguelo On Bus): módulo de plan `app_propia` (o `empresas.modulos_extra`), `src/apps-propias.js`, `src/api/08-apps.js`, páginas `/apps` (cliente) y `/apps-marca` (backoffice), workflow `.github/workflows/apps-propias.yml`.
 - Commits con mensajes en español.
 
 ## Estructura

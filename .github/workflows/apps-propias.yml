@@ -1,0 +1,161 @@
+# Apps con marca: compila la app del equipo y la app de clientes con el nombre, ícono y color de una empresa
+# (marca blanca de Síguelo On Rent), firma APK y AAB con la llave de carga y los sube a la plataforma.
+#
+# Lo dispara la plataforma al aprobar una solicitud (Backoffice → Apps con marca → Aprobar y compilar:
+# repository_dispatch «compilar-app-propia») o se ejecuta a mano (Actions → Apps con marca → Run workflow).
+# Secretos: ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS, ANDROID_KEY_PASSWORD (la misma
+# llave de carga de la app Síguelo On Rent) y ON_RENT_PUBLICAR_TOKEN (Backoffice → Apps con marca → token de servicio).
+# Variable: ON_RENT_URL (ej. https://onrent.siguelogps.com). Sin token, los archivos quedan como artefactos.
+name: Apps con marca
+
+on:
+  workflow_dispatch:
+    inputs:
+      empresa: { description: "Identificador (slug) de la empresa, ej. andes-rent", type: string, required: true }
+      app: { description: "App a compilar", type: choice, options: [ambas, equipo, clientes], default: ambas }
+      nombre_equipo: { description: "Nombre de la app del equipo", type: string, default: "" }
+      nombre_clientes: { description: "Nombre de la app de clientes", type: string, default: "" }
+      color: { description: "Color principal #RRGGBB", type: string, default: "" }
+      host: { description: "Dominio que abren las apps", type: string, default: onrent.siguelogps.com }
+      icono_url: { description: "URL del ícono PNG 512×512 (vacío = https://<host>/api/apps/marca/<empresa>/icono.png)", type: string, default: "" }
+  repository_dispatch:
+    types: [compilar-app-propia]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: apps-propias-${{ github.event.inputs.empresa || github.event.client_payload.empresa }}
+  cancel-in-progress: false
+
+jobs:
+  preparar:
+    name: Parámetros
+    runs-on: ubuntu-latest
+    outputs:
+      apps: ${{ steps.p.outputs.apps }}
+      empresa: ${{ steps.p.outputs.empresa }}
+      host: ${{ steps.p.outputs.host }}
+      color: ${{ steps.p.outputs.color }}
+      icono_url: ${{ steps.p.outputs.icono_url }}
+    steps:
+      - id: p
+        env:
+          APP: ${{ github.event.inputs.app || github.event.client_payload.app || 'ambas' }}
+          EMPRESA: ${{ github.event.inputs.empresa || github.event.client_payload.empresa }}
+          HOST_APPS: ${{ github.event.inputs.host || github.event.client_payload.host || 'onrent.siguelogps.com' }}
+          COLOR: ${{ github.event.inputs.color || github.event.client_payload.color || '' }}
+          ICONO_URL: ${{ github.event.inputs.icono_url || github.event.client_payload.icono_url || '' }}
+        run: |
+          set -euo pipefail
+          case "$APP" in
+            ambas) apps='["equipo","clientes"]' ;;
+            equipo|clientes) apps="[\"$APP\"]" ;;
+            *) echo "::error::App desconocida: $APP"; exit 1 ;;
+          esac
+          [[ "$EMPRESA" =~ ^[a-z0-9][a-z0-9-]{1,40}$ ]] || { echo "::error::Identificador de empresa no válido: $EMPRESA"; exit 1; }
+          if [ -n "$COLOR" ] && ! [[ "$COLOR" =~ ^#[0-9A-Fa-f]{6}$ ]]; then echo "::error::Color no válido: $COLOR"; exit 1; fi
+          host="${HOST_APPS#https://}"; host="${host#http://}"; host="${host%%/*}"
+          [ -n "$ICONO_URL" ] || ICONO_URL="https://$host/api/apps/marca/$EMPRESA/icono.png"
+          { echo "apps=$apps"; echo "empresa=$EMPRESA"; echo "host=$host"; echo "color=$COLOR"; echo "icono_url=$ICONO_URL"; } >> "$GITHUB_OUTPUT"
+          echo "### Apps con marca · $EMPRESA · $apps · $host" >> "$GITHUB_STEP_SUMMARY"
+
+  compilar:
+    name: Compilar ${{ matrix.app }}
+    needs: preparar
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        app: ${{ fromJSON(needs.preparar.outputs.apps) }}
+    defaults:
+      run:
+        working-directory: apps/movil
+    env:
+      APP: ${{ matrix.app }}
+      EMPRESA: ${{ needs.preparar.outputs.empresa }}
+      HOST_APPS: ${{ needs.preparar.outputs.host }}
+      COLOR: ${{ needs.preparar.outputs.color }}
+      ICONO_URL: ${{ needs.preparar.outputs.icono_url }}
+      NOMBRE_EQUIPO: ${{ github.event.inputs.nombre_equipo || github.event.client_payload.nombre_equipo || '' }}
+      NOMBRE_CLIENTES: ${{ github.event.inputs.nombre_clientes || github.event.client_payload.nombre_clientes || '' }}
+      VERSION_CODE: ${{ github.run_number }}
+      VERSION_NAME: 1.0.${{ github.run_number }}
+      KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: apps/movil/package-lock.json
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Ícono de la empresa
+        run: |
+          set -euo pipefail
+          curl -fsSL --retry 3 "$ICONO_URL" -o "$RUNNER_TEMP/icono.png" || { echo "::error::No se pudo bajar el ícono desde $ICONO_URL (¿la solicitud está firmada?)"; exit 1; }
+          file "$RUNNER_TEMP/icono.png" | grep -q 'PNG image data, 512 x 512' || { echo "::error::El ícono debe ser PNG de 512×512"; exit 1; }
+
+      - name: Aplicar la marca
+        run: |
+          set -euo pipefail
+          npm ci
+          if [ "$APP" = equipo ]; then NOMBRE="$NOMBRE_EQUIPO"; else NOMBRE="$NOMBRE_CLIENTES"; fi
+          node scripts/app-propia.mjs --empresa "$EMPRESA" --app "$APP" --nombre "$NOMBRE" --color "$COLOR" --host "$HOST_APPS" --icono "$RUNNER_TEMP/icono.png"
+          node scripts/preparar.mjs
+          npx cap sync android
+          echo "PAQUETE=$(node -p "require('./capacitor.config.json').appId")" >> "$GITHUB_ENV"
+
+      - name: Compilar y firmar APK y AAB
+        working-directory: apps/movil/android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          chmod +x gradlew
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/carga.jks"
+            export ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/carga.jks"
+          else
+            echo "::warning::Sin la llave de carga (secretos ANDROID_*): el APK y el AAB quedan sin firmar y no sirven para instalar ni para Play."
+          fi
+          ./gradlew assembleRelease bundleRelease --no-daemon
+          mkdir -p "$GITHUB_WORKSPACE/salida"
+          base="$EMPRESA-$APP-$VERSION_NAME"
+          cp app/build/outputs/apk/release/app-release*.apk "$GITHUB_WORKSPACE/salida/$base.apk"
+          cp app/build/outputs/bundle/release/app-release.aab "$GITHUB_WORKSPACE/salida/$base.aab"
+          rm -f "$RUNNER_TEMP/carga.jks"
+          echo "BASE=$base" >> "$GITHUB_ENV"
+          echo "- $APP · \`$PAQUETE\` · $VERSION_NAME ($VERSION_CODE)" >> "$GITHUB_STEP_SUMMARY"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BASE }}
+          path: salida/
+          retention-days: 30
+
+      - name: Publicar en la plataforma
+        if: env.KEYSTORE_B64 != ''
+        env:
+          TOKEN: ${{ secrets.ON_RENT_PUBLICAR_TOKEN }}
+          URL_PLATAFORMA: ${{ vars.ON_RENT_URL }}
+        working-directory: salida
+        run: |
+          set -euo pipefail
+          if [ -z "$TOKEN" ]; then echo "::notice::Sin ON_RENT_PUBLICAR_TOKEN: los archivos quedan solo como artefactos."; exit 0; fi
+          url="${URL_PLATAFORMA:-https://$HOST_APPS}"; url="${url%/}"
+          for formato in apk aab; do
+            curl -fsS --retry 3 --retry-all-errors -X POST "$url/api/apps/servicio/$APP" \
+              -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/octet-stream" \
+              -H "x-empresa: $EMPRESA" -H "x-version: $VERSION_NAME" -H "x-formato: $formato" -H "x-paquete: $PAQUETE" \
+              --data-binary "@$BASE.$formato" -o /dev/null -w "$formato: HTTP %{http_code}\n"
+          done
+          echo "- Publicado en $url" >> "$GITHUB_STEP_SUMMARY"

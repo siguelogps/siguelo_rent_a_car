@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Apps</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/img/app/apple-touch-icon.png"><meta name="theme-color" content="#FFFFFF">
+<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/apps.css">
+</head>
+<body>
+<main>
+  <div class="pagina-cab">
+    <div><h1>Apps</h1><p>La app Síguelo On Rent para tu equipo y las apps con tu marca para tu equipo y tus clientes</p></div>
+  </div>
+  <div id="contenido"><p class="rc-cargando">Cargando…</p></div>
+</main>
+<script type="module">
+// Apps: link de la app genérica y, con el módulo «app_propia», la solicitud de apps con la marca de la empresa
+// (datos, ícono, logo, color y textos de la tienda) con la autorización de uso de marca firmada en línea.
+import { iniciarPagina, api, esc, fecha, hora, modal, toast, toastError, leerForm, puede, ICONOS } from '/comun.js';
+import { pasos, mb, aDataUrl } from '/js/apps-comun.js';
+
+await iniciarPagina({ activo: 'apps', titulo: 'Apps' });
+const caja = document.getElementById('contenido');
+const editar = puede('configuracion', 'editar');
+let D = null;
+
+const copiable = (url, etiqueta) => `<div class="ap-link"><span class="ap-url">${esc(url)}</span><button class="btn peq" data-copiar="${esc(url)}">Copiar</button>${etiqueta ? `<a class="btn peq" href="${esc(url)}" target="_blank" rel="noopener">${etiqueta}</a>` : ''}</div>`;
+
+function generica() {
+  return `<div class="ap-seccion"><h2>App Síguelo On Rent</h2><div class="ap-grilla">
+    <div class="tarjeta bloque"><div class="ap-cab"><img class="ap-ico" src="/img/app/icono-192.png" alt=""><div><h3>Síguelo On Rent <span class="chip">Android · iPhone · web</span></h3><span class="ap-pk">cl.siguelogps.onrent</span></div></div>
+      <p class="ayuda">Tu equipo la usa en el teléfono o la tablet con su mismo correo y clave: reservas, entregas y devoluciones con fotos, contratos y flota. Mientras se publica en las tiendas, se instala desde el navegador: abre este link en el teléfono y toca «Agregar a pantalla de inicio».</p>
+      ${copiable(D.links.sistema)}</div>
+    <div class="tarjeta bloque"><div class="ap-cab"><img class="ap-ico" src="/api/logo/${esc(D.empresa.slug)}" alt="" onerror="this.src='/img/logo-pin.png'"><div><h3>Reservas en línea</h3><span class="ap-pk">/reservar/${esc(D.empresa.slug)}</span></div></div>
+      <p class="ayuda">El portal de reservas con tu marca para tus clientes. Compártelo o ponlo en tu sitio web; con la app de clientes con tu marca, tus clientes también lo tienen en su teléfono.</p>
+      ${copiable(D.links.reservas, 'Abrir')}</div>
+  </div></div>`;
+}
+
+function tarjetaPropia(k) {
+  const v = D.versiones[k] || {};
+  const nombre = D.solicitud.datos[`nombre_${k}`] || D.apps[k].nombre;
+  return `<div class="tarjeta bloque"><div class="ap-cab"><img class="ap-ico" src="/api/archivos/${D.solicitud.icono_archivo_id}" alt=""><div><h3>${esc(nombre)} ${v.apk ? `<span class="chip ok">Versión ${esc(v.apk.version)}</span>` : '<span class="chip">En desarrollo</span>'}</h3><span class="ap-pk">${esc(D.paquetes[k])}</span></div></div>
+    <p class="ayuda">${esc(D.apps[k].descripcion)}</p>
+    ${v.apk ? `${copiable(D.links.descargas[k], 'Descargar APK')}<p class="peq muted">${mb(v.apk.tamano)} · compilada el ${fecha(v.apk.subida)}. En el teléfono: abre el link, descarga e instala (Android pide permitir «instalar apps de esta fuente» la primera vez).${v.aab ? ` · <a href="/api/apps/archivo/${k}.aab">AAB para Google Play</a>` : ''}</p>` : ''}
+    ${D.solicitud.url_tiendas?.[k] ? `<a class="btn peq" href="${esc(D.solicitud.url_tiendas[k])}" target="_blank" rel="noopener">Ver en Google Play</a>` : ''}
+  </div>`;
+}
+
+function pedido() {
+  const p = D.pedido;
+  return `<div class="tarjeta bloque">
+    <h2>Apps con tu marca ${p ? '<span class="chip aviso">Solicitud enviada</span>' : ''}</h2>
+    <p class="ayuda">Tu equipo y tus clientes instalan apps con tu nombre, ícono y colores, publicadas por Síguelo GPS en Google Play a tu nombre: la app del equipo (el sistema para tu personal) y la app de clientes (tus reservas en línea). Al habilitarla, aquí mismo subes el logo, eliges el color, escribes los textos de la tienda y firmas en línea la autorización de uso de marca.</p>
+    ${p ? `<p>Pediste la personalización el ${fecha(p.fecha)} (${esc(p.usuario)}). El equipo de Síguelo te contactará para habilitarla.</p>`
+    : editar ? `<label class="etiqueta">Comentario (opcional)<textarea class="campo" id="nota-pedido" rows="2" maxlength="500" placeholder="Ej.: queremos publicarla antes de diciembre"></textarea></label>
+      <div><button class="btn primario" id="pedir">Solicitar apps con mi marca</button></div>`
+    : '<p class="peq muted">Pídele a un administrador de tu empresa que la solicite.</p>'}
+  </div>`;
+}
+
+function estadoSolicitud() {
+  const s = D.solicitud; const d = s.datos;
+  return `<div class="tarjeta bloque">
+    <h2>${esc(d.nombre_equipo || '')} y ${esc(d.nombre_clientes || '')} <span class="chip ${s.estado === 'publicada' || s.estado === 'lista' ? 'ok' : 'info'}">${esc(s.estadoNombre)}</span></h2>
+    ${pasos(s.estado, D.estados)}
+    <p class="ayuda">${{
+    enviada: 'Recibimos tu solicitud firmada. El equipo de Síguelo la revisará y te avisará por correo.',
+    en_revision: 'El equipo de Síguelo está revisando tu solicitud.',
+    compilando: 'Aprobada: tus apps están en desarrollo. Te avisaremos cuando estén listas para probar.',
+    lista: 'Tus apps están compiladas. Ya puedes descargarlas y probarlas mientras Síguelo las publica en Google Play.',
+    publicada: 'Tus apps están publicadas en Google Play.'
+  }[s.estado] || ''}</p>
+    ${s.firma ? `<div class="ap-firmado"><div style="flex:1"><b>Autorización firmada</b><div class="peq muted">${esc(s.firma.nombre)} · ${esc(s.firma.cargo)} · ${fecha(s.firma.fecha)} ${hora(s.firma.fecha)}</div><div class="ap-hash">SHA-256 ${esc(s.firma.hash)}</div></div>
+      <a class="btn peq" href="/api/apps/solicitud/pdf" target="_blank" rel="noopener">PDF</a></div>` : ''}
+  </div>`;
+}
+
+function formulario() {
+  const s = D.solicitud; const d = s?.datos || {};
+  const dis = editar ? '' : ' disabled';
+  const cont = (n, max) => `<span class="ap-contador" data-cuenta="${n}" data-max="${max}">${(d[n] || '').length}/${max}</span>`;
+  const color = d.color || '#15181D';
+  return `<div class="tarjeta bloque" id="solicitud">
+    <h2>${s ? 'Tus apps con tu marca' : 'Solicitar mis apps con mi marca'} ${s ? `<span class="chip ${s.estado === 'con_observaciones' ? 'aviso' : ''}">${esc(s.estadoNombre)}</span>` : '<span class="chip marca">Habilitado por Síguelo</span>'}</h2>
+    ${s ? pasos(s.estado, D.estados) : ''}
+    ${s?.estado === 'con_observaciones' ? `<div class="aviso"><b>Observaciones de Síguelo</b><div style="white-space:pre-wrap">${esc(s.observaciones || '')}</div><div class="peq">Corrige lo indicado y vuelve a firmar y enviar.</div></div>` : ''}
+    <p class="ayuda">Dos apps con tu nombre, ícono y color, publicadas por Síguelo GPS en Google Play: la del equipo (el sistema para tu personal) y la de clientes (tus reservas en línea). Completa los datos, guarda el borrador y firma en línea la autorización.</p>
+    <form class="ap-form" id="form-sol" onsubmit="return false">
+      <label class="etiqueta">Nombre de la app del equipo<input class="campo" name="nombre_equipo" maxlength="30" value="${esc(d.nombre_equipo || '')}" placeholder="Ej.: Andes Equipo"${dis}></label>
+      <label class="etiqueta">Nombre de la app de clientes<input class="campo" name="nombre_clientes" maxlength="30" value="${esc(d.nombre_clientes || '')}" placeholder="Ej.: Andes Rent a Car"${dis}></label>
+      <label class="etiqueta">Color principal<span class="ap-color"><input type="color" id="color-sel" value="${esc(color)}"${dis}><input class="campo mono" name="color" value="${esc(d.color || '')}" placeholder="#0B5FFF" maxlength="7"${dis}></span></label>
+      <div class="etiqueta">Vista previa<div class="ap-vista" id="vista" style="background:${esc(color)}">${s?.logo_archivo_id ? `<img src="/api/archivos/${s.logo_archivo_id}" alt="">` : ''}<span id="vp-nombre">${esc(d.nombre_clientes || 'Tu app')}</span></div></div>
+      <div class="etiqueta">Ícono de la app
+        <div class="ap-img"><img id="img-icono" ${s?.icono_archivo_id ? `src="/api/archivos/${s.icono_archivo_id}"` : 'hidden'} alt="Ícono">
+        <input class="campo" type="file" accept="image/png,image/jpeg,image/webp" data-subir="icono"${dis}></div>
+        <span class="peq muted">Sube tu logo o isotipo en PNG, JPG o WebP: lo dejamos en 512 × 512 con margen y fondo blanco, como lo pide Google Play.</span></div>
+      <div class="etiqueta">Logo
+        <div class="ap-img"><img id="img-logo" ${s?.logo_archivo_id ? `src="/api/archivos/${s.logo_archivo_id}"` : 'hidden'} alt="Logo">
+        <input class="campo" type="file" accept="image/png,image/jpeg,image/webp" data-subir="logo"${dis}></div>
+        <span class="peq muted">Se muestra en el ingreso de la app del equipo.</span></div>
+      <label class="etiqueta">Descripción corta · equipo<input class="campo" name="desc_corta_equipo" maxlength="80" value="${esc(d.desc_corta_equipo || '')}" data-contar="desc_corta_equipo"${dis}>${cont('desc_corta_equipo', 80)}</label>
+      <label class="etiqueta">Descripción corta · clientes<input class="campo" name="desc_corta_clientes" maxlength="80" value="${esc(d.desc_corta_clientes || '')}" data-contar="desc_corta_clientes"${dis}>${cont('desc_corta_clientes', 80)}</label>
+      <label class="etiqueta">Descripción larga · equipo<textarea class="campo" name="desc_larga_equipo" rows="5" maxlength="4000" data-contar="desc_larga_equipo"${dis}>${esc(d.desc_larga_equipo || '')}</textarea>${cont('desc_larga_equipo', 4000)}</label>
+      <label class="etiqueta">Descripción larga · clientes<textarea class="campo" name="desc_larga_clientes" rows="5" maxlength="4000" data-contar="desc_larga_clientes"${dis}>${esc(d.desc_larga_clientes || '')}</textarea>${cont('desc_larga_clientes', 4000)}</label>
+      <label class="etiqueta">Correo de soporte<input class="campo" type="email" name="correo_soporte" value="${esc(d.correo_soporte || '')}" placeholder="soporte@tuempresa.cl"${dis}></label>
+      <label class="etiqueta">Teléfono de soporte<input class="campo" type="tel" name="telefono_soporte" value="${esc(d.telefono_soporte || '')}" placeholder="+56 9 1234 5678"${dis}></label>
+      <div class="etiqueta ancho">Capturas para la tienda (opcional, hasta 8)
+        <div class="ap-capturas" id="capturas">${(s?.capturas || []).map((id) => `<figure data-id="${id}"><img src="/api/archivos/${id}" alt="Captura"><button type="button" class="btn-icono" data-quitar="${id}" aria-label="Quitar captura"${dis}>${ICONOS.x}</button></figure>`).join('')}</div>
+        <input class="campo" type="file" accept="image/png,image/jpeg,image/webp" multiple data-subir="captura"${dis}>
+        <span class="peq muted">Si no envías capturas, Síguelo las prepara con tus colores.</span></div>
+      <input type="hidden" name="icono_archivo_id" value="${s?.icono_archivo_id || ''}"><input type="hidden" name="logo_archivo_id" value="${s?.logo_archivo_id || ''}">
+    </form>
+    ${editar ? `<div class="rc-fila" style="justify-content:flex-end"><button class="btn" id="guardar">Guardar borrador</button><button class="btn primario" id="firmar">Firmar y enviar</button></div>`
+    : '<p class="peq muted">Solo un administrador de la empresa puede completar y firmar la solicitud.</p>'}
+  </div>`;
+}
+
+async function pintar() {
+  D = await api('apps/panel');
+  const s = D.solicitud;
+  const aprobada = s && ['compilando', 'lista', 'publicada'].includes(s.estado);
+  caja.innerHTML = `${generica()}
+    <div class="ap-seccion"><h2>Apps con tu marca</h2>
+      ${aprobada ? `<div class="ap-grilla">${Object.keys(D.apps).map(tarjetaPropia).join('')}</div>` : ''}
+      ${!D.modulo && !s ? pedido() : s && !s.editable ? estadoSolicitud() : formulario()}
+    </div>`;
+}
+
+const leerSolicitud = () => {
+  const d = leerForm(document.getElementById('form-sol'));
+  return { ...d, icono_archivo_id: d.icono_archivo_id || null, logo_archivo_id: d.logo_archivo_id || null, capturas: [...document.querySelectorAll('#capturas [data-id]')].map((x) => Number(x.dataset.id)) };
+};
+const guardar = async () => { D.solicitud = await api('apps/solicitud', { method: 'PUT', body: leerSolicitud() }); return D.solicitud; };
+
+// El ícono se ajusta solo: cualquier imagen se centra con margen sobre un cuadrado de 512 × 512 con fondo blanco.
+async function ajustarIcono(archivo) {
+  if (!/^image\/(png|jpeg|webp)$/.test(archivo.type)) throw new Error('El ícono debe ser una imagen PNG, JPG o WebP.');
+  const url = URL.createObjectURL(archivo);
+  try {
+    const img = await new Promise((ok, mal) => { const i = new Image(); i.onload = () => ok(i); i.onerror = () => mal(new Error('No se pudo leer la imagen.')); i.src = url; });
+    const { naturalWidth: w, naturalHeight: h } = img;
+    if (Math.max(w, h) < 128) throw new Error(`La imagen es muy chica (${w} × ${h}). Usa una de al menos 256 píxeles de lado.`);
+    const L = 512; const margen = 0.12;
+    const c = document.createElement('canvas'); c.width = L; c.height = L;
+    const x = c.getContext('2d');
+    x.fillStyle = '#FFFFFF'; x.fillRect(0, 0, L, L);
+    const lado = L * (1 - 2 * margen); const k = Math.min(lado / w, lado / h);
+    x.imageSmoothingQuality = 'high';
+    x.drawImage(img, (L - w * k) / 2, (L - h * k) / 2, w * k, h * k);
+    if (Math.max(w, h) < 256) toast('La imagen es chica: el ícono puede verse borroso. Si tienes una más grande, mejor.', 'error');
+    return c.toDataURL('image/png');
+  } finally { URL.revokeObjectURL(url); }
+}
+
+function lienzoFirma(canvas) {
+  const ctx = canvas.getContext('2d');
+  let dibujado = false; let trazo = null;
+  const r0 = canvas.getBoundingClientRect(); const k = window.devicePixelRatio || 1;
+  canvas.width = r0.width * k; canvas.height = r0.height * k; ctx.scale(k, k);
+  Object.assign(ctx, { lineWidth: 2.2, lineCap: 'round', lineJoin: 'round', strokeStyle: '#15181D' });
+  const punto = (ev) => { const r = canvas.getBoundingClientRect(); return [ev.clientX - r.left, ev.clientY - r.top]; };
+  canvas.addEventListener('pointerdown', (ev) => { ev.preventDefault(); canvas.setPointerCapture(ev.pointerId); trazo = punto(ev); ctx.beginPath(); ctx.moveTo(...trazo); ctx.lineTo(trazo[0] + 0.1, trazo[1] + 0.1); ctx.stroke(); dibujado = true; });
+  canvas.addEventListener('pointermove', (ev) => { if (!trazo) return; ev.preventDefault(); const p = punto(ev); ctx.beginPath(); ctx.moveTo(...trazo); ctx.lineTo(...p); ctx.stroke(); trazo = p; });
+  for (const t of ['pointerup', 'pointercancel', 'pointerleave']) canvas.addEventListener(t, () => { trazo = null; });
+  return {
+    limpiar: () => { ctx.clearRect(0, 0, canvas.width, canvas.height); dibujado = false; },
+    vacio: () => !dibujado,
+    png: () => { const c = document.createElement('canvas'); c.width = canvas.width; c.height = canvas.height; const x = c.getContext('2d'); x.fillStyle = '#fff'; x.fillRect(0, 0, c.width, c.height); x.drawImage(canvas, 0, 0); return c.toDataURL('image/png'); }
+  };
+}
+
+// Antes de firmar: marca lo obligatorio que falta (así no se firma en vano).
+function faltantes() {
+  const f = document.getElementById('form-sol');
+  const req = [['nombre_equipo', 'nombre de la app del equipo'], ['nombre_clientes', 'nombre de la app de clientes'], ['color', 'color principal'], ['icono_archivo_id', 'ícono'], ['logo_archivo_id', 'logo'], ['correo_soporte', 'correo de soporte']];
+  const falta = [];
+  for (const [n, t] of req) {
+    const el = f.querySelector(`[name=${n}]`);
+    const vacio = !String(el?.value || '').trim();
+    const campo = el?.type === 'hidden' ? f.querySelector(`[data-subir=${n.replace('_archivo_id', '')}]`) : el;
+    campo?.classList.toggle('error', vacio);
+    if (vacio) falta.push([t, campo]);
+  }
+  return falta;
+}
+
+async function abrirFirma() {
+  const falta = faltantes();
+  if (falta.length) { toast(`Antes de firmar completa: ${falta.map(([t]) => t).join(', ')}.`, 'error'); falta[0][1]?.scrollIntoView({ behavior: 'smooth', block: 'center' }); return; }
+  await guardar();
+  D = await api('apps/panel');
+  let lienzo = null;
+  const ok = await modal({
+    titulo: 'Autorización y licencia de uso de marca', ancho: true,
+    html: `<div style="display:flex;flex-direction:column;gap:12px">
+      <p class="peq muted">Lee el texto. Al firmar se genera un PDF con la fecha, tu dirección IP y el hash SHA-256 del contenido, descargable por tu empresa y por Síguelo.</p>
+      <div class="ap-autorizacion">${D.autorizacion.map((p) => `<p>${esc(p)}</p>`).join('')}</div>
+      <div class="ap-form" id="form-firma">
+        <label class="etiqueta">Nombre del representante<input class="campo" name="nombre" autocomplete="name"></label>
+        <label class="etiqueta">RUT<input class="campo mono" name="rut" placeholder="12.345.678-9"></label>
+        <label class="etiqueta">Cargo<input class="campo" name="cargo" placeholder="Ej.: Gerente general"></label>
+        <div class="etiqueta">Identificador de las apps<span class="ap-pk" style="padding-top:8px">${esc(D.paquetes.equipo)}<br>${esc(D.paquetes.clientes)}</span></div>
+      </div>
+      <div><div class="peq muted" style="margin-bottom:6px">Firma aquí con el mouse o con el dedo</div><canvas class="ap-firma" id="lienzo" aria-label="Recuadro para firmar"></canvas>
+        <div class="ap-firma-pie"><span class="peq muted">Firma electrónica simple (Ley 19.799)</span><button type="button" class="btn peq" id="limpiar-firma">Limpiar</button></div></div>
+      <label style="display:flex;gap:8px;align-items:flex-start"><input type="checkbox" id="acepta" style="margin-top:3px"><span>Declaro tener facultades para representar a la empresa y acepto la autorización y la licencia de uso de marca para que Síguelo GPS publique estas apps en Google Play en nuestro nombre.</span></label>
+    </div>`,
+    alAbrir: (cuerpo) => { lienzo = lienzoFirma(cuerpo.querySelector('#lienzo')); cuerpo.querySelector('#limpiar-firma').onclick = () => lienzo.limpiar(); },
+    botones: [{ texto: 'Cancelar', valor: false }, { texto: 'Firmar y enviar', clase: 'primario', accion: async (cuerpo) => {
+      if (lienzo.vacio()) throw new Error('Dibuja tu firma en el recuadro.');
+      if (!cuerpo.querySelector('#acepta').checked) throw new Error('Debes aceptar la autorización.');
+      await api('apps/solicitud/firmar', { body: { ...leerForm(cuerpo.querySelector('#form-firma')), acepta: true, firma: lienzo.png() } });
+      return true;
+    } }]
+  });
+  if (ok === true) { toast('Solicitud firmada y enviada a Síguelo.', 'ok'); await pintar(); }
+}
+
+caja.addEventListener('click', async (ev) => {
+  try {
+    const c = ev.target.closest('[data-copiar]');
+    if (c) { try { await navigator.clipboard.writeText(c.dataset.copiar); toast('Link copiado', 'ok'); } catch { toast(c.dataset.copiar); } return; }
+    if (ev.target.closest('#pedir')) { await api('apps/pedir-personalizacion', { body: { nota: document.getElementById('nota-pedido')?.value || '' } }); toast('Solicitud enviada a Síguelo', 'ok'); await pintar(); return; }
+    const q = ev.target.closest('[data-quitar]');
+    if (q) { q.closest('figure').remove(); return; }
+    if (ev.target.closest('#guardar')) { await guardar(); toast('Borrador guardado', 'ok'); await pintar(); return; }
+    if (ev.target.closest('#firmar')) await abrirFirma();
+  } catch (e) { toastError(e); }
+});
+
+caja.addEventListener('change', async (ev) => {
+  const t = ev.target;
+  const vista = document.getElementById('vista');
+  if (t.id === 'color-sel') { document.querySelector('[name=color]').value = t.value.toUpperCase(); vista.style.background = t.value; return; }
+  if (t.name === 'color' && /^#[0-9A-Fa-f]{6}$/.test(t.value)) { document.getElementById('color-sel').value = t.value; vista.style.background = t.value; return; }
+  const tipo = t.dataset.subir;
+  if (!tipo) return;
+  try {
+    for (const archivo of [...t.files]) {
+      if (tipo === 'captura' && document.querySelectorAll('#capturas figure').length >= 8) throw new Error('Hasta 8 capturas.');
+      const dataUrl = tipo === 'icono' ? await ajustarIcono(archivo) : await aDataUrl(archivo);
+      const f = await api('archivos', { body: { entidad: 'solicitud_app', tipo, nombre: tipo === 'icono' ? 'icono-512.png' : archivo.name, dataUrl } });
+      if (tipo === 'captura') {
+        document.getElementById('capturas').insertAdjacentHTML('beforeend', `<figure data-id="${f.id}"><img src="/api/archivos/${f.id}" alt="Captura"><button type="button" class="btn-icono" data-quitar="${f.id}" aria-label="Quitar captura">${ICONOS.x}</button></figure>`);
+      } else {
+        document.querySelector(`[name=${tipo}_archivo_id]`).value = f.id;
+        const img = document.getElementById(`img-${tipo}`); img.src = `/api/archivos/${f.id}`; img.hidden = false;
+        if (tipo === 'logo') { vista.querySelector('img')?.remove(); vista.insertAdjacentHTML('afterbegin', `<img src="/api/archivos/${f.id}" alt="">`); }
+      }
+    }
+    await guardar();
+    toast(tipo === 'captura' ? 'Captura agregada' : 'Imagen cargada', 'ok');
+  } catch (e) { toastError(e); }
+  t.value = '';
+});
+
+caja.addEventListener('input', (ev) => {
+  const n = ev.target.dataset?.contar;
+  if (n) { const c = document.querySelector(`[data-cuenta="${n}"]`); c.textContent = `${ev.target.value.length}/${c.dataset.max}`; }
+  if (ev.target.name === 'nombre_clientes') document.getElementById('vp-nombre').textContent = ev.target.value || 'Tu app';
+});
+
+try { await pintar(); } catch (e) { caja.innerHTML = `<div class="aviso error">${esc(e.message)}</div>`; }
+</script>
+</body>
+</html>

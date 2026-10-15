@@ -5,7 +5,7 @@
   "appendUserAgent": "SigueloOnRent/1",
   "backgroundColor": "#FFFFFF",
   "server": {
-    "url": "https://siguelo-rentacar.onrender.com/",
+    "url": "https://onrent.siguelogps.com/",
     "errorPath": "sin-conexion.html",
     "cleartext": false
   },

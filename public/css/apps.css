@@ -1,0 +1,44 @@
+/* Apps (cliente) y Apps con marca (backoffice). Prefijo ap- */
+.ap-grilla { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(340px, 100%), 1fr)); gap: 16px; }
+.ap-seccion { display: flex; flex-direction: column; gap: 12px; margin-bottom: 22px; }
+.ap-seccion > h2 { font-size: 15px; font-weight: 600; color: var(--ink-2); }
+.ap-cab { display: flex; gap: 12px; align-items: center; }
+.ap-cab .ap-ico { width: 52px; height: 52px; border-radius: 12px; border: 1px solid var(--line); object-fit: cover; background: #fff; flex: none; }
+.ap-cab h3 { font-size: 15px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.ap-pk { font: 12px var(--mono); color: var(--muted); word-break: break-all; }
+.ap-link { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; background: var(--soft, #F7F8FA); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.ap-link .ap-url { font: 12px var(--mono); word-break: break-all; flex: 1 1 200px; }
+.ap-pasos { display: flex; gap: 4px; flex-wrap: wrap; align-items: center; }
+.ap-pasos span { font-size: 12px; padding: 4px 10px; border-radius: 999px; background: var(--line); color: var(--muted); white-space: nowrap; }
+.ap-pasos span.hecho { background: var(--green-soft); color: #14532D; }
+.ap-pasos span.ahora { background: var(--ink); color: #fff; font-weight: 600; }
+.ap-pasos span.obs { background: var(--marca-suave); color: var(--marca-texto); font-weight: 600; }
+.ap-form { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 16px; }
+.ap-form .ancho { grid-column: 1 / -1; }
+.ap-img { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.ap-img img { max-height: 72px; max-width: 160px; border-radius: 10px; border: 1px solid var(--line); background: #fff; }
+.ap-capturas { display: flex; gap: 8px; flex-wrap: wrap; }
+.ap-capturas figure { margin: 0; position: relative; }
+.ap-capturas img { height: 120px; border-radius: 8px; border: 1px solid var(--line); background: #fff; display: block; }
+.ap-capturas button { position: absolute; top: 4px; right: 4px; background: #fff; }
+.ap-contador { font: 11px var(--mono); color: var(--muted); text-align: right; }
+.ap-color { display: flex; gap: 8px; align-items: center; }
+.ap-color input[type=color] { width: 44px; height: 38px; padding: 2px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+.ap-vista { display: flex; align-items: center; gap: 10px; border-radius: 10px; padding: 10px 12px; font-weight: 600; color: #fff; background: var(--ink); min-height: 42px; }
+.ap-vista img { height: 26px; max-width: 90px; object-fit: contain; background: #fff; border-radius: 4px; padding: 2px; }
+.ap-autorizacion { max-height: 260px; overflow: auto; border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; background: var(--bg); font-size: 13px; line-height: 1.55; display: flex; flex-direction: column; gap: 8px; }
+.ap-autorizacion p { margin: 0; }
+.ap-firma { border: 1.5px dashed var(--ink-2); border-radius: 10px; background: #fff; width: 100%; height: 170px; touch-action: none; cursor: crosshair; display: block; }
+.ap-firma-pie { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; }
+.ap-firmado { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; }
+.ap-hash { font: 11px var(--mono); color: var(--muted); word-break: break-all; }
+.ap-dato { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.ap-dato span { color: var(--muted); }
+.ap-dato b { text-align: right; font-weight: 500; }
+.ap-historial { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+.ap-historial li { display: flex; gap: 10px; flex-wrap: wrap; }
+.ap-comando { font: 12px/1.5 var(--mono); background: var(--ink); color: #E5E7EB; border-radius: 8px; padding: 10px 12px; white-space: pre-wrap; word-break: break-all; }
+.ap-parametros { width: 100%; font-size: 12px; border-collapse: collapse; }
+.ap-parametros td { padding: 3px 6px; border-bottom: 1px solid var(--line); word-break: break-all; }
+.ap-parametros td:first-child { font-family: var(--mono); color: var(--muted); width: 140px; }
+@media (max-width: 700px) { .ap-form { grid-template-columns: 1fr; } }

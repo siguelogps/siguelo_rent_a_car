@@ -20,7 +20,7 @@ El sistema web además quedó como **PWA** (`public/manifest.webmanifest`, `publ
 
 ## Carpetas
 
-- `capacitor.config.json` — dirección del sistema (`server.url`), nombre y colores. **Si cambia el dominio** (ej. `onrent.siguelogps.cl`), cambiarlo aquí y en `tienda/ficha.md`.
+- `capacitor.config.json` — dirección del sistema (`server.url`), nombre y colores. Hoy: `https://onrent.siguelogps.com`. Si cambia el dominio, cambiarlo aquí y en `tienda/ficha.md`.
 - `android/`, `ios/` — proyectos nativos (se abren con Android Studio / Xcode).
 - `www/` — lo único que va dentro de la app: pantalla de carga y «Sin conexión».
 - `assets/` — imágenes de origen de íconos y pantalla de inicio (`scripts/fuentes-iconos.py` las dibuja con los logos oficiales; `npm run iconos` genera todos los tamaños).
@@ -71,3 +71,18 @@ npm run ios              # abre Xcode (solo en Mac)
 ## Versiones
 
 GitHub Actions numera solo: versión `1.0.N` y número de compilación `N` (N = número de ejecución). Cada subida a las tiendas necesita un N mayor que la anterior: basta con volver a correr el flujo.
+
+## Apps con la marca del cliente (marca blanca)
+
+Igual que en Síguelo On Bus. Cada empresa con el módulo «App con la marca del cliente» (en su plan, o habilitado por Síguelo en Backoffice › Apps con marca cuando lo pide) obtiene **dos apps Android**:
+
+| App | Abre | Paquete |
+|---|---|---|
+| Equipo | `https://onrent.siguelogps.com/ingresar?app=<empresa>` (ingreso con su logo; solo entra su personal) | `cl.siguelogps.onrent.<empresa>.equipo` |
+| Clientes | `https://onrent.siguelogps.com/reservar/<empresa>` (su portal de reservas) | `cl.siguelogps.onrent.<empresa>.clientes` |
+
+Flujo: la empresa completa en **Apps** el nombre de cada app, ícono, logo, color, textos de la tienda y soporte → firma en línea la autorización y licencia de uso de marca (PDF con fecha, IP y hash SHA-256) → Síguelo revisa en **Backoffice › Apps con marca** (observaciones o aprobación) → al aprobar se dispara `.github/workflows/apps-propias.yml`, que aplica la marca (`scripts/app-propia.mjs`), compila y firma el APK y el AAB y los sube a la plataforma → la solicitud pasa a «Lista para tienda» y la empresa puede descargar y compartir el APK → Síguelo sube el AAB a Play Console y la marca «Publicada» con el link.
+
+Para que el disparo sea automático (una sola vez, superadmin): en Backoffice › Apps con marca guardar un token de GitHub con permiso *Contents: read & write* sobre este repositorio, y crear el **token de servicio**, que se guarda en GitHub como secreto `ON_RENT_PUBLICAR_TOKEN` junto a la variable `ON_RENT_URL=https://onrent.siguelogps.com`. Sin token de GitHub, la pantalla muestra el comando para ejecutarlo a mano.
+
+**iPhone:** las apps con marca son solo Android. Apple no acepta apps «de plantilla» publicadas por el proveedor en nombre de sus clientes (norma 4.2.6): una app con marca en el App Store debe publicarse en la cuenta de desarrollador de Apple del propio cliente. En iPhone, el personal usa la app Síguelo On Rent y los clientes el portal de reservas (se puede agregar a la pantalla de inicio).

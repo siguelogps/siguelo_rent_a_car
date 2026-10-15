@@ -21,6 +21,12 @@ r.post('/ingresar', async (req, res) => {
     throw new ErrorHttp(401, 'Correo o clave incorrectos.');
   }
   intentos.delete(k);
+  // App con la marca de un cliente (?app=<slug>): solo entra el personal de esa empresa (y el equipo Síguelo).
+  const appEmpresa = String(req.body.app || '').trim().toLowerCase();
+  if (appEmpresa && !esSiguelo(u.rol)) {
+    const e = await uno('SELECT id, nombre FROM empresas WHERE slug = $1', [appEmpresa]);
+    if (e && Number(e.id) !== Number(u.empresa_id)) throw new ErrorHttp(403, `Esta app es de ${e.nombre}. Ingresa con la app Síguelo On Rent o con la app de tu empresa.`);
+  }
   const empresaId = esSiguelo(u.rol) ? null : u.empresa_id; // el equipo Síguelo entra a su backoffice
   await crearSesion(res, { ...u, empresa_id: empresaId }, req.headers['user-agent']);
   await registrar({ usuario: u, empresaId, ip: req.ip }, 'ingreso', 'usuario', u.id);

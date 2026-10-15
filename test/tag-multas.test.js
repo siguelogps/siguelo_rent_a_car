@@ -233,3 +233,30 @@ test('conector del dashboard Síguelo (fetch simulado): tramos de 7 días, X-Api
     assert.equal(r2.datos.desde, new Date(Date.parse(`${r.datos.hasta}T12:00:00Z`) - 2 * 864e5).toISOString().slice(0, 10));
   } finally { dash._usarFetch(null); }
 });
+
+test('conector del dashboard con la conexión de la plataforma GPS: X-Token-Plataforma y errores que dicen qué hacer', async () => {
+  const dash = await import('../src/tagmultas/dashboard.js');
+  const vistas = [];
+  let respuesta = { status: 200, cuerpo: { ok: true, cliente: 'Andes', vehiculos: 3 } };
+  dash._usarFetch(async (_url, op) => {
+    vistas.push(op.headers);
+    return new Response(JSON.stringify(respuesta.cuerpo), { status: respuesta.status, headers: { 'Content-Type': 'application/json' } });
+  });
+  const config = { url: 'https://dashboard.prueba', token_plataforma: 'tok-'.repeat(10), cuenta_plataforma: 'lite' };
+  try {
+    const s = await dash.salud(config);
+    assert.equal(s.cliente, 'Andes');
+    assert.equal(vistas[0]['X-Token-Plataforma'], config.token_plataforma);
+    assert.equal(vistas[0]['X-Cuenta-Plataforma'], 'lite');
+    assert.equal(vistas[0]['X-Api-Key'], undefined);
+    respuesta = { status: 401, cuerpo: { ok: false, codigo: 'TOKEN_INVALIDO', error: 'x' } };
+    await assert.rejects(() => dash.salud(config), /vuelve a conectarla en Configuración › Integraciones/);
+    respuesta = { status: 403, cuerpo: { ok: false, codigo: 'CLIENTE_NO_REGISTRADO', error: 'x' } };
+    await assert.rejects(() => dash.salud(config), /no está registrado en el dashboard Síguelo/);
+    // Con clave de integración manda la clave
+    respuesta = { status: 200, cuerpo: { ok: true } };
+    await dash.salud({ ...config, api_key: 'sgi_x' });
+    assert.equal(vistas.at(-1)['X-Api-Key'], 'sgi_x');
+    assert.equal(vistas.at(-1)['X-Token-Plataforma'], undefined);
+  } finally { dash._usarFetch(null); }
+});

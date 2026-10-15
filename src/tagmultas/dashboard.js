@@ -59,7 +59,13 @@ export async function llamar(config, ruta, params = {}, timeout = 30000) {
   try { j = await r.json(); } catch { /* respuesta sin JSON */ }
   if (!r.ok) {
     const det = j?.error || j?.mensaje;
-    throw new ErrorDashboard(`Dashboard (HTTP ${r.status}): ${MENSAJES_HTTP[r.status] || 'error inesperado'}${det ? ` — ${det}` : ''}`, r.status);
+    // Con la conexión de la plataforma GPS (sin clave), los rechazos se explican con qué hacer.
+    const porToken = !config.api_key && {
+      401: 'la conexión con la plataforma GPS venció o fue revocada: vuelve a conectarla en Configuración › Integraciones',
+      403: j?.codigo === 'CLIENTE_NO_REGISTRADO' ? 'tu usuario de la plataforma GPS no está registrado en el dashboard Síguelo: pide a soporte Síguelo que lo active' : null,
+      503: j?.codigo === 'PLATAFORMA_NO_DISPONIBLE' ? 'la plataforma GPS no respondió al validar la conexión (se reintentará)' : null
+    }[r.status];
+    throw new ErrorDashboard(`Dashboard (HTTP ${r.status}): ${porToken || MENSAJES_HTTP[r.status] || 'error inesperado'}${det && !porToken ? ` — ${det}` : ''}`, r.status);
   }
   if (!j || j.ok === false) throw new ErrorDashboard(`Dashboard: ${j?.error || j?.mensaje || 'respuesta no válida'}`, 502);
   return j;

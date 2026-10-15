@@ -21,7 +21,7 @@ Textos listos para copiar en Google Play Console y App Store Connect. Las captur
 
 ## Descripción breve (Play, máx. 80)
 
-Rent a car en tu teléfono: reservas, contratos, entregas y devoluciones con fotos.
+Rent a car en tu teléfono: reservas, contratos, entregas y devoluciones.
 
 ## Subtítulo (App Store, máx. 30)
 

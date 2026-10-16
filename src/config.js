@@ -14,5 +14,7 @@ export const config = {
   pgliteDir: process.env.PGLITE_DIR || '',            // vacío = en memoria
   secreto: process.env.APP_SECRET || crypto.createHash('sha256').update('siguelo-rentacar-desarrollo').digest('hex'),
   sembrarDemo: process.env.SEMBRAR_DEMO === '1' || (!produccion && process.env.SEMBRAR_DEMO !== '0'),
-  tareas: process.env.TAREAS !== '0'                  // sincronización GPS, avisos de vencimientos, etc.
+  tareas: process.env.TAREAS !== '0',                 // sincronización GPS, avisos de vencimientos, etc.
+  // Síguelo Admin (acceso único del equipo). No es un secreto: la clave pública se lee de esa dirección.
+  panelAdmin: 'https://admin.siguelogps.com'
 };

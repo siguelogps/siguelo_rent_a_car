@@ -34,6 +34,8 @@ test('el equipo Síguelo entra al backoffice con el pase del panel', async () =>
   assert.equal(yo.usuario.rol, 'soporte');
   assert.equal(yo.modo, 'backoffice');
   assert.equal((await entrar(p)).status, 401, 'el pase sirve una sola vez');
+  const raiz = await fetch(`${t.base}/acceso-admin`, { method: 'POST', redirect: 'manual', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: new URLSearchParams({ pase: pase({ sub: 'nueva.persona@siguelogps.cl', nombre: 'Nueva Persona', nivel: 'usa' }) }) });
+  assert.equal(raiz.status, 303, 'también en /acceso-admin, la ruta por defecto del panel');
   const admin = await entrar(pase({ sub: 'nueva.persona@siguelogps.cl', nombre: 'Nueva Persona', nivel: 'admin' }));
   const yo2 = await (await fetch(`${t.base}/api/yo`, { headers: { Cookie: admin.headers.get('set-cookie').split(';')[0] } })).json();
   assert.equal(yo2.usuario.rol, 'superadmin', 'el nivel lo decide el panel');

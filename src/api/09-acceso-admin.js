@@ -16,7 +16,7 @@ export const usarVerificador = (fn) => { verificar = fn; }; // pruebas
 const pagina = (titulo, texto) => `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${titulo}</title><link rel="stylesheet" href="/app.css"></head><body><main class="login"><div class="caja"><img src="/img/logo-siguelo.png" alt="Síguelo GPS" style="height:40px;width:auto;align-self:flex-start"><h1 style="font-size:20px">${titulo}</h1><p class="muted">${texto}</p><a class="btn primario" href="${config.panelAdmin}">Volver a Síguelo Admin</a></div></main></body></html>`;
 const limpio = (t) => String(t || '').replace(/[<>&"']/g, '');
 
-r.post('/acceso-admin', async (req, res) => {
+export async function entradaDesdeAdmin(req, res) {
   verificar ??= crearAccesoAdmin({ panel: config.panelAdmin, herramienta: 'rentacar' });
   let p;
   try { p = await verificar(String(req.body?.pase || '')); }
@@ -36,6 +36,8 @@ r.post('/acceso-admin', async (req, res) => {
   await crearSesion(res, { ...u, empresa_id: null }, req.headers['user-agent']);
   await registrar({ usuario: u, empresaId: null, ip: req.ip }, 'ingreso', 'usuario', u.id, { via: 'Síguelo Admin', nivel: p.nivel });
   res.redirect(303, '/empresas');
-});
+}
+// Dos direcciones: /api/acceso-admin y /acceso-admin (la ruta por defecto del panel), para que funcione con cualquiera.
+r.post('/acceso-admin', entradaDesdeAdmin);
 
 export default r;

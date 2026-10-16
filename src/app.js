@@ -24,6 +24,10 @@ export async function crearApp() {
 
   app.get('/salud', (_req, res) => res.json({ ok: true, servicio: 'siguelo-rentacar' }));
 
+  // Entrada desde Síguelo Admin también en /acceso-admin (la ruta por defecto que usa el panel).
+  const { entradaDesdeAdmin } = await import('./api/09-acceso-admin.js');
+  app.post('/acceso-admin', entradaDesdeAdmin);
+
   // API: cada archivo de src/api exporta `default` = express.Router (montado en /api)
   const api = express.Router();
   const dirApi = path.join(RAIZ, 'src/api');

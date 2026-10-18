@@ -59,5 +59,7 @@ test('equipo Síguelo: backoffice, «ver como», planes y límites', async () =>
   const suc = await admin.post('/api/configuracion/sucursales', { nombre: 'Temuco' });
   assert.equal(suc.estado, 403, 'el plan Básico permite 1 sucursal');
   assert.match(suc.datos.error, /plan Básico/);
+  // con máximo 1 el sustantivo va en singular («1 sucursal», no «1 sucursales»)
+  assert.match(suc.datos.error, /hasta 1 sucursal \(/);
   await sa.patch(`/api/configuracion/empresas/${E}`, { plan: 'pro' });
 });

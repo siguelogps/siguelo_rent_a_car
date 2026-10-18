@@ -33,9 +33,9 @@ export async function incluye(empresaId, modulo) {
 }
 
 const RECURSOS = {
-  vehiculos: { campo: 'max_vehiculos', sql: 'SELECT count(*)::int AS n FROM vehiculos WHERE empresa_id = $1 AND activo', nombre: 'vehículos' },
-  usuarios: { campo: 'max_usuarios', sql: 'SELECT count(*)::int AS n FROM usuarios WHERE empresa_id = $1 AND activo', nombre: 'usuarios' },
-  sucursales: { campo: 'max_sucursales', sql: 'SELECT count(*)::int AS n FROM sucursales WHERE empresa_id = $1 AND activa', nombre: 'sucursales' }
+  vehiculos: { campo: 'max_vehiculos', sql: 'SELECT count(*)::int AS n FROM vehiculos WHERE empresa_id = $1 AND activo', nombre: ['vehículo', 'vehículos'] },
+  usuarios: { campo: 'max_usuarios', sql: 'SELECT count(*)::int AS n FROM usuarios WHERE empresa_id = $1 AND activo', nombre: ['usuario', 'usuarios'] },
+  sucursales: { campo: 'max_sucursales', sql: 'SELECT count(*)::int AS n FROM sucursales WHERE empresa_id = $1 AND activa', nombre: ['sucursal', 'sucursales'] }
 };
 
 // Lanza 403 si agregar `cantidad` más supera el límite del plan.
@@ -45,7 +45,7 @@ export async function verificarLimite(empresaId, recurso, cantidad = 1) {
   const max = p?.[r.campo];
   if (max == null) return;
   const [{ n }] = await q(r.sql, [empresaId]);
-  if (n + cantidad > max) throw new ErrorHttp(403, `El plan ${p.nombre} permite hasta ${max} ${r.nombre} (hoy hay ${n}). Pide a Síguelo un cambio de plan.`);
+  if (n + cantidad > max) throw new ErrorHttp(403, `El plan ${p.nombre} permite hasta ${max} ${r.nombre[max === 1 ? 0 : 1]} (hoy hay ${n}). Pide a Síguelo un cambio de plan.`);
 }
 
 export async function usoDeEmpresa(empresaId) {

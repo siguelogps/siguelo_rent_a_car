@@ -20,7 +20,7 @@
 </main>
 <script type="module">
 import { iniciarPagina, api, esc, fecha, rut, validarRut, modal, confirmar, toast, toastError, leerForm } from '/comun.js';
-import { detallePlan, precio, uso } from '/js/backoffice.js';
+import { detallePlan, precio, usos } from '/js/backoffice.js';
 const yo = await iniciarPagina({ activo: 'empresas', titulo: 'Empresas' });
 if (!yo.siguelo) {
   document.querySelector('main').innerHTML = '<p class="aviso error">Solo el equipo de Síguelo puede administrar las empresas.</p>';
@@ -50,7 +50,7 @@ function pintar() {
       <td style="white-space:nowrap"><a class="mono peq" href="/reservar/${esc(e.slug)}" target="_blank" rel="noopener">/reservar/${esc(e.slug)}</a></td>
       <td><div class="bo-plan-celda"><select class="campo" data-plan="${e.id}" aria-label="Plan">${PLANES.filter((x) => x.activo || x.codigo === e.plan).map((x) => `<option value="${esc(x.codigo)}"${x.codigo === e.plan ? ' selected' : ''}>${esc(x.nombre)}</option>`).join('')}${p ? '' : `<option selected>${esc(e.plan)} (no existe)</option>`}</select>
         ${p ? `<button class="btn peq" data-detalle="${e.id}">Ver detalle</button>` : ''}</div><div class="peq muted">${p ? precio(p) : ''}</div></td>
-      <td>${p ? uso(e.vehiculos, p.max_vehiculos, 'vehículos') + uso(e.usuarios, p.max_usuarios, 'usuarios') + uso(e.sucursales, p.max_sucursales, 'sucursales') : ''}</td>
+      <td>${p ? usos(e, p) : ''}</td>
       <td>${e.marcha_blanca ? '<span class="chip rc-marcha">● Activa</span>' : '<span class="chip ok">Operación real</span>'}</td>
       <td><label class="cf-switch-et"><span class="switch"><input type="checkbox" data-activa="${e.id}"${e.activa ? ' checked' : ''} aria-label="Empresa activa"><span></span></span><span>${e.activa ? 'Activa' : 'Suspendida'}</span></label></td>
       <td class="mono peq" style="white-space:nowrap">${fecha(e.creado_en)}</td>

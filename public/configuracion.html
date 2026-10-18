@@ -426,9 +426,9 @@ async function salidas() {
   const EST = { retenida: ['Retenida', 'aviso'], enviada: ['Enviada', 'ok'], error: ['Error', 'error'], descartada: ['Descartada', ''], pendiente: ['Pendiente', 'info'] };
   panel.innerHTML = `<div class="filtros-fila">${[['retenida', 'Retenidas'], ['enviada', 'Enviadas'], ['error', 'Con error'], ['descartada', 'Descartadas'], ['', 'Todas']].map(([k, t]) => `<button type="button" class="filtro" data-f="${k}" aria-pressed="${salFiltro === k}">${t}</button>`).join('')}</div>
     <div class="tarjeta"><div class="tabla-env"><table class="tabla"><thead><tr><th>Fecha</th><th>Canal</th><th>Destino</th><th>Mensaje</th><th>Estado</th><th></th></tr></thead><tbody>
-    ${lista.map((s) => `<tr><td class="mono peq">${fechaHora(s.creado_en)}</td><td><span class="chip ${s.canal === 'whatsapp' ? 'ok' : 'info'}">${s.canal === 'whatsapp' ? 'WhatsApp' : 'Correo'}</span></td><td class="peq">${esc(s.destino)}</td>
-      <td style="max-width:420px"><b class="peq">${esc(s.asunto || '')}</b><div class="peq muted" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:420px">${esc(s.cuerpo)}</div></td>
-      <td><span class="chip ${EST[s.estado]?.[1] || ''}">${EST[s.estado]?.[0] || esc(s.estado)}</span>${s.error ? `<div class="peq muted" style="max-width:220px">${esc(s.error)}</div>` : ''}</td>
+    ${lista.map((s) => `<tr><td class="mono peq cf-sal-fecha">${fechaHora(s.creado_en)}</td><td><span class="chip ${s.canal === 'whatsapp' ? 'ok' : 'info'}">${s.canal === 'whatsapp' ? 'WhatsApp' : 'Correo'}</span></td><td class="peq">${esc(s.destino)}</td>
+      <td class="cf-sal-msg">${s.asunto ? `<b class="peq">${esc(s.asunto)}</b>` : ''}<div class="peq muted">${esc(s.cuerpo)}</div></td>
+      <td class="cf-sal-estado"><span class="chip ${EST[s.estado]?.[1] || ''}">${EST[s.estado]?.[0] || esc(s.estado)}</span>${s.error ? `<div class="peq muted" style="max-width:220px">${esc(s.error)}</div>` : ''}</td>
       <td style="text-align:right;white-space:nowrap"><button class="btn peq" data-ver="${s.id}">Ver</button>${ed && s.estado !== 'enviada' ? ` <button class="btn peq" data-reenviar="${s.id}">Reenviar</button>${s.estado !== 'descartada' ? ` <button class="btn peq peligro" data-desc="${s.id}">Descartar</button>` : ''}` : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="rc-vacio">No hay mensajes en esta bandeja</td></tr>'}
     </tbody></table></div></div>`;
   panel.querySelectorAll('[data-f]').forEach((b) => b.onclick = () => { salFiltro = b.dataset.f; salidas(); });

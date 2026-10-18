@@ -1,7 +1,7 @@
 /* Configuración (/configuracion) y Empresas (/empresas). Prefijo cf- */
-.cf-tabs { display: flex; gap: 2px; border-bottom: 1px solid var(--line); overflow-x: auto; overflow-y: hidden; scrollbar-width: none; }
-.cf-tabs::-webkit-scrollbar { display: none; }
-.cf-tabs a { display: inline-flex; align-items: center; gap: 6px; padding: 10px 14px; text-decoration: none; color: var(--ink-2); font-weight: 500; border-bottom: 3px solid transparent; white-space: nowrap; margin-bottom: -1px; }
+/* Las pestañas pasan a una segunda línea si no caben: con el desplazamiento oculto, «Mi clave» quedaba cortada a 1280 px. */
+.cf-tabs { display: flex; flex-wrap: wrap; gap: 2px; border-bottom: 1px solid var(--line); }
+.cf-tabs a { display: inline-flex; align-items: center; gap: 6px; padding: 10px 11px; text-decoration: none; color: var(--ink-2); font-weight: 500; border-bottom: 3px solid transparent; white-space: nowrap; margin-bottom: -1px; }
 .cf-tabs a:hover { color: var(--ink); background: var(--soft); border-radius: 8px 8px 0 0; }
 .cf-tabs a[aria-current="page"] { color: var(--ink); font-weight: 600; border-bottom-color: var(--marca); }
 .cf-tabs .n { font: 600 11px/1 var(--mono); padding: 3px 6px; border-radius: 6px; background: var(--amber-soft); color: var(--amber-ink); }
@@ -16,6 +16,12 @@
 .cf-sufijo { position: relative; }
 .cf-sufijo .campo { padding-right: 44px; }
 .cf-sufijo em { position: absolute; right: 10px; top: 50%; transform: translateY(-50%); font-style: normal; font-size: 12px; color: var(--muted); pointer-events: none; }
+
+/* Bandeja de salida: el mensaje toma el ancho que sobra y se corta con «…», para que los botones de la fila (Descartar) no queden fuera */
+.cf-sal-fecha { white-space: nowrap; }
+.cf-sal-msg { width: 100%; max-width: 0; }
+.cf-sal-msg > * { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cf-sal-estado { min-width: 150px; }
 
 /* Marcha blanca */
 .cf-marcha { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 14px 20px; align-items: center; padding: 18px 20px; border-radius: 12px; border: 1px solid #F6D9A8; background: var(--amber-soft); }

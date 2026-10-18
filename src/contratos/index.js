@@ -25,10 +25,10 @@ function codigoVerificacion() {
   return `${s.slice(0, 4)}-${s.slice(4, 8)}-${s.slice(8, 12)}`;
 }
 
-const hoyLargo = () => new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
+const hoyLargo = (d = new Date()) => new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', day: 'numeric', month: 'long', year: 'numeric' }).format(d);
 
 /** Variables de la plantilla de contrato (ver src/plantillas-defecto.js). */
-export function variablesContrato(ctx, { folio, codigo }) {
+export function variablesContrato(ctx, { folio, codigo, fecha = new Date() }) {
   const { reserva: r, cliente: c, vehiculo: v, empresa: e, sr, sd, conductores } = ctx;
   const aj = e.ajustes || {};
   const lineas = r.cotizacion?.lineas || [];
@@ -54,7 +54,7 @@ export function variablesContrato(ctx, { folio, codigo }) {
       : 'no hay conductores adicionales autorizados',
     condiciones_adicionales: aj.condiciones_contrato || 'No hay condiciones adicionales.',
     url_verificacion: urlVerificacion(codigo),
-    hoy: hoyLargo()
+    hoy: hoyLargo(fecha)
   };
 }
 
@@ -62,7 +62,8 @@ export function variablesContrato(ctx, { folio, codigo }) {
  * Genera (o regenera, si está pendiente de firma) el contrato de una reserva confirmada o en curso.
  * → fila de contratos con token_firma vigente.
  */
-export async function generarContrato(empresaId, reservaId, usuarioId = null, { ip = null } = {}) {
+// `fecha` (opcional) solo la usan los datos de prueba, para fechar el contrato antes del retiro de la reserva.
+export async function generarContrato(empresaId, reservaId, usuarioId = null, { ip = null, fecha = new Date() } = {}) {
   return transaccion(async (tx) => {
     const [res] = await tx.query('SELECT id, estado FROM reservas WHERE id = $1 AND empresa_id = $2 FOR UPDATE', [reservaId, empresaId]);
     if (!res) throw new ErrorHttp(404, 'Reserva no encontrada');
@@ -76,7 +77,7 @@ export async function generarContrato(empresaId, reservaId, usuarioId = null, { 
     const [pend] = await tx.query(`SELECT * FROM contratos WHERE empresa_id = $1 AND reserva_id = $2 AND estado = 'pendiente_firma' ORDER BY id DESC LIMIT 1`, [empresaId, reservaId]);
     const folio = pend?.folio || await siguienteFolio(empresaId, 'CT', tx);
     const codigo = pend?.codigo_verificacion || codigoVerificacion();
-    const vars = variablesContrato(ctx, { folio, codigo });
+    const vars = variablesContrato(ctx, { folio, codigo, fecha });
     const contenido = renderizar(plant?.cuerpo || CONTRATO_ESTANDAR, vars);
     const datos = { cliente: vars.cliente.nombre_completo, documento: `${vars.cliente.documento_tipo} ${vars.cliente.documento}`, patente: vars.vehiculo.patente,
       vehiculo: `${ctx.vehiculo.marca || ''} ${ctx.vehiculo.modelo || ''} ${ctx.vehiculo.anio || ''}`.trim(), reserva_folio: ctx.reserva.folio, inicio: ctx.reserva.inicio, fin: ctx.reserva.fin,
@@ -123,7 +124,8 @@ export async function pdfContrato(empresaId, contrato) {
  * Firma el contrato: guarda la imagen de la firma, construye el PDF con QR, lo guarda, calcula la huella SHA-256 y
  * envía «contrato_firmado» por correo (con el PDF adjunto) y WhatsApp (retenidos en marcha blanca).
  */
-export async function firmarContrato({ empresaId, contratoId, firmaDataUrl, nombre, documento, ip = null, agente = null, usuarioId = null }) {
+// `firmadoEn` (opcional) solo la usan los datos de prueba; en la operación real la firma queda con la hora del servidor.
+export async function firmarContrato({ empresaId, contratoId, firmaDataUrl, nombre, documento, ip = null, agente = null, usuarioId = null, firmadoEn = null }) {
   const nom = String(nombre || '').trim().slice(0, 120), docu = String(documento || '').trim().slice(0, 30);
   if (nom.length < 3) throw new ErrorHttp(400, 'Escribe tu nombre completo', { campo: 'nombre' });
   if (docu.length < 5) throw new ErrorHttp(400, 'Escribe tu RUT, pasaporte o DNI', { campo: 'documento' });
@@ -133,8 +135,8 @@ export async function firmarContrato({ empresaId, contratoId, firmaDataUrl, nomb
   if (img.datos.length > 3 * 1024 * 1024) throw new ErrorHttp(400, 'La imagen de la firma es demasiado grande');
 
   // Se «toma» el contrato de forma atómica para que no se firme dos veces
-  const [c] = await q(`UPDATE contratos SET estado = 'firmado', firmante_nombre = $3, firmante_documento = $4, firmado_en = now(), firmado_ip = $5, firmado_agente = $6
-      WHERE id = $1 AND empresa_id = $2 AND estado = 'pendiente_firma' RETURNING *`, [contratoId, empresaId, nom, docu, ip, String(agente || '').slice(0, 300)]);
+  const [c] = await q(`UPDATE contratos SET estado = 'firmado', firmante_nombre = $3, firmante_documento = $4, firmado_en = COALESCE($7::timestamptz, now()), firmado_ip = $5, firmado_agente = $6
+      WHERE id = $1 AND empresa_id = $2 AND estado = 'pendiente_firma' RETURNING *`, [contratoId, empresaId, nom, docu, ip, String(agente || '').slice(0, 300), firmadoEn]);
   if (!c) throw new ErrorHttp(409, 'Este contrato ya fue firmado o anulado');
   try {
     const fa = await guardarArchivo({ empresaId, entidad: 'contrato', entidadId: c.id, tipo: 'firma', nombre: `firma-${c.folio}.png`, mime: img.mime, datos: img.datos, meta: { ip, firmante: nom }, usuarioId });

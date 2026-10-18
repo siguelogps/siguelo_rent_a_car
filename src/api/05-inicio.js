@@ -2,6 +2,7 @@
 import express from 'express';
 import { q, uno } from '../db.js';
 import { requiere } from '../auth.js';
+import { ocupacionHoy } from '../flota/comun.js';
 
 const r = express.Router();
 r.get('/inicio', requiere('inicio'), async (req, res) => {
@@ -16,8 +17,7 @@ r.get('/inicio', requiere('inicio'), async (req, res) => {
     q(`${base} AND r.estado = 'confirmada' AND ${local('r.inicio')} = ${hoy} ORDER BY r.inicio`, [E]),
     q(`${base} AND r.estado = 'en_curso' AND ${local('r.fin')} = ${hoy} ORDER BY r.fin`, [E]),
     q(`${base} AND r.estado = 'en_curso' AND r.fin < now() ORDER BY r.fin`, [E]),
-    uno(`SELECT count(*) FILTER (WHERE activo)::int AS total, count(*) FILTER (WHERE activo AND estado = 'arrendado')::int AS arrendados,
-           count(*) FILTER (WHERE activo AND estado = 'disponible')::int AS disponibles, count(*) FILTER (WHERE activo AND estado IN ('mantencion','fuera_servicio'))::int AS taller
+    uno(`SELECT count(*) FILTER (WHERE activo AND estado = 'disponible')::int AS disponibles, count(*) FILTER (WHERE activo AND estado IN ('mantencion','fuera_servicio'))::int AS taller
          FROM vehiculos WHERE empresa_id = $1`, [E]),
     uno(`SELECT count(*)::int AS n FROM reservas WHERE empresa_id = $1 AND estado = 'cotizacion' AND inicio > now()`, [E]),
     q(`SELECT id, patente, marca, modelo, x.tipo, x.fecha FROM vehiculos v,
@@ -28,6 +28,8 @@ r.get('/inicio', requiere('inicio'), async (req, res) => {
   ]);
   const mant = await q(`SELECT id, patente, marca, modelo, coalesce(gps_km, km) AS km, mant_ultima_km + mant_cada_km AS proxima FROM vehiculos
       WHERE empresa_id = $1 AND activo AND mant_cada_km > 0 AND coalesce(gps_km, km) >= mant_ultima_km + mant_cada_km - 1000 ORDER BY (mant_ultima_km + mant_cada_km - coalesce(gps_km, km)) LIMIT 8`, [E]);
+  // ocupación con la misma regla que Reservas (ocupacionHoy)
+  Object.assign(flota, await ocupacionHoy(E));
   res.json({ retiros, devoluciones, atrasadas, flota, cotizaciones: cot.n, vencimientos: venc, mantenciones: mant, alertas, multas });
 });
 export default r;

@@ -8,6 +8,7 @@ import { registrar } from '../bitacora.js';
 import { cotizar } from '../cotizador.js';
 import { conflictos, vehiculosDisponibles } from '../disponibilidad.js';
 import { lecturaActual } from '../gps/index.js';
+import { ocupacionHoy } from '../flota/comun.js';
 import { tokenAleatorio } from '../cifrado.js';
 import { diasArriendo, fechaHora } from '../util/formato.js';
 import { formatearPatente, normalizarPatente } from '../util/patente.js';
@@ -120,9 +121,7 @@ r.get('/reservas/calendario', ver, async (req, res) => {
       WHERE r.empresa_id = $1 AND r.estado = 'confirmada' AND ${local('r.inicio')} = ${hoy} GROUP BY s.nombre ORDER BY n DESC LIMIT 1`, [E]);
   const atrasadas = await q(`SELECT r.id, r.folio, r.fin, v.patente FROM reservas r LEFT JOIN vehiculos v ON v.id = r.vehiculo_id
       WHERE r.empresa_id = $1 AND r.estado = 'en_curso' AND r.fin < now() ORDER BY r.fin`, [E]);
-  const flota = await uno(`SELECT count(*) FILTER (WHERE estado <> 'fuera_servicio')::int AS total,
-      count(DISTINCT v.id) FILTER (WHERE EXISTS (SELECT 1 FROM reservas r WHERE r.empresa_id = v.empresa_id AND r.vehiculo_id = v.id AND r.estado = 'en_curso'))::int AS ocupados
-    FROM vehiculos v WHERE v.empresa_id = $1 AND v.activo`, [E]);
+  const flota = await ocupacionHoy(E);
   res.json({ vehiculos, reservas, bloqueos, kpis: { ...k, retiros_sucursal: retirosSuc[0] || null, atrasadas, flota } });
 });
 

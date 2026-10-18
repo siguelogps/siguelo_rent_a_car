@@ -107,3 +107,13 @@ export function mantencion(v, hoy = hoyIso()) {
   out.vencida = (out.faltan_km != null && out.faltan_km <= 0) || (out.faltan_dias != null && out.faltan_dias <= 0);
   return out;
 }
+
+// Ocupación de hoy, la misma en Inicio y en Reservas (antes Inicio dividía por toda la flota activa y contaba el estado
+// «arrendado» del vehículo, mientras Reservas sacaba los fuera de servicio y contaba reservas en curso: 6 de 12 vs 6 de 11).
+// Regla única: base = vehículos activos que se pueden arrendar (sin los fuera de servicio, igual que disponibilidad.js);
+// ocupados = de esos, los que tienen una reserva en curso (la reserva manda, no el estado manual del vehículo).
+export async function ocupacionHoy(empresaId) {
+  return uno(`SELECT count(*) FILTER (WHERE v.estado <> 'fuera_servicio')::int AS total,
+      count(*) FILTER (WHERE v.estado <> 'fuera_servicio' AND EXISTS (SELECT 1 FROM reservas r WHERE r.empresa_id = v.empresa_id AND r.vehiculo_id = v.id AND r.estado = 'en_curso'))::int AS ocupados
+    FROM vehiculos v WHERE v.empresa_id = $1 AND v.activo`, [empresaId]);
+}

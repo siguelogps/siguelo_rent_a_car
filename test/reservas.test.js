@@ -120,3 +120,29 @@ test('ficha, lista con filtros y Excel', async () => {
   assert.equal(x.datos.slice(0, 2).toString(), 'PK');
   assert.equal((await a.get('/api/reservas/999999')).estado, 404);
 });
+
+test('ocupación de hoy: Inicio y Reservas usan la misma regla', async () => {
+  // Antes Inicio contaba toda la flota activa y Reservas sacaba los fuera de servicio (6 de 12 vs 6 de 11).
+  const comparar = async () => {
+    const ini = (await a.get('/api/inicio')).datos.flota;
+    const cal = (await a.get(`/api/reservas/calendario?desde=${enDias(-1)}&hasta=${enDias(1)}`)).datos.kpis.flota;
+    assert.equal(ini.total, cal.total);
+    assert.equal(ini.ocupados, cal.ocupados);
+    return cal;
+  };
+  const antes = await comparar();
+  const E = (await t.db.uno(`SELECT empresa_id FROM vehiculos WHERE patente = 'SJRT80'`)).empresa_id;
+  const base = await t.db.uno(`SELECT count(*)::int AS n FROM vehiculos WHERE empresa_id = $1 AND activo AND estado <> 'fuera_servicio'`, [E]);
+  assert.equal(antes.total, base.n, 'la base no incluye los vehículos fuera de servicio');
+  // un vehículo libre pasa a fuera de servicio: baja la base en ambas pantallas por igual
+  const libre = await t.db.uno(`SELECT v.id, v.estado FROM vehiculos v WHERE v.empresa_id = $1 AND v.activo AND v.estado = 'disponible'
+      AND NOT EXISTS (SELECT 1 FROM reservas r WHERE r.vehiculo_id = v.id AND r.estado = 'en_curso') LIMIT 1`, [E]);
+  await t.db.q(`UPDATE vehiculos SET estado = 'fuera_servicio' WHERE id = $1`, [libre.id]);
+  try {
+    const despues = await comparar();
+    assert.equal(despues.total, antes.total - 1);
+    assert.equal(despues.ocupados, antes.ocupados);
+  } finally {
+    await t.db.q('UPDATE vehiculos SET estado = $2 WHERE id = $1', [libre.id, libre.estado]);
+  }
+});

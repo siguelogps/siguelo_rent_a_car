@@ -13,7 +13,7 @@
   <footer class="rs-pub-pie"><span>Verificación de documentos con</span><img src="/img/logo-siguelo.png" alt="Síguelo GPS"><span>On Rent</span></footer>
 </div>
 <script type="module">
-import { esc, fecha, hora } from '/comun.js';
+import { esc, fecha, hora, rut, pat } from '/comun.js';
 const codigo = decodeURIComponent(location.pathname.split('/').pop() || '');
 const cuerpo = document.getElementById('cuerpo'), cab = document.getElementById('cab');
 const fh = (v) => (v ? `${fecha(v)} ${hora(v)}` : '—');
@@ -38,8 +38,8 @@ try {
       <div class="rc-sep" style="width:100%"></div>
       <dl class="rs-verif-datos">
         <div><dt>Contrato</dt><dd class="mono">${esc(d.folio)}</dd></div>
-        <div><dt>Arrendador</dt><dd>${esc(e.razon_social || e.nombre)}${e.rut ? `<br><span class="peq muted mono">RUT ${esc(e.rut)}</span>` : ''}</dd></div>
-        <div><dt>Vehículo</dt><dd>${d.patente ? `<span class="pat">${esc(d.patente)}</span> ` : ''}${esc(d.vehiculo || '')}</dd></div>
+        <div><dt>Arrendador</dt><dd>${esc(e.razon_social || e.nombre)}${e.rut ? `<br><span class="peq muted mono">RUT ${esc(rut(e.rut))}</span>` : ''}</dd></div>
+        <div><dt>Vehículo</dt><dd>${d.patente ? `${pat(d.patente)} ` : ''}${esc(d.vehiculo || '')}</dd></div>
         <div><dt>Período de arriendo</dt><dd class="mono">${fh(d.inicio)}<br>${fh(d.fin)}</dd></div>
         <div><dt>Firmante</dt><dd>${esc(d.firmante || '—')}${d.firmante_documento ? `<br><span class="peq muted mono">${esc(d.firmante_documento)}</span>` : ''}</dd></div>
         <div><dt>Firmado el</dt><dd class="mono">${fh(d.firmado_en)}</dd></div>

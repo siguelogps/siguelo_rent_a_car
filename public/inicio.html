@@ -28,12 +28,12 @@ const yo = await iniciarPagina({ activo: 'inicio', titulo: 'Inicio' });
 document.getElementById('saludo').textContent = `Hola, ${yo.usuario.nombre.split(' ')[0]}`;
 document.getElementById('hoy').textContent = new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
 const d = await api('inicio');
-const ocup = d.flota.total ? Math.round(d.flota.arrendados * 100 / d.flota.total) : 0;
+const ocup = d.flota.total ? Math.round(d.flota.ocupados * 100 / d.flota.total) : 0;
 document.getElementById('kpis').innerHTML = `
   <div class="kpi"><span>Retiros hoy</span><b>${d.retiros.length}</b><small>confirmados</small></div>
   <div class="kpi"><span>Devoluciones hoy</span><b>${d.devoluciones.length}</b><small>en curso que vuelven hoy</small></div>
   <div class="kpi"><span>Atrasadas</span><b style="${d.atrasadas.length ? 'color:var(--red)' : ''}">${d.atrasadas.length}</b><small class="${d.atrasadas.length ? 'mal' : ''}">${d.atrasadas.map((r) => esc(r.folio)).join(', ') || 'ninguna'}</small></div>
-  <div class="kpi"><span>Ocupación</span><b>${ocup} %</b><small>${d.flota.arrendados} de ${d.flota.total} vehículos</small></div>
+  <div class="kpi"><span>Ocupación</span><b>${ocup} %</b><small>${d.flota.ocupados} de ${d.flota.total} vehículos</small></div>
   <div class="kpi"><span>Disponibles</span><b>${d.flota.disponibles}</b><small>${d.flota.taller} en taller o fuera de servicio</small></div>
   <div class="kpi"><span>Cotizaciones abiertas</span><b>${d.cotizaciones}</b><small>por confirmar</small></div>`;
 const fila = (r, campo) => `<a class="item" href="/reservas/${r.id}" style="text-decoration:none"><div class="item-txt"><b>${esc(r.cliente)}</b><span>${r.patente ? pat(r.patente) : 'sin vehículo'} ${esc(r.marca || '')} ${esc(r.modelo || '')} · ${esc(campo === 'inicio' ? r.sucursal_retiro : r.sucursal_devolucion)}</span></div><div class="item-der"><b class="mono">${hora(r[campo])}</b>${chipEstado(r.estado)}</div></a>`;

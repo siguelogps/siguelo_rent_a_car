@@ -10,3 +10,6 @@ datos/
 *.p12
 *.p8
 *.mobileprovision
+
+# El paquete «datos» de la app Android es código, no datos locales.
+!android/app/src/main/java/cl/siguelogps/onrent/datos/

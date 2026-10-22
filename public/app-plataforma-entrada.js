@@ -77,6 +77,8 @@
       if (x.r.nombre) { $('ap-usuario').textContent = x.r.nombre; $('ap-como').hidden = false; }
       $('ap-paso2').textContent = '✓ ' + (x.r.empresa ? 'Tu empresa: ' + x.r.empresa : 'Tu empresa');
       $('ap-paso2').className = 'ok';
+      // Herramientas cuya sesión es un token de pestaña (no cookie): se guarda donde la herramienta lo espera.
+      if (d.guardarToken && typeof x.r.token === 'string') { try { sessionStorage.setItem(d.guardarToken, x.r.token); } catch (e) { /* sin almacenamiento */ } }
       var ir = typeof x.r.ir === 'string' && /^\/(?!\/)/.test(x.r.ir) ? x.r.ir : '/';
       window.location.replace(ir);
     })

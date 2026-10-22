@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<meta name="robots" content="noindex">
+<title>Entrando a Síguelo On Rent</title>
+<link rel="icon" type="image/png" href="/app/logo.png">
+<link rel="stylesheet" href="/node_modules/@fontsource/ibm-plex-sans/400.css"><link rel="stylesheet" href="/node_modules/@fontsource/ibm-plex-sans/600.css">
+<link rel="stylesheet" href="/app-plataforma.css">
+<!--
+  Entrada desde el menú Apps de la plataforma de rastreo (Síguelo Pro / Síguelo Lite), mismo estándar que Síguelo OS.
+  La plataforma abre esta página con ?authHash=…&baseUrl=…&lang=…&user=…; el guion limpia la URL antes que nada y canjea
+  el hash en el servidor (/api/app-plataforma/sesion). Ícono del menú Apps: <esta URL>/app/logo.png.
+-->
+</head>
+<body class="ap" data-herramienta="Síguelo On Rent" data-api="/api/app-plataforma/sesion" data-ingreso="/ingresar" data-correo="soporte@siguelogps.cl">
+  <div class="ap-tarjeta" id="ap-cargando">
+    <img src="/img/logo-siguelo.png" alt="Síguelo GPS" class="ap-logo">
+    <div class="ap-radar"><span></span><span></span><span></span><div class="pin"></div></div>
+    <h1>Entrando a Síguelo On Rent</h1>
+    <p class="ap-como" id="ap-como" hidden>como <b id="ap-usuario"></b></p>
+    <div class="ap-pasos">
+      <div id="ap-paso1">· Confirmando quién eres…</div>
+      <div id="ap-paso2">· Tu empresa</div>
+    </div>
+  </div>
+
+  <div class="ap-tarjeta ap-error" id="ap-error" hidden>
+    <img src="/img/logo-siguelo.png" alt="Síguelo GPS" class="ap-logo">
+    <div class="ap-icono">!</div>
+    <h1 id="ap-error-titulo">No pudimos abrir Síguelo On Rent</h1>
+    <p id="ap-error-texto"></p>
+    <div class="ap-botones" id="ap-botones"></div>
+  </div>
+  <script src="/app-plataforma-entrada.js"></script>
+</body>
+</html>

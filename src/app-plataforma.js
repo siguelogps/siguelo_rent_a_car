@@ -6,7 +6,7 @@
 // La página de entrada (public/app-plataforma.html) limpia la barra de direcciones al tiro y manda authHash + baseUrl
 // por POST. Acá:
 //
-//   1. `baseUrl` NO se usa para llamar a nadie. Viene en la URL y cualquiera la puede cambiar: si la usáramos, el
+//   1. `baseUrl` NO se usa para llamar a nadie. Viene en la URL y cualquiera la puede cambiar: si se usara para llamar, el
 //      servidor llamaría a donde le digan (SSRF). Solo se compara con la lista cerrada de cuentas que conocemos, y el
 //      canje va a NUESTRA dirección de la API. Si no calza: 400.
 //   2. Nunca `sid`: con sid la sesión del cliente viaja en la URL (historial, registros, Referer). El authHash sirve

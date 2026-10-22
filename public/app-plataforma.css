@@ -1,11 +1,14 @@
 /* Página de entrada desde el menú Apps de la plataforma de rastreo. Mismo dibujo que la de Síguelo OS (mockup
    aprobado wialon-app-202): tarjeta blanca, pin amarillo con ondas, pasos. Sin depender de la hoja de la herramienta. */
-:root { --ap-amarillo: #FFD500; --ap-amarillo-b: #FFBF00; --ap-fondo: #F4F5F7; --ap-tinta: #15181D; --ap-tenue: #5B6270; --ap-borde: #E5E7EB; }
-@media (prefers-color-scheme: dark) { :root { --ap-fondo: #0F1115; --ap-tinta: #ECEEF2; --ap-tenue: #A3A9B5; --ap-borde: #2A2F38; } .ap-tarjeta { background: #181B21 !important; } .ap-btn.sec { background: #181B21 !important; } }
+:root { --ap-amarillo: #FFD500; --ap-amarillo-b: #FFBF00; --ap-fondo: #F4F5F7; --ap-tinta: #15181D; --ap-tenue: #5B6270; --ap-borde: #E5E7EB; --ap-tarjeta: #fff; }
+/* Oscuro: solo el fondo (sigue al sistema, salvo que la herramienta fije el tema en <html data-theme>). La tarjeta
+   queda blanca a propósito: el logo oficial tiene letras negras y no se recolorea. */
+@media (prefers-color-scheme: dark) { :root:not([data-theme="claro"]):not([data-theme="light"]) { --ap-fondo: #0F1115; } }
+:root[data-theme="oscuro"], :root[data-theme="dark"] { --ap-fondo: #0F1115; }
 * { box-sizing: border-box; }
 html, body { margin: 0; min-height: 100%; }
 body.ap { background: var(--ap-fondo); color: var(--ap-tinta); font: 14px/1.45 "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; display: flex; align-items: center; justify-content: center; padding: 16px; min-height: 100dvh; }
-.ap-tarjeta { background: #fff; border-radius: 12px; padding: 28px 30px; width: 100%; max-width: 420px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,.05); }
+.ap-tarjeta { background: var(--ap-tarjeta); border-radius: 12px; padding: 28px 30px; width: 100%; max-width: 420px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,.05); }
 .ap-logo { height: 28px; margin-bottom: 6px; }
 .ap-tarjeta h1 { font-size: 17px; margin: 10px 0 4px; }
 .ap-como { color: var(--ap-tenue); margin: 0; overflow-wrap: anywhere; }
@@ -23,7 +26,7 @@ body.ap { background: var(--ap-fondo); color: var(--ap-tinta); font: 14px/1.45 "
 .ap-error p { color: var(--ap-tenue); margin: 0; }
 .ap-botones { margin-top: 16px; display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; }
 .ap-btn { display: inline-flex; align-items: center; justify-content: center; min-height: 40px; padding: 0 16px; border-radius: 8px; font-weight: 600; text-decoration: none; color: #15181D; background: var(--ap-amarillo); border: 1px solid var(--ap-amarillo-b); max-width: 100%; overflow-wrap: anywhere; }
-.ap-btn.sec { background: #fff; color: var(--ap-tinta); border-color: var(--ap-borde); font-weight: 500; }
+.ap-btn.sec { background: var(--ap-tarjeta); color: var(--ap-tinta); border-color: var(--ap-borde); font-weight: 500; }
 [hidden] { display: none !important; }
 
 /* La franja «Abierto desde tu plataforma de rastreo» (la pone franja-plataforma.js en las páginas de la herramienta). */

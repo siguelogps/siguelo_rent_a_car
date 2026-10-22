@@ -198,6 +198,8 @@ const BACKOFFICE = [['empresas', 'Empresas', '/empresas'], ['planes', 'Planes', 
 
 export async function iniciarPagina({ activo, titulo = '' } = {}) {
   YO = await api('yo');
+  // Franja «Abierto desde tu plataforma de rastreo» (solo si la sesión vino del menú Apps; ver franja-plataforma.js).
+  if (!document.getElementById('rc-franja-plataforma')) { const s = document.createElement('script'); s.id = 'rc-franja-plataforma'; s.src = '/franja-plataforma.js'; document.head.appendChild(s); }
   const enBackoffice = BACKOFFICE.some(([m]) => m === activo);
   if (YO.modo === 'backoffice' && !enBackoffice) { location.replace('/empresas'); await new Promise(() => {}); }
   if (YO.modo === 'cliente' && !YO.siguelo && enBackoffice) { location.replace('/inicio'); await new Promise(() => {}); }
@@ -271,7 +273,8 @@ function abrirMiCuenta() {
     if (e.target === fondo || e.target.closest('[data-cerrar]')) return cerrar();
     const ojo = e.target.closest('.rc-ojo');
     if (ojo) { const inp = ojo.previousElementSibling; inp.type = inp.type === 'password' ? 'text' : 'password'; return; }
-    if (e.target.closest('[data-salir]')) { await api('salir', { body: {} }).catch(() => {}); location.href = '/ingresar'; }
+    // Si la sesión se abrió desde el menú Apps de la plataforma GPS, «Salir» vuelve allá (franja-plataforma.js).
+    if (e.target.closest('[data-salir]')) { await api('salir', { body: {} }).catch(() => {}); location.href = (window.salidaPlataforma && window.salidaPlataforma()) || '/ingresar'; }
     if (e.target.closest('[data-eliminar]')) {
       err.hidden = true;
       const clave = f.clave_eliminar.value;

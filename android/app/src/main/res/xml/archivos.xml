@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Solo la carpeta de documentos descargados (PDF de contratos) se comparte con otras apps, con permiso temporal. -->
+<paths>
+    <cache-path name="documentos" path="documentos/" />
+</paths>

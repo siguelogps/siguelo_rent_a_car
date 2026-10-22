@@ -1,0 +1,15 @@
+# Compilación y configuración local
+.gradle/
+build/
+/local.properties
+.idea/
+*.iml
+.DS_Store
+.kotlin/
+
+# Secretos: NUNCA en el repositorio (GitHub Actions los arma desde los secretos y los borra al terminar)
+*.jks
+*.keystore
+*.p12
+keystore.properties
+google-services.json

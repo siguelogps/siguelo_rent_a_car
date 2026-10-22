@@ -8,6 +8,9 @@ import { incluye } from './planes.js';
 
 const COOKIE = 'rc_sesion';
 const DURACION_MS = 12 * 3600e3;
+// App nativa: la sesión dura 30 días (el personal de patio no puede reingresar a cada rato con el teléfono en la mano).
+// Se cierra al salir, al eliminar la cuenta o al desactivar al usuario, igual que la de la web.
+const DURACION_NATIVA_MS = 30 * 24 * 3600e3;
 
 export function hashClave(clave) {
   const sal = crypto.randomBytes(16);
@@ -22,18 +25,30 @@ export function verificarClave(clave, guardado) {
   return calc.length === esperado.length && crypto.timingSafeEqual(calc, esperado);
 }
 
-export async function crearSesion(res, usuario, agente = '') {
+// nativa = true: la app Android. El token va en la respuesta (la app lo guarda cifrado con el Keystore y lo manda como
+// «Authorization: Bearer»), no en una cookie. El navegador nunca recibe el token: sigue con la cookie httpOnly.
+export async function crearSesion(res, usuario, agente = '', { nativa = false } = {}) {
   const token = tokenAleatorio(32);
+  const dura = nativa ? DURACION_NATIVA_MS : DURACION_MS;
   await q('INSERT INTO sesiones (token_hash, usuario_id, empresa_id, expira_en, agente) VALUES ($1,$2,$3,$4,$5)',
-    [hashSha256(token), usuario.id, usuario.empresa_id, new Date(Date.now() + DURACION_MS), String(agente).slice(0, 200)]);
+    [hashSha256(token), usuario.id, usuario.empresa_id, new Date(Date.now() + dura), String(agente).slice(0, 200)]);
   await q('UPDATE usuarios SET ultimo_acceso = now() WHERE id = $1', [usuario.id]);
-  res.cookie(COOKIE, token, { httpOnly: true, sameSite: 'lax', secure: config.produccion, maxAge: DURACION_MS, path: '/' });
+  if (nativa) return token;
+  res.cookie(COOKIE, token, { httpOnly: true, sameSite: 'lax', secure: config.produccion, maxAge: dura, path: '/' });
+  return null;
 }
 
 export async function cerrarSesion(req, res) {
-  const t = leerCookie(req, COOKIE);
+  const t = tokenDeSesion(req);
   if (t) await q('DELETE FROM sesiones WHERE token_hash = $1', [hashSha256(t)]);
   res.clearCookie(COOKIE, { path: '/' });
+}
+
+// Token de la sesión: «Authorization: Bearer …» (app nativa) o la cookie (web).
+export function tokenDeSesion(req) {
+  const a = String(req.headers.authorization || '');
+  if (/^Bearer [\w-]{20,100}$/.test(a)) return a.slice(7);
+  return leerCookie(req, COOKIE);
 }
 
 export function leerCookie(req, nombre) {
@@ -47,7 +62,7 @@ export function leerCookie(req, nombre) {
 
 // Middleware: deja req.usuario { id, nombre, correo, rol, empresa_id (activa), permisos } o nada.
 export async function cargarSesion(req, _res, next) {
-  const t = leerCookie(req, COOKIE);
+  const t = tokenDeSesion(req);
   if (!t) return next();
   const s = await uno(
     `SELECT u.id, u.nombre, u.correo, u.rol, u.sucursal_id, u.activo, s.empresa_id, s.token_hash
@@ -57,6 +72,7 @@ export async function cargarSesion(req, _res, next) {
     req.usuario = { ...s, permisos: permisosDe(s.rol), siguelo: esSiguelo(s.rol) };
     req.empresaId = s.empresa_id;
     req.verComo = esSiguelo(s.rol) && !!s.empresa_id; // equipo Síguelo dentro de la cuenta de un cliente
+    req.tokenHash = s.token_hash;
   }
   next();
 }
@@ -83,6 +99,6 @@ export const soloSiguelo = (req, _res, next) => {
 };
 
 export async function cambiarEmpresaSesion(req, empresaId) {
-  const t = leerCookie(req, COOKIE);
+  const t = tokenDeSesion(req);
   await q('UPDATE sesiones SET empresa_id = $1 WHERE token_hash = $2', [empresaId, hashSha256(t)]);
 }

@@ -28,9 +28,11 @@ r.post('/ingresar', async (req, res) => {
     if (e && Number(e.id) !== Number(u.empresa_id)) throw new ErrorHttp(403, `Esta app es de ${e.nombre}. Ingresa con la app Síguelo On Rent o con la app de tu empresa.`);
   }
   const empresaId = esSiguelo(u.rol) ? null : u.empresa_id; // el equipo Síguelo entra a su backoffice
-  await crearSesion(res, { ...u, empresa_id: empresaId }, req.headers['user-agent']);
-  await registrar({ usuario: u, empresaId, ip: req.ip }, 'ingreso', 'usuario', u.id);
-  res.json({ ok: true, destino: esSiguelo(u.rol) ? '/empresas' : u.rol === 'patio' ? '/patio' : '/inicio' });
+  // App nativa (Android): pide { nativa: true } y recibe el token de la sesión en la respuesta, no en una cookie.
+  const nativa = req.body.nativa === true;
+  const token = await crearSesion(res, { ...u, empresa_id: empresaId }, req.headers['user-agent'], { nativa });
+  await registrar({ usuario: u, empresaId, ip: req.ip }, nativa ? 'ingreso_app' : 'ingreso', 'usuario', u.id);
+  res.json({ ok: true, destino: esSiguelo(u.rol) ? '/empresas' : u.rol === 'patio' ? '/patio' : '/inicio', ...(nativa ? { token } : {}) });
 });
 
 r.post('/salir', async (req, res) => { await cerrarSesion(req, res); res.json({ ok: true }); });

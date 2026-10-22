@@ -15,6 +15,7 @@ import { formatearPatente, normalizarPatente } from '../util/patente.js';
 import { cambiarEstado, recalcularEstadoVehiculo, MANUALES, NOMBRES } from '../reservas/estados.js';
 import { SQL_LISTA, avisarConfirmada, urlPortal, documentoTxt } from '../reservas/datos.js';
 
+import { avisarReservaNueva } from '../app-nativa/push.js';
 const r = express.Router();
 const ver = requiere('reservas', 'ver'), editar = requiere('reservas', 'editar');
 
@@ -222,6 +223,8 @@ r.post('/reservas', editar, conConflicto(async (req, res) => {
     return { ...nueva, avisos: cot.avisos };
   });
   if (estado === 'confirmada') await avisarConfirmada(E, reserva.id).catch((e) => console.error('aviso reserva_confirmada', e.message));
+  // Aviso push al resto del equipo con la app (no a quien la creó). Sin esperar: no demora la respuesta.
+  avisarReservaNueva(E, reserva, { origen: reserva.origen, excluirUsuario: req.usuario.id });
   res.status(201).json(reserva);
 }));
 

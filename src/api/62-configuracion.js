@@ -276,7 +276,9 @@ r.get('/configuracion/bitacora', requiere('configuracion', 'ver'), async (req, r
 r.patch('/configuracion/empresas/:id', requiere(null, 'ver', { sinEmpresa: true }), soloSiguelo, async (req, res) => {
   const b = req.body || {};
   const sets = [], vals = [req.params.id];
-  if ('activa' in b) { vals.push(!!b.activa); sets.push(`activa = $${vals.length}`); }
+  // Ruta anterior al backoffice estándar (22-oct): se mantiene, pero ahora mueve también «estado» (y no toca una baja).
+  // Suspender con motivo se hace en /api/backoffice/clientes/:id/suspender.
+  if ('activa' in b) { vals.push(!!b.activa); sets.push(`activa = $${vals.length}`, `estado = CASE WHEN estado = 'baja' THEN estado WHEN $${vals.length} THEN 'activo' ELSE 'suspendido' END`); }
   if ('plan' in b) {
     const plan = texto(b.plan, 30);
     if (!plan || !(await uno('SELECT 1 AS ok FROM planes WHERE codigo = $1', [plan]))) throw new ErrorHttp(400, 'Plan no válido');

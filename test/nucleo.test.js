@@ -37,10 +37,12 @@ test('ingreso y permisos por rol', async () => {
   assert.equal((await admin.get('/api/integraciones')).estado, 200);
 });
 
+// 22-oct (espec. Backoffice): WhatsApp pasó a ser gestionado por Síguelo; el ejemplo de integración del cliente es Mercado Pago.
 test('solo administradores activan integraciones', async () => {
   const counter = await t.como('counter@siguelogps.cl');
-  assert.equal((await counter.post('/api/integraciones/whatsapp/activar', { activa: true })).estado, 403);
+  assert.equal((await counter.post('/api/integraciones/mercadopago/activar', { activa: true })).estado, 403);
   const admin = await t.como('demo@siguelogps.cl');
-  const r = await admin.put('/api/integraciones/whatsapp', { phone_id: '123', token: 'secreto' });
-  assert.equal(r.datos.config.token, '••••••••');
+  assert.equal((await admin.put('/api/integraciones/whatsapp', { phone_id: '123', token: 'secreto' })).estado, 403, 'WhatsApp lo configura Síguelo');
+  const r = await admin.put('/api/integraciones/mercadopago', { public_key: 'pk', access_token: 'secreto' });
+  assert.equal(r.datos.config.access_token, '••••••••');
 });

@@ -46,9 +46,10 @@ test('cliente de la plataforma: token/login, reingreso con error 1 y probador «
   const items = await c.buscarUnidades(1);
   assert.equal(items.length, 3);
   assert.deepEqual(svcs, ['token/login', 'core/search_items', 'token/login', 'core/search_items']);
-  const admin = await t.como('demo@siguelogps.cl');
-  await admin.put('/api/integraciones/gps', { token: 'tk' });
-  const p = await admin.post('/api/integraciones/gps/probar', {});
+  // 22-oct (espec. Backoffice): la plataforma GPS la configura y prueba el equipo Síguelo desde el backoffice, no el cliente.
+  const sop = await t.como('soporte@siguelogps.cl');
+  await (await import('../src/integraciones/index.js')).guardar(E, 'gps', { token: 'tk' }, null);
+  const p = await sop.post(`/api/backoffice/clientes/${E}/integraciones/gps/probar`, {});
   assert.equal(p.datos.ok, true);
   assert.match(p.datos.mensaje, /^Conectado: 3 unidades/);
   _usarFetch(null);
@@ -106,10 +107,12 @@ test('sincronización: une por patente, actualiza vehículo, guarda lecturas y a
 test('inmovilización: doble validación, nunca con el vehículo en movimiento, marcha blanca → simulada', async () => {
   const admin = await t.como('demo@siguelogps.cl');
   const soporte = await t.como('soporte@siguelogps.cl'); // superadmin: segundo validador
-  await soporte.post('/api/empresa-activa', { empresa_id: (await t.db.uno(`SELECT id FROM empresas WHERE slug = 'andes-rent'`)).id }); // «ver como»
+  // 22-oct: «Ver como» pasó a ser de solo lectura; para confirmar una orden el equipo Síguelo entra con «Operar» y un motivo.
+  await soporte.post('/api/empresa-activa', { empresa_id: (await t.db.uno(`SELECT id FROM empresas WHERE slug = 'andes-rent'`)).id, modo: 'operar', motivo: 'Segundo validador (prueba)' });
   const counter = await t.como('counter@siguelogps.cl');
   const patio = await t.como('patio@siguelogps.cl');
-  await admin.post('/api/integraciones/gps/activar', { activa: false });
+  const integ = await import('../src/integraciones/index.js'); // la integración GPS ya no la cambia el cliente
+  await integ.activar(E, 'gps', false, null);
   const v = await db.uno(`SELECT id, patente FROM vehiculos WHERE patente = 'SXLR27'`);
   await db.q('UPDATE vehiculos SET gps_velocidad = 0, gps_motor = false WHERE id = $1', [v.id]);
   assert.equal((await patio.post('/api/gps/inmovilizaciones', { vehiculo_id: v.id, accion: 'inmovilizar', motivo: 'Arriendo vencido' })).estado, 403);
@@ -151,7 +154,8 @@ test('inmovilización: doble validación, nunca con el vehículo en movimiento, 
 test('inmovilización real (sin marcha blanca): exec_cmd con el vehículo detenido, liberación con el mismo flujo', async () => {
   const admin = await t.como('demo@siguelogps.cl');
   const soporte = await t.como('soporte@siguelogps.cl');
-  await soporte.post('/api/empresa-activa', { empresa_id: (await t.db.uno(`SELECT id FROM empresas WHERE slug = 'andes-rent'`)).id });
+  await soporte.post('/api/empresa-activa', { empresa_id: (await t.db.uno(`SELECT id FROM empresas WHERE slug = 'andes-rent'`)).id, modo: 'operar', motivo: 'Segundo validador (prueba)' }); // 22-oct: «Operar», ver arriba
+  const integ = await import('../src/integraciones/index.js');
   const v = await db.uno(`SELECT id, patente, gps_unidad_id FROM vehiculos WHERE patente = 'RVLW56'`);
   const cmds = [];
   _usarFetch(async (_url, op) => {
@@ -162,8 +166,8 @@ test('inmovilización real (sin marcha blanca): exec_cmd con el vehículo deteni
     return json({});
   });
   try {
-    await admin.put('/api/integraciones/gps', { token: 'tk', comando_inmovilizar: 'Activar Corte de Motor', comando_liberar: 'Desactivar Corte de Motor' });
-    await admin.post('/api/integraciones/gps/activar', { activa: true });
+    await integ.guardar(E, 'gps', { token: 'tk', comando_inmovilizar: 'Activar Corte de Motor', comando_liberar: 'Desactivar Corte de Motor' }, null);
+    await integ.activar(E, 'gps', true, null);
     await db.q('UPDATE empresas SET marcha_blanca = false WHERE id = $1', [E]);
     await db.q('UPDATE vehiculos SET gps_velocidad = 80 WHERE id = $1', [v.id]); // lo guardado dice que se mueve, pero la lectura en vivo manda
     for (const [accion, comando, queda] of [['inmovilizar', 'Activar Corte de Motor', true], ['liberar', 'Desactivar Corte de Motor', false]]) {
@@ -177,7 +181,7 @@ test('inmovilización real (sin marcha blanca): exec_cmd con el vehículo deteni
   } finally {
     _usarFetch(null);
     await db.q('UPDATE empresas SET marcha_blanca = true WHERE id = $1', [E]);
-    await admin.post('/api/integraciones/gps/activar', { activa: false });
+    await integ.activar(E, 'gps', false, null);
   }
 });
 

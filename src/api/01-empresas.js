@@ -19,15 +19,8 @@ r.get('/empresas', requiere(null, 'ver', { sinEmpresa: true }), soloSiguelo, asy
                       FROM empresas e LEFT JOIN planes p ON p.codigo = e.plan ORDER BY e.nombre`));
 });
 
-// Alta de un rentacar nuevo con su administrador inicial, sucursal y plantillas por defecto.
-r.post('/empresas', requiere(null, 'ver', { sinEmpresa: true }), soloSiguelo, async (req, res) => {
-  const b = req.body;
-  if (!b.nombre || !b.admin_correo || !b.admin_clave) throw new ErrorHttp(400, 'Faltan nombre de la empresa, correo y clave del administrador');
-  if (b.rut && !validarRut(b.rut)) throw new ErrorHttp(400, 'El RUT de la empresa no es válido', { campo: 'rut' });
-  const empresa = await crearEmpresa({ ...b, rut: b.rut ? normalizarRut(b.rut) : null });
-  await registrar(req, 'empresa_creada', 'empresa', empresa.id, { nombre: empresa.nombre });
-  res.json(empresa);
-});
+// El alta de un cliente nuevo va por el asistente del backoffice (POST /api/backoffice/clientes, 16-backoffice-clientes.js):
+// el primer administrador recibe una invitación para crear su clave; Síguelo no la escribe ni la ve (22-oct).
 
 export async function crearEmpresa(b) {
   return transaccion(async (tx) => {
@@ -39,8 +32,10 @@ export async function crearEmpresa(b) {
       [b.nombre, slug, b.rut || null, b.razon_social || b.nombre, b.giro || 'Arriendo de vehículos', b.direccion || null, b.comuna || null, b.ciudad || null, b.telefono || null, b.correo || null,
         JSON.stringify({ tolerancia_min: 59, precio_litro: 1390, cargo_servicio_combustible: 5000, lavado: 15000, triangulo: 12000, garantia_dias_retencion: 30, edad_minima: 21, hora_corte_atraso: true, ...(b.ajustes || {}) }), b.plan || null]);
     const [s] = await tx.query('INSERT INTO sucursales (empresa_id, nombre, direccion, comuna, ciudad) VALUES ($1,$2,$3,$4,$5) RETURNING id', [e.id, b.sucursal || 'Casa matriz', b.direccion || null, b.comuna || null, b.ciudad || null]);
-    await tx.query('INSERT INTO usuarios (empresa_id, nombre, correo, clave_hash, rol, sucursal_id) VALUES ($1,$2,$3,$4,$5,$6)',
-      [e.id, b.admin_nombre || 'Administrador', String(b.admin_correo).toLowerCase(), hashClave(b.admin_clave), 'administrador', s.id]);
+    // Sin admin_clave el administrador queda sin clave hasta que acepte su invitación (alta desde el backoffice).
+    const [adm] = await tx.query('INSERT INTO usuarios (empresa_id, nombre, correo, clave_hash, rol, sucursal_id, telefono) VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id',
+      [e.id, b.admin_nombre || 'Administrador', String(b.admin_correo).toLowerCase(), b.admin_clave ? hashClave(b.admin_clave) : null, 'administrador', s.id, b.admin_telefono || null]);
+    e.admin_id = adm.id;
     for (const p of plantillasPorDefecto()) {
       await tx.query('INSERT INTO plantillas (empresa_id, tipo, clave, nombre, asunto, cuerpo) VALUES ($1,$2,$3,$4,$5,$6)', [e.id, p.tipo, p.clave, p.nombre, p.asunto || null, p.cuerpo]);
     }
@@ -60,7 +55,8 @@ r.patch('/empresa', requiere('configuracion', 'editar'), async (req, res) => {
   for (const c of campos) if (c in b) { vals.push(c === 'rut' && b.rut ? normalizarRut(b.rut) : b[c]); sets.push(`${c} = $${vals.length}`); }
   if (b.ajustes && typeof b.ajustes === 'object') { vals.push(JSON.stringify(b.ajustes)); sets.push(`ajustes = ajustes || $${vals.length}::jsonb`); }
   if ('marcha_blanca' in b) {
-    if (req.usuario.rol !== 'administrador' && !esSiguelo(req.usuario.rol)) throw new ErrorHttp(403, 'Solo un administrador puede cambiar la marcha blanca');
+    // 22-oct (Pablo): la marcha blanca la cambia solo el equipo Síguelo (backoffice, o «Operar» con motivo).
+    if (!esSiguelo(req.usuario.rol)) throw new ErrorHttp(403, 'La marcha blanca la cambia el equipo Síguelo GPS. Pídelo con «Solicitar a Síguelo».');
     vals.push(!!b.marcha_blanca); sets.push(`marcha_blanca = $${vals.length}`);
     await registrar(req, b.marcha_blanca ? 'marcha_blanca_activada' : 'marcha_blanca_desactivada', 'empresa', req.empresaId);
   }

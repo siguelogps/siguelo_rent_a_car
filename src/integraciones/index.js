@@ -1,13 +1,22 @@
-// Integraciones por empresa, cargadas desde la pantalla (Configuración › Integraciones), no desde variables de entorno.
-// Cada integración tiene un interruptor «activa» que solo los administradores cambian. Si está apagada, no genera acciones.
-// Además, mientras la empresa esté en marcha blanca, nada sale hacia afuera (correos, WhatsApp, cobros, DTE, inmovilización).
+// Integraciones por empresa, cargadas desde la pantalla, no desde variables de entorno. Cada una tiene un interruptor
+// «activa»: si está apagada, no genera acciones. Mientras la empresa esté en marcha blanca, o suspendida, nada sale hacia
+// afuera (correos, WhatsApp, cobros, DTE, inmovilización).
+// 22-oct (Pablo, espec. Backoffice Síguelo): quién las configura lo dice «administra»:
+//   · 'siguelo': solo el equipo Síguelo, cliente por cliente, desde el backoffice (plataforma GPS, Síguelo OS, facturación,
+//     WhatsApp, correo). El cliente las ve como tarjetas de solo lectura y pide cambios con «Solicitar a Síguelo».
+//   · 'cliente': los cobros en línea (Transbank y Mercado Pago). El dinero va a la cuenta del rentacar: los datos de comercio
+//     los carga el propio cliente; Síguelo lo ayuda entrando con «Operar».
+//   · 'general': el almacenamiento de archivos pasó a ser de Síguelo (Conexiones generales). La fila por empresa se sigue
+//     leyendo solo para los clientes que ya tenían bucket propio (no se pierde ninguna conexión que funcionaba).
 import { q, uno } from '../db.js';
 import { cifrar, descifrar } from '../cifrado.js';
+import { leerGeneral } from '../siguelo/conexiones.js';
 
 // Definición de cada integración: campos que se piden en pantalla. «secreto» = no se devuelve al navegador.
 export const TIPOS = {
   gps: {
-    nombre: 'Plataforma GPS', descripcion: 'Posición en vivo, km y combustible reales, geocercas, alertas e inmovilización. Se conecta con el usuario y la clave de la plataforma GPS (los mismos del dashboard Síguelo).',
+    administra: 'siguelo',
+    nombre: 'Plataforma GPS', descripcionCliente: 'Posición en vivo, km y combustible reales, geocercas, alertas e inmovilización.', descripcion: 'Posición en vivo, km y combustible reales, geocercas, alertas e inmovilización. Se conecta con el usuario y la clave de la plataforma GPS (los mismos del dashboard Síguelo).',
     acciones: true,
     campos: [
       { clave: 'cuenta', etiqueta: 'Plataforma', opciones: ['hosting', 'lite'], nombres: { hosting: 'Síguelo Pro', lite: 'Síguelo Lite' }, defecto: 'hosting' },
@@ -23,7 +32,8 @@ export const TIPOS = {
     ]
   },
   dashboard_siguelo: {
-    nombre: 'TAG y multas · Dashboard Síguelo', descripcion: 'Trae las pasadas TAG (pórticos) y las multas del registro MTT que calcula el dashboard de Síguelo, y las asigna al contrato vigente. Usa la misma conexión de la plataforma GPS: no hay que ingresar nada más.',
+    administra: 'siguelo',
+    nombre: 'TAG y multas · Dashboard Síguelo', nombreCliente: 'Síguelo OS', descripcionCliente: 'TAG, multas y salud de la flota desde el dashboard de Síguelo.', descripcion: 'Trae las pasadas TAG (pórticos) y las multas del registro MTT que calcula el dashboard de Síguelo, y las asigna al contrato vigente. Usa la misma conexión de la plataforma GPS: no hay que ingresar nada más.',
     acciones: true,
     campos: [
       { clave: 'sincronizar_cada_horas', etiqueta: 'Sincronizar cada (horas)', tipo: 'numero', defecto: 24 },
@@ -32,6 +42,7 @@ export const TIPOS = {
     ]
   },
   webpay: {
+    administra: 'cliente',
     nombre: 'Transbank Webpay Plus', descripcion: 'Cobro de reservas y garantía con captura diferida (retener y luego capturar o liberar).',
     acciones: true,
     campos: [
@@ -42,6 +53,7 @@ export const TIPOS = {
     ]
   },
   mercadopago: {
+    administra: 'cliente',
     nombre: 'Mercado Pago', descripcion: 'Cobro en línea y garantía con pago autorizado y captura posterior.',
     acciones: true,
     campos: [
@@ -50,7 +62,9 @@ export const TIPOS = {
     ]
   },
   simpleapi: {
-    nombre: 'SimpleAPI (boleta y factura electrónica)', descripcion: 'Emisión de DTE ante el SII, igual que en el CRM Síguelo Gestión.',
+    administra: 'siguelo',
+    nombre: 'SimpleAPI (boleta y factura electrónica)', nombreCliente: 'Facturación electrónica', descripcion: 'Emisión de DTE ante el SII, igual que en el CRM Síguelo Gestión. Servicio provisto por Síguelo GPS: el certificado y los CAF los envía el cliente con un enlace de carga de un solo uso.',
+    descripcionCliente: 'Boletas, facturas y notas de crédito ante el SII, desde Facturación.',
     acciones: true,
     campos: [
       { clave: 'ambiente', etiqueta: 'Ambiente', opciones: ['certificacion', 'produccion'], defecto: 'certificacion' },
@@ -66,7 +80,8 @@ export const TIPOS = {
     ]
   },
   whatsapp: {
-    nombre: 'WhatsApp', descripcion: 'Envío de contratos, confirmaciones, liquidaciones y avisos de multas (WhatsApp Cloud API de Meta).',
+    administra: 'siguelo',
+    nombre: 'WhatsApp', descripcionCliente: 'Contratos, confirmaciones y avisos por WhatsApp con plantillas aprobadas. Tiene costo por mensaje.', descripcion: 'Envío de contratos, confirmaciones, liquidaciones y avisos de multas (WhatsApp Cloud API de Meta).',
     acciones: true,
     campos: [
       { clave: 'phone_id', etiqueta: 'Phone number ID' },
@@ -76,17 +91,23 @@ export const TIPOS = {
     ]
   },
   correo: {
-    nombre: 'Correo (SMTP)', descripcion: 'Envío de correos con el nombre y logo de la empresa.',
+    administra: 'siguelo',
+    nombre: 'Correo de salida', descripcion: 'Correos con el nombre del cliente. Normalmente salen por el servidor de Síguelo; un servidor SMTP propio queda para los clientes que ya lo tenían.',
+    descripcionCliente: 'Confirmaciones, contratos y avisos con el nombre de tu empresa.',
     acciones: true,
     campos: [
+      { clave: 'modo', etiqueta: 'Cómo sale', opciones: ['siguelo', 'smtp'], nombres: { siguelo: 'Servidor de Síguelo', smtp: 'Servidor SMTP propio' } },
+      { clave: 'remitente_nombre', etiqueta: 'Remitente visible', ejemplo: 'Andes Rent a Car' },
+      { clave: 'responder_a', etiqueta: 'Responder a', ejemplo: 'reservas@andesrent.cl' },
       { clave: 'host', etiqueta: 'Servidor SMTP', ejemplo: 'smtp.gmail.com' },
       { clave: 'puerto', etiqueta: 'Puerto', tipo: 'numero', defecto: 587 },
       { clave: 'usuario', etiqueta: 'Usuario' },
       { clave: 'clave', etiqueta: 'Clave', secreto: true },
-      { clave: 'remitente', etiqueta: 'Remitente', ejemplo: 'Andes Rent a Car <reservas@andesrent.cl>' }
+      { clave: 'remitente', etiqueta: 'Remitente (servidor propio)', ejemplo: 'Andes Rent a Car <reservas@andesrent.cl>' }
     ]
   },
   almacenamiento: {
+    administra: 'general',
     nombre: 'Almacenamiento de fotos y documentos', descripcion: 'Bucket S3 compatible (Cloudflare R2, AWS S3, Backblaze B2, Google Cloud Storage). Las fotos nunca se guardan en el disco del servidor.',
     acciones: false,
     campos: [
@@ -111,6 +132,7 @@ export async function leer(empresaId, tipo) {
   const r = await uno('SELECT activa, config_cifrada, estado_prueba, probado_en, actualizado_en FROM integraciones WHERE empresa_id = $1 AND tipo = $2', [empresaId, tipo]);
   const defecto = Object.fromEntries((TIPOS[tipo]?.campos || []).filter((f) => f.defecto !== undefined).map((f) => [f.clave, f.defecto]));
   const v = { activa: !!r?.activa, config: { ...defecto, ...(r ? descifrar(r.config_cifrada) : {}) }, estado_prueba: r?.estado_prueba || null, probado_en: r?.probado_en || null, en: Date.now() };
+  if (tipo === 'correo' && !v.config.modo) v.config.modo = v.config.host ? 'smtp' : 'siguelo'; // los que ya tenían SMTP siguen con el suyo
   if (tipo === 'dashboard_siguelo') {
     // El dashboard reconoce al cliente con el mismo token de la plataforma GPS: se reutiliza la conexión GPS.
     const gps = await leer(empresaId, 'gps');
@@ -133,6 +155,8 @@ export async function leerPublica(empresaId, tipo) {
 
 const tieneDatos = (tipo, c) => {
   if (tipo === 'dashboard_siguelo') return !!c.url && !!(c.api_key || c.token_plataforma);
+  if (tipo === 'correo' && c.modo === 'siguelo') return true; // sale por el servidor de Síguelo: el cliente no pone nada
+  if (tipo === 'correo') return !!(c.host && c.clave);
   return TIPOS[tipo].campos.filter((f) => f.secreto && !f.opcional).every((f) => c[f.clave]);
 };
 
@@ -175,11 +199,24 @@ export async function marchaBlanca(empresaId) {
 
 // ¿Puede esta integración generar acciones reales hacia afuera? (activa + configurada + sin marcha blanca)
 export async function puedeActuar(empresaId, tipo) {
+  const e = await uno('SELECT estado FROM empresas WHERE id = $1', [empresaId]);
+  if (e && e.estado !== 'activo') return { ok: false, motivo: e.estado === 'baja' ? 'Cliente dado de baja' : 'Servicio suspendido' };
   const v = await leer(empresaId, tipo);
   if (!v.activa) return { ok: false, motivo: `La integración «${TIPOS[tipo].nombre}» está desactivada` };
   if (!tieneDatos(tipo, v.config)) return { ok: false, motivo: `Faltan datos de conexión de «${TIPOS[tipo].nombre}»` };
   if (TIPOS[tipo].acciones && await marchaBlanca(empresaId)) return { ok: false, motivo: 'Marcha blanca activa', marchaBlanca: true };
+  if (tipo === 'correo' && v.config.modo === 'siguelo' && !(await leerGeneral('correo_siguelo')).lista) return { ok: false, motivo: 'El correo de Síguelo todavía no está configurado' };
   return { ok: true, config: v.config };
 }
 
 export const limpiarCache = () => cache.clear();
+
+// Tipos que ve y configura cada uno. El almacenamiento ya no aparece en ninguna lista por cliente.
+export const tiposDe = (administra) => Object.keys(TIPOS).filter((t) => TIPOS[t].administra === administra);
+export const TIPOS_CLIENTE = Object.keys(TIPOS).filter((t) => TIPOS[t].administra !== 'general');
+
+// Al dar de baja: se apagan las integraciones y se borran sus secretos (la fila queda para la bitácora).
+export async function desconectarTodo(empresaId) {
+  await q(`UPDATE integraciones SET activa = false, config_cifrada = NULL, actualizado_en = now() WHERE empresa_id = $1 AND tipo <> 'almacenamiento'`, [empresaId]);
+  for (const t of Object.keys(TIPOS)) cache.delete(`${empresaId}:${t}`);
+}

@@ -5,6 +5,7 @@ import nodemailer from 'nodemailer';
 import { q, uno } from './db.js';
 import { puedeActuar } from './integraciones/index.js';
 import { leerArchivo } from './almacenamiento/index.js';
+import { enviarCorreoSiguelo } from './siguelo/correo.js';
 
 export function normalizarTelefono(tel) {
   let d = String(tel || '').replace(/\D/g, '');
@@ -35,6 +36,14 @@ async function enviarCorreo(empresaId, conf, s) {
     if (r) attachments.push({ filename: a.nombre || r.fila.nombre, content: r.datos, contentType: r.fila.mime });
   }
   const html = /<\w+[^>]*>/.test(s.cuerpo) ? s.cuerpo : `<div style="font-family:Arial,sans-serif;font-size:14px;line-height:1.5;white-space:pre-line">${s.cuerpo.replace(/</g, '&lt;')}</div>`;
+  // 22-oct: lo normal es que el correo salga por el servidor de Síguelo con el nombre del cliente (remitente visible y
+  // «responder a» del cliente). Los que ya tenían SMTP propio siguen con el suyo.
+  if (conf.modo === 'siguelo') {
+    const e = await uno('SELECT nombre, correo FROM empresas WHERE id = $1', [empresaId]);
+    const r = await enviarCorreoSiguelo({ para: s.destino, asunto: s.asunto || '', html, nombreRemitente: conf.remitente_nombre || e?.nombre, responderA: conf.responder_a || e?.correo || null, adjuntos: attachments });
+    if (!r.ok) throw new Error(r.motivo);
+    return;
+  }
   await t.sendMail({ from: conf.remitente || conf.usuario, to: s.destino, subject: s.asunto || '', html, attachments });
 }
 

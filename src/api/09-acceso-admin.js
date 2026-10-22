@@ -2,6 +2,8 @@
 // y sirve una sola vez. Se verifica con la clave pública del panel (sin secretos) y se abre la sesión del equipo
 // Síguelo en el backoffice. Si la persona no existe todavía, se crea sin clave: solo entra por el panel.
 //   nivel del panel admin → rol superadmin · usa / ve → rol soporte
+// 22-oct (espec. Backoffice): el nivel se guarda (usuarios.nivel_panel) porque decide quién puede «Operar» en un cliente:
+// admin y usa sí; ve solo «Ver como» (de solo lectura).
 import express from 'express';
 import { q, uno } from '../db.js';
 import { crearSesion } from '../auth.js';
@@ -23,15 +25,16 @@ export async function entradaDesdeAdmin(req, res) {
   catch (e) { return res.status(401).type('html').send(pagina('No se pudo entrar', `${limpio(e.message)}. Vuelve a abrir Síguelo On Rent desde el panel.`)); }
   const correo = String(p.email || '').toLowerCase();
   const rol = p.nivel === 'admin' ? 'superadmin' : 'soporte';
+  const nivel = ['admin', 'usa', 've'].includes(p.nivel) ? p.nivel : 've'; // nivel desconocido: el más restrictivo
   let u = await uno('SELECT * FROM usuarios WHERE lower(correo) = $1', [correo]);
   if (u && !esSiguelo(u.rol)) return res.status(403).type('html').send(pagina('Sin acceso', 'Ese correo es de un usuario de una empresa cliente. El panel solo abre el backoffice del equipo Síguelo.'));
   if (u && !u.activo) return res.status(403).type('html').send(pagina('Acceso desactivado', 'Tu usuario está desactivado en Síguelo On Rent.'));
   if (!u) {
-    u = await uno('INSERT INTO usuarios (empresa_id, nombre, correo, clave_hash, rol) VALUES (NULL, $1, $2, NULL, $3) RETURNING *', [String(p.nombre || correo).slice(0, 80), correo, rol]);
-  } else if (u.rol !== rol) {
+    u = await uno('INSERT INTO usuarios (empresa_id, nombre, correo, clave_hash, rol, nivel_panel) VALUES (NULL, $1, $2, NULL, $3, $4) RETURNING *', [String(p.nombre || correo).slice(0, 80), correo, rol, nivel]);
+  } else if (u.rol !== rol || u.nivel_panel !== nivel) {
     // El nivel lo decide el panel: si cambió allá, se refleja aquí.
-    await q('UPDATE usuarios SET rol = $1 WHERE id = $2', [rol, u.id]);
-    u = { ...u, rol };
+    await q('UPDATE usuarios SET rol = $1, nivel_panel = $3 WHERE id = $2', [rol, u.id, nivel]);
+    u = { ...u, rol, nivel_panel: nivel };
   }
   await crearSesion(res, { ...u, empresa_id: null }, req.headers['user-agent']);
   await registrar({ usuario: u, empresaId: null, ip: req.ip }, 'ingreso', 'usuario', u.id, { via: 'Síguelo On Board', nivel: p.nivel });

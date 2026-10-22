@@ -3,7 +3,7 @@ import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { cargarSesion, ErrorHttp } from './auth.js';
+import { cargarSesion, soloLectura, ErrorHttp } from './auth.js';
 import { idempotencia } from './app-nativa/idempotencia.js';
 
 const RAIZ = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -23,6 +23,8 @@ export async function crearApp() {
   app.use(express.urlencoded({ extended: false, limit: '2mb' }));
   app.use(cargarSesion);
   app.use('/api', idempotencia); // reintentos de la cola de la app nativa (cabecera Idempotency-Key)
+  // «Ver como» del equipo Síguelo es de solo lectura EN EL SERVIDOR (22-oct, espec. Backoffice): cualquier cambio se rechaza.
+  app.use('/api', soloLectura);
 
   app.get('/salud', (_req, res) => res.json({ ok: true, servicio: 'siguelo-rentacar' }));
 
@@ -53,7 +55,7 @@ export async function crearApp() {
   app.use(express.static(PUBLICO, { extensions: ['html'], index: false, maxAge: process.env.NODE_ENV === 'production' ? '1h' : 0 }));
 
   // URLs limpias de las páginas con parámetro: /reservas/123 → reserva.html, /verificar/ABC → verificar.html, etc.
-  const PAGINAS_PARAM = { reservas: 'reserva', vehiculos: 'vehiculo', clientes: 'cliente', contratos: 'contrato', incidentes: 'incidente', liquidaciones: 'liquidacion', verificar: 'verificar', reservar: 'reservar', portal: 'portal', firmar: 'firmar', patio: 'patio-inspeccion', embed: 'reservar' };
+  const PAGINAS_PARAM = { empresas: 'empresa', invitacion: 'invitacion', carga: 'carga', reservas: 'reserva', vehiculos: 'vehiculo', clientes: 'cliente', contratos: 'contrato', incidentes: 'incidente', liquidaciones: 'liquidacion', verificar: 'verificar', reservar: 'reservar', portal: 'portal', firmar: 'firmar', patio: 'patio-inspeccion', embed: 'reservar' };
   app.get('/:pagina/:id', (req, res, next) => {
     const html = PAGINAS_PARAM[req.params.pagina];
     if (!html) return next();

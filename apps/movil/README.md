@@ -1,5 +1,7 @@
 # Síguelo On Rent · apps para Android y iOS
 
+> **Android ahora es nativa** (Kotlin, carpeta `android/` en la raíz del repositorio, ver `android/README.md`). Esta carpeta sigue sirviendo para la app de **iPhone** y para las **apps con la marca del cliente** (`apps-propias.yml`).
+
 La app abre el sistema Síguelo On Rent (el mismo de la web) dentro de una app nativa hecha con **Capacitor 8**. Así cada mejora del sistema llega al teléfono sin publicar una versión nueva; solo hay que volver a publicar si cambia algo de esta carpeta (íconos, permisos, plugins).
 
 | | Android | iOS |

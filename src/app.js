@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { cargarSesion, ErrorHttp } from './auth.js';
+import { idempotencia } from './app-nativa/idempotencia.js';
 
 const RAIZ = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLICO = path.join(RAIZ, 'public');
@@ -21,6 +22,7 @@ export async function crearApp() {
   app.use(express.json({ limit: '25mb' }));            // fotos y firmas llegan como data URL
   app.use(express.urlencoded({ extended: false, limit: '2mb' }));
   app.use(cargarSesion);
+  app.use('/api', idempotencia); // reintentos de la cola de la app nativa (cabecera Idempotency-Key)
 
   app.get('/salud', (_req, res) => res.json({ ok: true, servicio: 'siguelo-rentacar' }));
 

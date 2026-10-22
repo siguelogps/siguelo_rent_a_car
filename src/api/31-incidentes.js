@@ -103,11 +103,18 @@ r.post('/incidentes', requiere('incidentes', 'editar'), async (req, res) => {
   if (!v) throw new ErrorHttp(404, 'Vehículo no encontrado', { campo: 'patente' });
   const descripcion = String(b.descripcion || '').trim().slice(0, 2000);
   if (!descripcion) throw new ErrorHttp(400, 'Describe lo ocurrido', { campo: 'descripcion' });
+  // Una foto (dataUrl, la web) o varias (fotos: [dataUrl], la app nativa; hasta 8). Se revisan antes de crear el
+  // incidente: así una foto mala no deja un incidente a medias que el reintento duplicaría.
+  const fotos = [...(b.dataUrl ? [b.dataUrl] : []), ...(Array.isArray(b.fotos) ? b.fotos : [])].slice(0, 8).map((f) => {
+    let x;
+    try { x = desdeDataUrl(f); } catch { throw new ErrorHttp(400, 'Una de las fotos no se pudo leer', { campo: 'fotos' }); }
+    if (!x.mime.startsWith('image/')) throw new ErrorHttp(400, 'Las fotos deben ser imágenes', { campo: 'fotos' });
+    return x;
+  });
   const inc = await transaccion((tx) => crearIncidente(tx, { empresaId: E, tipo: b.tipo, reservaId, vehiculoId, descripcion, deducible: monto(b.deducible, 'deducible'), usuarioId: req.usuario.id,
     detalleReporte: `${TIPOS_INCIDENTE[b.tipo]} reportado por ${req.usuario.nombre}: ${descripcion}` }));
-  if (b.dataUrl) {
-    const { mime, datos } = desdeDataUrl(b.dataUrl);
-    await guardarArchivo({ empresaId: E, entidad: 'incidente', entidadId: inc.id, tipo: 'foto', nombre: `${inc.folio}.jpg`, mime, datos, usuarioId: req.usuario.id });
+  for (const [k, { mime, datos }] of fotos.entries()) {
+    await guardarArchivo({ empresaId: E, entidad: 'incidente', entidadId: inc.id, tipo: 'foto', nombre: fotos.length > 1 ? `${inc.folio}-${k + 1}.jpg` : `${inc.folio}.jpg`, mime, datos, usuarioId: req.usuario.id });
   }
   await registrar(req, 'incidente_creado', 'incidente', inc.id, { folio: inc.folio, tipo: b.tipo, origen: 'manual' });
   res.json(inc);

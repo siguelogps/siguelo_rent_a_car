@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Sigue el tema del teléfono (claro u oscuro); Compose pinta todo. Esto solo cubre el instante antes de dibujar. -->
+    <style name="Tema.OnRent" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/fondo</item>
+        <item name="android:statusBarColor">@color/cabecera</item>
+    </style>
+</resources>

@@ -18,6 +18,7 @@
 // Backoffice · Apps con marca (equipo Síguelo): habilitar el módulo a quien lo pide, revisar solicitudes, observar,
 // aprobar (dispara la compilación en GitHub Actions o muestra el comando para ejecutarla a mano), marcar lista o
 // publicada; y (superadmin) los ajustes de la compilación: token de GitHub y token de servicio para publicar versiones.
+// Además, los ajustes de la app nativa Síguelo On Rent: versión mínima y cuenta de servicio de Firebase (avisos push).
 import { iniciarPagina, api, esc, fecha, hora, modal, toast, toastError, leerForm } from '/comun.js';
 import { pasos, mb, CHIP } from '/js/apps-comun.js';
 
@@ -29,7 +30,7 @@ let filtro = 'pendientes';
 const comando = (p) => `gh workflow run apps-propias.yml --repo siguelogps/siguelo_rent_a_car \\\n${Object.entries(p).map(([k, v]) => `  -f ${k}=${JSON.stringify(String(v ?? ''))}`).join(' \\\n')}`;
 
 async function pintar() {
-  const d = await api('backoffice/apps');
+  const [d, m] = await Promise.all([api('backoffice/apps'), api('backoffice/app-movil')]);
   const lista = d.solicitudes.filter((s) => filtro === 'todas' || !['publicada', 'borrador'].includes(s.estado));
   const a = d.ajustes;
   caja.innerHTML = `
@@ -54,6 +55,18 @@ async function pintar() {
         <label class="etiqueta">Token de GitHub (permiso «Contents: read & write» del repositorio)<input class="campo mono" name="github_token" autocomplete="off" placeholder="${a.github_conectado ? '•••••••• (déjalo vacío para mantenerlo)' : 'github_pat_…'}"></label>
       </div>
       <div class="rc-fila" style="justify-content:flex-end"><button class="btn" id="guardar-gh">Guardar GitHub</button><button class="btn" id="nuevo-token">${a.token_cargado ? 'Renovar token de servicio' : 'Crear token de servicio'}</button></div>` : '<p class="peq muted">Solo un superadmin cambia estos ajustes.</p>'}
+    </div>
+    <div class="tarjeta bloque" style="margin-top:16px"><h2>App Síguelo On Rent (Android)</h2>
+      <p class="ayuda">La app nativa del personal (cl.siguelogps.onrent). Con una versión mínima, las apps más viejas piden actualizar desde Google Play antes de seguir. Los avisos push («Reserva nueva») necesitan la cuenta de servicio de Firebase: Firebase → ⚙ Configuración del proyecto → Cuentas de servicio → Generar nueva clave privada.</p>
+      <div class="ap-dato"><span>Versión mínima</span><b class="mono">${esc(m.version.minima || 'No se exige')}</b></div>
+      <div class="ap-dato"><span>Avisos push</span><b>${m.push.configurado ? `Activos · proyecto <span class="mono">${esc(m.push.proyecto)}</span>` : 'Sin cuenta de servicio'}</b></div>
+      <div class="ap-dato"><span>Teléfonos con avisos</span><b class="mono">${m.dispositivos}</b></div>
+      ${superadmin ? `<div class="ap-form" id="form-app">
+        <label class="etiqueta">Versión mínima (vacío = no se exige)<input class="campo mono" name="minima" value="${esc(m.version.minima || '')}" placeholder="1.0.42"></label>
+        <label class="etiqueta">Mensaje al pedir actualizar (opcional)<input class="campo" name="mensaje" maxlength="200" value="${esc(m.version.mensaje || '')}" placeholder="Hay una versión nueva con mejoras en las fotos."></label>
+        <label class="etiqueta" style="grid-column:1/-1">Cuenta de servicio de Firebase (pega el contenido del .json; queda cifrada y no se vuelve a mostrar)<textarea class="campo mono" name="cuenta_push" rows="3" autocomplete="off" placeholder="${m.push.configurado ? '•••••••• (déjalo vacío para mantenerla)' : '{ &quot;type&quot;: &quot;service_account&quot;, … }'}"></textarea></label>
+      </div>
+      <div class="rc-fila" style="justify-content:flex-end">${m.push.configurado ? '<button class="btn" id="quitar-push">Quitar avisos push</button><button class="btn" id="probar-push">Aviso de prueba a mi teléfono</button>' : ''}<button class="btn primario" id="guardar-app">Guardar</button></div>` : ''}
     </div>`;
 }
 
@@ -131,6 +144,20 @@ caja.addEventListener('click', async (ev) => {
       if (!b.github_token) delete b.github_token;
       await api('backoffice/apps-ajustes', { method: 'PUT', body: b });
       toast('Ajustes de GitHub guardados', 'ok'); await pintar(); return;
+    }
+    if (ev.target.closest('#guardar-app')) {
+      const b = leerForm(document.getElementById('form-app'));
+      if (!String(b.cuenta_push || '').trim()) delete b.cuenta_push;
+      await api('backoffice/app-movil', { method: 'PUT', body: b });
+      toast('Ajustes de la app guardados', 'ok'); await pintar(); return;
+    }
+    if (ev.target.closest('#quitar-push')) {
+      await api('backoffice/app-movil', { method: 'PUT', body: { cuenta_push: null } });
+      toast('Avisos push desactivados', 'ok'); await pintar(); return;
+    }
+    if (ev.target.closest('#probar-push')) {
+      const r = await api('backoffice/app-movil/probar-push', { body: {} });
+      toast(r.enviados ? 'Aviso de prueba enviado' : 'No se pudo enviar el aviso de prueba', r.enviados ? 'ok' : 'error'); return;
     }
     if (ev.target.closest('#nuevo-token')) {
       const r = await api('backoffice/apps-token', { body: {} });

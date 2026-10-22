@@ -3,6 +3,7 @@
 // transacción que vuelve a revisar la disponibilidad (vehículo bloqueado con FOR UPDATE) y cobro en línea con el
 // módulo de pagos (o pago simulado en marcha blanca / mientras el módulo no esté instalado).
 import { q, uno, transaccion, siguienteFolio } from '../db.js';
+import { avisarReservaNueva } from '../app-nativa/push.js';
 import { ErrorHttp } from '../auth.js';
 import { cotizar } from '../cotizador.js';
 import { conflictos, vehiculosDisponibles } from '../disponibilidad.js';
@@ -273,6 +274,7 @@ export async function crearReservaPortal(e, { busqueda, categoriaId, extras, cli
   });
 
   let { reserva } = creada;
+  avisarReservaNueva(e.id, reserva, { origen: 'portal' }); // aviso push al equipo (sin esperar)
   let cobro = null, mensaje;
   if (creada.pagarAhora) {
     cobro = await cobrar({ empresaId: e.id, reservaId: reserva.id, clienteId: creada.cliente.id, monto: reserva.total, proveedor: prov, token: reserva.token_portal, folio: reserva.folio });

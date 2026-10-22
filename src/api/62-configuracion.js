@@ -5,7 +5,7 @@ import { verificarLimite } from '../planes.js';
 import crypto from 'node:crypto';
 import express from 'express';
 import { q, uno } from '../db.js';
-import { requiere, soloSiguelo, ErrorHttp, hashClave, verificarClave, leerCookie } from '../auth.js';
+import { requiere, soloSiguelo, ErrorHttp, hashClave, verificarClave, tokenDeSesion } from '../auth.js';
 import { hashSha256 } from '../cifrado.js';
 import { registrar } from '../bitacora.js';
 import { ROLES, MODULOS, nivel } from '../permisos.js';
@@ -40,7 +40,7 @@ r.post('/configuracion/mi-clave', requiere(null, 'ver', { sinEmpresa: true }), a
   if (String(nueva || '').length < 10) throw new ErrorHttp(400, 'La nueva clave debe tener al menos 10 caracteres.', { campo: 'nueva' });
   if (nueva === actual) throw new ErrorHttp(400, 'La nueva clave debe ser distinta de la actual.', { campo: 'nueva' });
   await q('UPDATE usuarios SET clave_hash = $2 WHERE id = $1', [u.id, hashClave(nueva)]);
-  const t = leerCookie(req, 'rc_sesion');
+  const t = tokenDeSesion(req); // cookie (web) o Bearer (app nativa)
   await q('DELETE FROM sesiones WHERE usuario_id = $1 AND token_hash <> $2', [u.id, t ? hashSha256(t) : '']);
   await registrar(req, 'clave_cambiada', 'usuario', u.id);
   res.json({ ok: true });
@@ -61,6 +61,7 @@ r.post('/configuracion/eliminar-mi-cuenta', requiere(null, 'ver', { sinEmpresa: 
     [u.id, `eliminado-${u.id}-${crypto.randomBytes(4).toString('hex')}@cuentas.invalid`]);
   await registrar(req, 'cuenta_eliminada', 'usuario', u.id);
   await q('DELETE FROM sesiones WHERE usuario_id = $1', [u.id]);
+  await q('DELETE FROM dispositivos WHERE usuario_id = $1', [u.id]); // sin avisos push a una cuenta eliminada
   res.clearCookie('rc_sesion', { path: '/' });
   res.json({ ok: true });
 });
@@ -170,6 +171,7 @@ r.patch('/configuracion/usuarios/:id', requiere('usuarios', 'editar'), async (re
   const [n] = await q(`UPDATE usuarios SET ${claves.map((k, i) => `${k} = $${i + 3}`).join(', ')} WHERE id = $1 AND empresa_id = $2
                        RETURNING id, nombre, correo, rol, sucursal_id, telefono, activo`, [u.id, req.empresaId, ...claves.map((k) => sets[k])]);
   if (sets.activo === false || sets.rol) await q('DELETE FROM sesiones WHERE usuario_id = $1', [u.id]);
+  if (sets.activo === false) await q('DELETE FROM dispositivos WHERE usuario_id = $1', [u.id]); // un usuario desactivado no recibe avisos
   await registrar(req, 'usuario_editado', 'usuario', u.id, { campos: claves, ...(sets.rol ? { rol: sets.rol } : {}), ...('activo' in sets ? { activo: sets.activo } : {}) });
   res.json({ ...n, rol_nombre: ROLES[n.rol] });
 });

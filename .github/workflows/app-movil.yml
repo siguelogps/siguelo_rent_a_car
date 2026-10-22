@@ -1,19 +1,29 @@
-# Compila la app «Síguelo On Rent» (apps/movil) para Android y iOS.
-#  · Android, siempre: APK de prueba para instalar en el celular + AAB sin firmar (verifica que compila para Play).
-#    Con los 4 secretos de la llave de carga: AAB y APK firmados, listos para subir a Play Console.
-#  · iOS, siempre: compila para el simulador (verifica que compila).
-#    Con los 4 secretos de App Store Connect: archiva, firma y sube la versión a TestFlight (después se envía a revisión).
-# Se ejecuta con cada cambio en apps/movil y a mano (Actions → «App móvil» → Run workflow).
+# App «Síguelo On Rent» para el personal del rentacar.
+#  · Android: app NATIVA (Kotlin + Jetpack Compose) en android/ (ver android/README.md). Reemplaza a la de Capacitor.
+#      1. pruebas:    lógica en Kotlin (android/core) y servidor (npm test).
+#      2. apk-prueba: APK de prueba (debug, cl.siguelogps.onrent.prueba). Queda 14 días.
+#      3. firmado:    AAB y APK firmados para Play (cl.siguelogps.onrent), solo con los 4 secretos de la llave
+#                     (si faltan, se omite y lo dice).
+#      4. capturas:   dibuja las pantallas y las deja en la rama «capturas-android» (git fetch para mirarlas).
+#  · iOS: sigue siendo la app de Capacitor de apps/movil (compila para el simulador y, con los secretos, sube a TestFlight).
+#    apps/movil también es la base de las apps con marca del cliente (apps-propias.yml): no se borra.
+# Versión 1.0.N, con N = número de esta compilación (Play exige que siempre suba). Para recompilar: «Run workflow»,
+# no «Re-run jobs» (Re-run repite el número y Play lo rechaza).
+# Si algo falla y la rama tiene un pull request abierto, las últimas líneas del registro quedan como comentario.
+# Avisos push (opcional): secreto GOOGLE_SERVICES_JSON con el google-services.json de Firebase.
+# Síguelo On Board busca los artefactos por prefijo: «on-rent-prueba-» y «on-rent-play-» (siguelo-admin/apps/catalogo.json).
 
 name: App móvil
 
 on:
   push:
-    paths: ['apps/movil/**', '.github/workflows/app-movil.yml']
+    paths: ['android/**', 'apps/movil/**', '.github/workflows/app-movil.yml', '.github/scripts/**', 'src/app-nativa/**', 'src/api/63-app-nativa.js', 'test/app-nativa.test.js']
   workflow_dispatch:
 
 permissions:
   contents: read
+  pull-requests: write
+  issues: write
 
 concurrency:
   group: app-movil-${{ github.ref }}
@@ -22,75 +32,143 @@ concurrency:
 env:
   VERSION_CODE: ${{ github.run_number }}
   VERSION_NAME: 1.0.${{ github.run_number }}
+  ONRENT_URL: ${{ vars.ON_RENT_URL || 'https://onrent.siguelogps.com' }}
+  GH_TOKEN: ${{ github.token }}
 
 jobs:
-  android:
-    name: Android
+  pruebas:
+    name: Pruebas (Kotlin y servidor)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
-    defaults:
-      run:
-        working-directory: apps/movil
-    env:
-      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: apps/movil/package-lock.json
       - uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: 21
       - uses: gradle/actions/setup-gradle@v4
-
-      - name: Preparar el proyecto (Capacitor)
+      - name: Pruebas del servidor
+        shell: bash
         run: |
           npm ci
-          node scripts/preparar.mjs
-          npx cap sync android
-
-      - name: APK de prueba y AAB sin firmar
-        working-directory: apps/movil/android
+          set -o pipefail
+          npm test 2>&1 | tee "$RUNNER_TEMP/servidor.log"
+      - name: Pruebas de la lógica en Kotlin (core)
+        working-directory: android
+        shell: bash
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug bundleRelease --no-daemon --stacktrace
-          cp app/build/outputs/apk/debug/app-debug.apk "$GITHUB_WORKSPACE/on-rent-prueba-${VERSION_NAME}.apk"
+          set -o pipefail
+          ./gradlew :core:test -PsoloCore=true --no-daemon --stacktrace 2>&1 | tee "$RUNNER_TEMP/core.log"
+      - name: Avisar el error en el pull request
+        if: failure()
+        run: |
+          [ -f "$RUNNER_TEMP/core.log" ] && .github/scripts/comentar-fallo.sh "$RUNNER_TEMP/core.log" "Pruebas de Kotlin (core)" || .github/scripts/comentar-fallo.sh "$RUNNER_TEMP/servidor.log" "Pruebas del servidor"
 
-      - name: Guardar el APK de prueba
-        uses: actions/upload-artifact@v4
+  apk-prueba:
+    name: APK de prueba (Android)
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Avisos push (si está el secreto)
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: .github/scripts/google-services.sh cl.siguelogps.onrent.prueba
+      # Las pantallas se dibujan en el trabajo «capturas» (con Robolectric, en un proceso aparte): juntas con la
+      # compilación, el dibujo nativo abortaba el proceso de pruebas (código 134) en el equipo de GitHub.
+      - name: Compilar el APK de prueba
+        working-directory: android
+        shell: bash
+        run: |
+          chmod +x gradlew
+          set -o pipefail
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee "$RUNNER_TEMP/gradle.log"
+      - name: Avisar el error en el pull request
+        if: failure()
+        run: .github/scripts/comentar-fallo.sh "$RUNNER_TEMP/gradle.log" "APK de prueba · Síguelo On Rent"
+      - name: Renombrar el APK
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk "on-rent-prueba-${VERSION_NAME}.apk"
+      - uses: actions/upload-artifact@v4
         with:
           name: on-rent-prueba-${{ env.VERSION_NAME }}
           path: on-rent-prueba-*.apk
           retention-days: 14
           if-no-files-found: error
 
+  firmado:
+    name: AAB y APK firmados (Play)
+    runs-on: ubuntu-latest
+    needs: apk-prueba
+    timeout-minutes: 40
+    env:
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+      ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+    steps:
       - name: ¿Están los secretos de la llave de carga?
         id: llave
         run: |
-          if [ -n "$ANDROID_KEYSTORE_BASE64" ] && [ -n "$ANDROID_KEYSTORE_PASSWORD" ] && [ -n "$ANDROID_KEY_ALIAS" ] && [ -n "$ANDROID_KEY_PASSWORD" ]; then
-            echo "hay=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice title=Versión firmada para Play omitida::Faltan los secretos ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD, ANDROID_KEY_ALIAS y ANDROID_KEY_PASSWORD. Ver apps/movil/README.md."
+          faltan=""
+          [ -z "$ANDROID_KEYSTORE_BASE64" ] && faltan="$faltan ANDROID_KEYSTORE_BASE64"
+          [ -z "$ANDROID_KEYSTORE_PASSWORD" ] && faltan="$faltan ANDROID_KEYSTORE_PASSWORD"
+          [ -z "$ANDROID_KEY_ALIAS" ] && faltan="$faltan ANDROID_KEY_ALIAS"
+          [ -z "$ANDROID_KEY_PASSWORD" ] && faltan="$faltan ANDROID_KEY_PASSWORD"
+          if [ -n "$faltan" ]; then
+            echo "::notice title=Versión firmada para Play omitida::Faltan estos secretos:$faltan. El APK de prueba sí quedó listo. Ver android/README.md, «Secretos»."
             echo "hay=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "hay=true" >> "$GITHUB_OUTPUT"
           fi
-
-      - name: AAB y APK firmados (Play Store)
+      - if: steps.llave.outputs.hay == 'true'
+        uses: actions/checkout@v5
+      - if: steps.llave.outputs.hay == 'true'
+        uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - if: steps.llave.outputs.hay == 'true'
+        uses: gradle/actions/setup-gradle@v4
+      - name: Avisos push (si está el secreto)
         if: steps.llave.outputs.hay == 'true'
-        working-directory: apps/movil/android
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: .github/scripts/google-services.sh cl.siguelogps.onrent
+      - name: Armar la llave (solo durante la compilación)
+        if: steps.llave.outputs.hay == 'true'
         run: |
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/carga.jks"
-          export ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/carga.jks"
-          ./gradlew bundleRelease assembleRelease --no-daemon
-          cp app/build/outputs/bundle/release/app-release.aab "$GITHUB_WORKSPACE/on-rent-${VERSION_NAME}.aab"
-          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/on-rent-${VERSION_NAME}.apk"
-          rm -f "$RUNNER_TEMP/carga.jks"
-
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/carga.jks"
+          echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/carga.jks" >> "$GITHUB_ENV"
+      - name: Compilar AAB y APK firmados
+        if: steps.llave.outputs.hay == 'true'
+        working-directory: android
+        shell: bash
+        run: |
+          chmod +x gradlew
+          set -o pipefail
+          ./gradlew bundleRelease assembleRelease --no-daemon --stacktrace 2>&1 | tee "$RUNNER_TEMP/gradle.log"
+      - name: Borrar la llave del equipo de compilación
+        if: always() && steps.llave.outputs.hay == 'true'
+        run: rm -f "$RUNNER_TEMP/carga.jks"
+      - name: Avisar el error en el pull request
+        if: failure() && steps.llave.outputs.hay == 'true'
+        run: .github/scripts/comentar-fallo.sh "$RUNNER_TEMP/gradle.log" "Versión firmada · Síguelo On Rent"
+      - name: Renombrar
+        if: steps.llave.outputs.hay == 'true'
+        run: |
+          cp android/app/build/outputs/bundle/release/app-release.aab "on-rent-${VERSION_NAME}.aab"
+          cp android/app/build/outputs/apk/release/app-release.apk "on-rent-${VERSION_NAME}.apk"
+      # El nombre «on-rent-play-1.0.N» es el que busca Síguelo On Board (apps/catalogo.json, por prefijo).
       - name: Guardar la versión para Play
         if: steps.llave.outputs.hay == 'true'
         uses: actions/upload-artifact@v4
@@ -101,6 +179,48 @@ jobs:
             on-rent-1.*.apk
           retention-days: 30
           if-no-files-found: error
+
+  capturas:
+    name: Capturas de pantalla → rama capturas-android
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: 21
+      - uses: gradle/actions/setup-gradle@v4
+      - name: Dibujar las pantallas
+        working-directory: android
+        shell: bash
+        run: |
+          chmod +x gradlew
+          set -o pipefail
+          ../.github/scripts/gradle-reintento.sh "$RUNNER_TEMP/capturas.log" :app:testDebugUnitTest --tests "*CapturasPantallas*" -Proborazzi.test.record=true --no-daemon --stacktrace
+      - name: Avisar el error en el pull request
+        if: failure()
+        run: .github/scripts/comentar-fallo.sh "$RUNNER_TEMP/capturas.log" "Capturas de pantalla"
+      - name: Dejar las capturas en la rama capturas-android
+        if: always()
+        run: |
+          set -e
+          ls android/app/build/capturas/*.png > /dev/null 2>&1 || { echo "::warning::No hay capturas"; exit 0; }
+          mkdir -p "$RUNNER_TEMP/pub"
+          cp android/app/build/capturas/*.png "$RUNNER_TEMP/pub/"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898283+github-actions[bot]@users.noreply.github.com"
+          git checkout --orphan capturas-android-tmp
+          git rm -rf -q .
+          cp "$RUNNER_TEMP"/pub/* .
+          printf '# Capturas de la app nativa Síguelo On Rent\n\nCompilación %s de la rama %s (%s).\n' "$GITHUB_RUN_NUMBER" "$GITHUB_REF_NAME" "${GITHUB_SHA::7}" > README.md
+          git add -f -- *.png README.md
+          git commit -q -m "Capturas de ${GITHUB_SHA::7} (${GITHUB_REF_NAME})"
+          git push -f origin HEAD:capturas-android
 
   ios:
     name: iOS

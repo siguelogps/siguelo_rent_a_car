@@ -123,6 +123,7 @@ dependencies {
     implementation(libs.camerax.view)
     implementation(libs.play.location)
     implementation(libs.play.app.update)
+    implementation(libs.androidx.fragment)
     implementation(libs.firebase.messaging)
 
     testImplementation(libs.junit)

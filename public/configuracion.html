@@ -326,6 +326,7 @@ async function integraciones() {
 }
 // Los campos de integraciones no deben ofrecer los datos de acceso guardados en el navegador: sin type="password"
 // (los secretos se enmascaran con CSS) y con autocompletado apagado para el navegador y los gestores de claves.
+const NOMBRE_CUENTA_GPS = { hosting: 'Síguelo Pro', lite: 'Síguelo Lite' };
 const SIN_AUTORRELLENO = ' autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true" data-bwignore="true" data-form-type="other"';
 function campoInt(i, f, ed) {
   const v = i.config[f.clave] ?? '';
@@ -341,15 +342,31 @@ function campoInt(i, f, ed) {
   const tipo = f.tipo === 'numero' ? 'number' : 'text';
   return `<label class="etiqueta${ancho}">${esc(f.etiqueta)}<input class="campo${f.secreto ? ' mono cf-secreto' : ''}" name="${f.clave}" type="${tipo}" value="${oculto ? '' : esc(v)}" placeholder="${oculto ? 'Servidor estándar de la plataforma GPS' : esc(ej)}"${oculto ? ' data-oculto' : ''}${SIN_AUTORRELLENO}${dis}>${ayuda}</label>`;
 }
+// La cuenta y el token de la plataforma GPS se eligen en el bloque «Conectar» de la tarjeta (no en «Datos de conexión»).
+const CAMPOS_DEL_INGRESO = { gps: ['cuenta', 'token'] };
 function camposInt(i, ed) {
-  const normales = i.campos.filter((f) => !f.avanzado), avanzados = i.campos.filter((f) => f.avanzado);
+  const fuera = CAMPOS_DEL_INGRESO[i.tipo] || [];
+  const campos = i.campos.filter((f) => !fuera.includes(f.clave));
+  const normales = campos.filter((f) => !f.avanzado), avanzados = campos.filter((f) => f.avanzado);
   return `${normales.map((f) => campoInt(i, f, ed)).join('')}${avanzados.length ? `<details class="cf-avanzado ancho"><summary>Opciones avanzadas</summary><div class="campos">${avanzados.map((f) => campoInt(i, f, ed)).join('')}</div></details>` : ''}`;
 }
 function extraInt(i, ed) {
   if (i.tipo === 'gps') {
-    return `<div class="cf-conectar">${i.config.usuario ? `<span class="chip ok">Conectado como «${esc(i.config.usuario)}»</span>` : '<span class="chip aviso">Sin conectar</span>'}
-      ${ed ? `<button type="button" class="btn primario peq" data-conectar-gps>${i.config.usuario ? 'Volver a conectar' : 'Conectar con usuario y clave'}</button>` : ''}
-      <small class="muted">Se abre la página de ingreso de la plataforma GPS (la misma del dashboard Síguelo). Tu clave no pasa por este sistema.</small></div>`;
+    // 22-oct (Pablo): lo principal es «Ingresar con usuario y clave» en la página de la plataforma (Síguelo Pro o Síguelo
+    // Lite); pegar un token queda plegado, para soporte. Mismo aspecto que On Tow.
+    const c = i.config.cuenta === 'lite' ? 'lite' : 'hosting';
+    const estadoGps = i.config.usuario ? `<span class="chip ok">Conectado como «${esc(i.config.usuario)}» · ${NOMBRE_CUENTA_GPS[c]}</span>` : '<span class="chip aviso">Sin conectar</span>';
+    if (!ed) return `<div class="cf-conectar">${estadoGps}</div>`;
+    return `<div class="cf-conectar cf-gps" data-cuenta="${c}">${estadoGps}
+      <small class="muted">Elige la plataforma de tu flota e ingresa con tu usuario y clave. Tu clave no pasa por Síguelo On Rent.</small>
+      <div class="cf-gps-seg" role="radiogroup" aria-label="Plataforma">
+        <button type="button" role="radio" data-cta="hosting" aria-checked="${c === 'hosting'}">Síguelo Pro</button>
+        <button type="button" role="radio" data-cta="lite" aria-checked="${c === 'lite'}">Síguelo Lite</button></div>
+      <button type="button" class="btn primario cf-gps-ir" data-conectar-gps>Ingresar a ${NOMBRE_CUENTA_GPS[c]} →</button>
+      <small class="muted" style="text-align:center">Serás redirigido a la plataforma oficial</small>
+      <details class="cf-gps-manual"><summary>¿Tienes un token? Pégalo a mano</summary>
+        <div class="rc-fila"><input class="campo mono cf-secreto" data-token-gps placeholder="Token de la cuenta"${SIN_AUTORRELLENO}><button type="button" class="btn peq" data-token-gps-guardar>Guardar token</button></div>
+        <small class="muted">Se prueba antes de usarlo, queda cifrado y no se vuelve a mostrar.</small></details></div>`;
   }
   if (i.tipo === 'dashboard_siguelo') {
     return `<div class="cf-conectar">${i.config.conexion_plataforma ? `<span class="chip ok">Usa la conexión de la plataforma GPS${i.config.usuario_plataforma ? ` («${esc(i.config.usuario_plataforma)}»)` : ''}</span>` : '<span class="chip aviso">Conecta primero la plataforma GPS</span> <a href="#int-gps" class="peq">Ir a Plataforma GPS</a>'}</div>`;
@@ -373,8 +390,28 @@ function tarjetaInt(i, ed) {
 function conectarInt(i, ed) {
   const card = document.getElementById(`int-${i.tipo}`);
   const form = card.querySelector('form');
+  const gps = card.querySelector('.cf-gps');
+  const cuentaGps = () => gps?.dataset.cuenta === 'lite' ? 'lite' : 'hosting';
+  gps?.querySelectorAll('[data-cta]').forEach((b) => b.addEventListener('click', () => {
+    gps.dataset.cuenta = b.dataset.cta;
+    gps.querySelectorAll('[data-cta]').forEach((x) => x.setAttribute('aria-checked', String(x === b)));
+    gps.querySelector('[data-conectar-gps]').textContent = `Ingresar a ${NOMBRE_CUENTA_GPS[cuentaGps()]} →`;
+  }));
+  // Token pegado a mano (soporte): va por la misma ruta que la vuelta del ingreso, que lo prueba antes de dejarlo en uso.
+  gps?.querySelector('[data-token-gps-guardar]')?.addEventListener('click', async (ev) => {
+    const campo = gps.querySelector('[data-token-gps]');
+    const token = campo.value.trim();
+    if (!token) return toast('Pega el token de la cuenta.', 'error');
+    ev.target.disabled = true;
+    try {
+      const r = await api('integraciones/gps/token', { body: { token, cuenta: cuentaGps() } });
+      campo.value = '';
+      toast(r.prueba?.ok ? `Plataforma GPS conectada. ${r.prueba.mensaje}` : `Se guardó el token, pero la prueba falló: ${r.prueba?.mensaje || 'sin detalle'}`, r.prueba?.ok ? 'ok' : 'error');
+      reemplazarInt(r.integracion, ed);
+    } catch (e) { toastError(e); ev.target.disabled = false; }
+  });
   card.querySelector('[data-conectar-gps]')?.addEventListener('click', async () => {
-    const cuenta = form.querySelector('[name=cuenta]')?.value || 'hosting';
+    const cuenta = cuentaGps();
     try {
       const { url } = await api(`integraciones/gps/ingreso?cuenta=${cuenta}`);
       try { localStorage.setItem('rc_gps_cuenta', cuenta); } catch { /* sin almacenamiento */ }

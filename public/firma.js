@@ -8,7 +8,7 @@ export function crearFirma(contenedor, { alto = 180, alCambiar = null, texto = '
   if (!contenedor.style.position) contenedor.style.position = 'relative';
   contenedor.innerHTML = `<canvas class="firma-canvas" style="height:${alto}px;display:block" aria-label="Recuadro para firmar"></canvas>
     <span class="firma-guia" style="position:absolute;left:0;right:0;top:50%;transform:translateY(-50%);text-align:center;color:#9AA1AD;font-size:14px;pointer-events:none">${texto}</span>
-    <span style="position:absolute;left:16px;right:16px;bottom:34px;border-bottom:1px solid #D0D5DD;pointer-events:none"></span>
+    <span style="position:absolute;left:16px;right:16px;bottom:34px;border-bottom:1px solid var(--borde-campo);pointer-events:none"></span>
     <button type="button" class="btn peq firma-limpiar" style="position:absolute;right:8px;top:8px">Borrar</button>`;
   const canvas = contenedor.querySelector('canvas'), guia = contenedor.querySelector('.firma-guia');
   const ctx = canvas.getContext('2d');

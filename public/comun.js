@@ -228,6 +228,7 @@ export async function iniciarPagina({ activo, titulo = '' } = {}) {
       <span class="titulo">${esc(titulo)}</span>
       ${YO.modo === 'backoffice' ? '<span class="chip marca">Backoffice Síguelo</span>' : `<div class="buscar">${ICONOS.buscar}<input id="rc-buscar" placeholder="Buscar patente, RUT, cliente o folio…" autocomplete="off"><div class="buscar-res" id="rc-buscar-res" hidden></div></div>`}
       <div class="acciones">
+        <span id="rc-tema"></span>
         ${e?.marcha_blanca ? '<a class="chip rc-marcha" href="/configuracion#integraciones" title="Correos, WhatsApp, cobros y documentos tributarios detenidos hasta desactivarla">● Marcha blanca</a>' : ''}
       </div>
     </header>
@@ -241,6 +242,9 @@ export async function iniciarPagina({ activo, titulo = '' } = {}) {
   app.querySelector('.btn-plegar').onclick = () => { app.classList.toggle('plegada'); try { localStorage.setItem('rc_menu_plegado', app.classList.contains('plegada') ? '1' : '0'); } catch { /* sin almacenamiento */ } };
   app.querySelector('.btn-menu-movil').onclick = () => app.classList.toggle('menu-abierto');
   app.querySelector('#rc-usuario').onclick = abrirMiCuenta;
+  // Tema Automático / Claro / Oscuro (lo maneja /tema.js, cargado en el <head>).
+  if (window.SigueloTema) app.querySelector('#rc-tema').replaceWith(window.SigueloTema.boton());
+  else app.querySelector('#rc-tema').remove();
   app.querySelector('#rc-salir-ver-como')?.addEventListener('click', async () => { const r = await api('empresa-activa', { body: { empresa_id: null } }); location.href = r.destino || '/empresas'; });
   if (YO.modo !== 'backoffice') activarBuscador(app);
   return YO;

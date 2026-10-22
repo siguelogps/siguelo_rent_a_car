@@ -7,7 +7,7 @@ set -o pipefail
 registro="$1"; shift
 ./gradlew "$@" 2>&1 | tee "$registro"
 estado=$?
-if [ $estado -ne 0 ] && grep -q "JniConstants: Class not found" "$registro"; then
+if [ $estado -ne 0 ] && grep -qE "JniConstants: Class not found|Gradle Test Executor [0-9]+. finished with non-zero exit value 134" "$registro"; then
   echo "::warning::Robolectric abortó al dibujar (error intermitente del dibujo nativo): se repite una vez"
   ./gradlew "$@" 2>&1 | tee "$registro"
   estado=$?

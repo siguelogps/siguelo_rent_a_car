@@ -30,8 +30,11 @@ test('ingreso: Síguelo Pro por plataforma.siguelogps.com y Síguelo Lite por el
   const lite = new URL((await sop.get(`/api/backoffice/clientes/${E}/integraciones/gps/ingreso?cuenta=lite`)).datos.url);
   assert.equal(lite.origin, 'https://lite.wialon.com');
   assert.match(lite.searchParams.get('redirect_uri'), /\/integracion-gps\?gps=lite&estado=/);
-  // el cliente ya no arma la dirección
-  assert.equal((await (await t.como('demo@siguelogps.cl')).get('/api/integraciones/gps/ingreso?cuenta=hosting')).estado, 404);
+  // 22-oct, más tarde (Pablo): el cliente vuelve a conectar la plataforma GPS él mismo, con la misma página y una vuelta
+  // marcada «desde=cliente» (antes esta prueba exigía 404). Lo demás de esa puerta está en test/gps-cliente.test.js.
+  const cli = new URL((await (await t.como('demo@siguelogps.cl')).get('/api/integraciones/gps/ingreso?cuenta=hosting')).datos.url);
+  assert.equal(cli.origin + cli.pathname, 'https://plataforma.siguelogps.com/login.html');
+  assert.match(cli.searchParams.get('redirect_uri'), /\/integracion-gps\?gps=hosting&desde=cliente&estado=[\w-]+$/);
   assert.equal((await (await t.como('demo@siguelogps.cl')).get(`/api/backoffice/clientes/${E}/integraciones/gps/ingreso?cuenta=hosting`)).estado, 403);
 });
 

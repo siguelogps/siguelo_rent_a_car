@@ -23,7 +23,7 @@ const TABS = [
   ['plantillas', 'Plantillas', 'configuracion'], ['conexiones', 'Conexiones', 'integraciones'], ['salidas', 'Bandeja de salida', 'configuracion'],
   ['bitacora', 'Bitácora', 'configuracion'], ['portal', 'Portal de reservas', 'configuracion'], ['mi-clave', 'Mi clave', null]
 ].filter(([, , m]) => !m || puede(m));
-document.getElementById('sub').textContent = yo.empresa ? `${yo.empresa.nombre} · datos, usuarios, sucursales y reglas de tu empresa. Las conexiones las administra Síguelo GPS por ti.` : '';
+document.getElementById('sub').textContent = yo.empresa ? `${yo.empresa.nombre} · datos, usuarios, sucursales y reglas de tu empresa. La plataforma GPS la conecta tu empresa; las demás conexiones las administra Síguelo GPS.` : '';
 
 function pintarTabs(actual, retenidas = null) {
   document.getElementById('tabs').innerHTML = TABS.map(([k, t]) => `<a href="#${k}"${k === actual ? ' aria-current="page"' : ''}>${t}${k === 'salidas' && retenidas ? ` <span class="n">${retenidas}</span>` : ''}</a>`).join('');
@@ -311,7 +311,11 @@ addEventListener('message', (ev) => {
 // 22-oct (Pablo, espec. Backoffice Síguelo): las conexiones las configura y mantiene Síguelo GPS. Aquí se ven en tarjetas
 // de solo lectura, sin claves, con «Solicitar a Síguelo». Los cobros en línea (Transbank, Mercado Pago) siguen siendo del
 // rentacar: el dinero va a su cuenta y su administrador carga los datos de su comercio.
-const ESTADO_GEST = { activo: ['ok', 'Activo'], en_preparacion: ['aviso', 'En preparación'], no_contratado: ['', 'No contratado'] };
+// 22-oct, más tarde (Pablo): tres estados por tarjeta. Activo («Gestionado por Síguelo GPS» + «Solicitar un cambio»),
+// En preparación (encendida por Síguelo y sin configurar: «Síguelo GPS la está dejando lista», sin «Solicitar») y No
+// contratado («Solicitar a Síguelo»). La plataforma GPS, además, la conecta el propio cliente: «Sin conectar» con el
+// selector Síguelo Pro / Síguelo Lite y «Ingresar con usuario y clave».
+const ESTADO_GEST = { activo: ['ok', 'Activo'], en_preparacion: ['aviso', 'En preparación'], no_contratado: ['', 'No contratado'], por_conectar: ['aviso', 'Sin conectar'] };
 const TIPO_SOL = { gps: 'gps', dashboard_siguelo: 'siguelo_os', simpleapi: 'facturacion', correo: 'correo', whatsapp: 'whatsapp', push: 'push' };
 const valorGest = (v) => (v && typeof v === 'object' && v.fecha ? fechaHora(v.fecha) : esc(v ?? '—'));
 async function conexiones() {
@@ -320,24 +324,66 @@ async function conexiones() {
   const pendiente = (tipo) => solicitudes.find((s) => s.tipo === TIPO_SOL[tipo] || (tipo === 'simpleapi' && s.tipo === 'folios'));
   const boton = (g) => {
     const p = pendiente(g.tipo);
+    if (g.estado === 'en_preparacion' || g.estado === 'por_conectar') return '';
     if (p) return `<span class="chip info">Solicitud enviada · ${fecha(p.creado_en)}</span>`;
     if (!esAdmin) return '';
     if (g.estado === 'no_contratado') return `<button type="button" class="btn primario peq" data-solicitar="${TIPO_SOL[g.tipo]}">Solicitar a Síguelo</button>`;
     return `<button type="button" class="btn peq" data-solicitar="${g.tipo === 'simpleapi' ? 'folios' : TIPO_SOL[g.tipo]}">${g.tipo === 'simpleapi' ? 'Solicitar más folios' : 'Solicitar un cambio'}</button>`;
   };
+  const sello = (g) => ({ no_contratado: 'Lo activa Síguelo GPS', en_preparacion: 'Síguelo GPS la está dejando lista', por_conectar: 'La conecta tu empresa' })[g.estado] || 'Gestionado por Síguelo GPS';
   const mbPendiente = solicitudes.some((s) => s.tipo === 'marcha_blanca');
-  panel.innerHTML = `<div class="cf-gest-banner"><img src="/img/logo-pin.png" alt=""><div><b>Síguelo GPS conecta y mantiene estos servicios por ti.</b><span>No necesitas claves ni contratos con terceros. Si quieres sumar o cambiar algo, pídelo aquí y te contactamos.</span></div>
+  panel.innerHTML = `<div class="cf-gest-banner"><img src="/img/logo-pin.png" alt=""><div><b>Síguelo GPS conecta y mantiene estos servicios por ti.</b><span>No necesitas claves ni contratos con terceros. La plataforma GPS la conectas tú con tu usuario y clave. Si quieres sumar o cambiar algo, pídelo aquí y te contactamos.</span></div>
       <div class="der">${marcha_blanca ? `<span class="chip mb">Marcha blanca · nada sale todavía</span>${esAdmin && !mbPendiente ? '<button type="button" class="btn peq" data-solicitar="marcha_blanca">Pedir terminarla</button>' : ''}` : '<span class="chip ok">Mensajes reales activos</span>'}</div></div>
-    <div class="cf-gest">${gestionadas.map((g) => { const [cls, txt] = ESTADO_GEST[g.estado]; return `<article class="tarjeta">
+    <div class="cf-gest">${gestionadas.map((g) => { const [cls, txt] = ESTADO_GEST[g.estado]; return `<article class="tarjeta" data-gest="${esc(g.tipo)}">
       <div class="cab"><div><h3>${esc(g.nombre)}</h3><p>${esc(g.descripcion)}</p></div><span class="chip ${cls}">${txt}</span></div>
-      <div class="cuerpo">${g.datos.map(([t, v, mono]) => `<div class="dato"><span>${esc(t)}</span><span class="v${mono ? ' mono' : ''}">${valorGest(v)}</span></div>`).join('')}</div>
-      <div class="pie"><span class="cf-sello-gest">${g.estado === 'no_contratado' ? 'Lo activa Síguelo GPS' : 'Gestionado por Síguelo GPS'}</span>${boton(g)}</div></article>`; }).join('')}</div>
+      ${g.datos.length ? `<div class="cuerpo">${g.datos.map(([t, v, mono]) => `<div class="dato"><span>${esc(t)}</span><span class="v${mono ? ' mono' : ''}">${valorGest(v)}</span></div>`).join('')}</div>` : ''}
+      ${g.tipo === 'gps' ? conectarGps(g) : ''}
+      <div class="pie"><span class="cf-sello-gest">${sello(g)}</span><div class="rc-fila">${g.tipo === 'gps' && g.conexion?.puede_conectar && g.estado !== 'por_conectar' ? '<button type="button" class="btn peq" data-cambiar-gps>Cambiar de cuenta</button>' : ''}${boton(g)}</div></div></article>`; }).join('')}</div>
     <h2 class="cf-subtitulo">Cobros en línea · los configura tu empresa</h2>
     <p class="peq muted">El dinero va directo a la cuenta de tu empresa, por eso estos datos los cargas tú. Si necesitas ayuda, pídela a Síguelo GPS: podemos entrar a tu cuenta a ayudarte y queda registrado en tu bitácora.</p>
     ${ed ? '' : '<p class="aviso neutro">Puedes ver y probar los cobros. Solo un administrador puede cambiar los datos o activarlos.</p>'}
     <div class="cf-integraciones">${lista.map((i) => tarjetaInt(i, ed)).join('')}</div>
     <p class="peq muted">Qué avisos salen y cuándo se configura en <a href="#plantillas">Plantillas</a>. Quién entra a On Rent, en <a href="#usuarios">Usuarios y permisos</a>.</p>`;
   for (const i of lista) conectarInt(i, ed);
+  activarConectarGps();
+}
+// Bloque «Conectar» de la tarjeta Plataforma GPS. Sin cuenta, a la vista; con cuenta, aparece con «Cambiar de cuenta».
+// El servidor vuelve a exigir el permiso (administrador o Síguelo con «Operar», nunca «Ver como»): esto solo lo muestra.
+function conectarGps(g) {
+  const c = g.conexion || {};
+  if (!c.conectable) return '';
+  if (!c.puede_conectar) {
+    if (g.estado !== 'por_conectar') return '';
+    const quien = yo.siguelo_modo === 'ver' ? 'En «Ver como» no se puede conectar. Para hacerlo junto con el cliente, entra con «Operar».' : 'La conecta un administrador de tu empresa con el usuario y la clave de la plataforma GPS.';
+    return `<div class="cf-conectar"><small class="muted">${quien}</small></div>`;
+  }
+  return `<div class="cf-conectar cf-gps" data-cuenta="${c.cuenta}"${g.estado === 'por_conectar' ? '' : ' hidden'}>
+      <small class="muted">Elige la plataforma de tu flota e ingresa con tu usuario y clave. Tu clave no pasa por Síguelo On Rent.</small>
+      <div class="cf-gps-seg" role="radiogroup" aria-label="Plataforma">
+        <button type="button" role="radio" data-cta="hosting" aria-checked="${c.cuenta !== 'lite'}">Síguelo Pro</button>
+        <button type="button" role="radio" data-cta="lite" aria-checked="${c.cuenta === 'lite'}">Síguelo Lite</button></div>
+      <button type="button" class="btn primario cf-gps-ir" data-conectar-gps>Ingresar con usuario y clave →</button>
+      <small class="muted" style="text-align:center">Se abre la página oficial de la plataforma en una ventana</small></div>`;
+}
+function activarConectarGps() {
+  const card = panel.querySelector('[data-gest="gps"]');
+  const gps = card?.querySelector('.cf-gps');
+  if (!gps) return;
+  const cuenta = () => (gps.dataset.cuenta === 'lite' ? 'lite' : 'hosting');
+  gps.querySelectorAll('[data-cta]').forEach((b) => b.addEventListener('click', () => {
+    gps.dataset.cuenta = b.dataset.cta;
+    gps.querySelectorAll('[data-cta]').forEach((x) => x.setAttribute('aria-checked', String(x === b)));
+  }));
+  card.querySelector('[data-cambiar-gps]')?.addEventListener('click', (ev) => { gps.hidden = !gps.hidden; ev.target.textContent = gps.hidden ? 'Cambiar de cuenta' : 'Cancelar'; });
+  gps.querySelector('[data-conectar-gps]').addEventListener('click', async () => {
+    const c = cuenta();
+    try {
+      const { url } = await api(`integraciones/gps/ingreso?cuenta=${c}`);
+      try { localStorage.setItem('rc_gps_cuenta', c); } catch { /* sin almacenamiento */ }
+      const v = window.open(url, 'rc_gps', 'width=520,height=720');
+      if (!v) location.href = url; // ventana bloqueada: se va en la misma pestaña y vuelve a /integracion-gps
+    } catch (e) { toastError(e); }
+  });
 }
 const NOMBRE_SOL = { gps: 'Plataforma GPS', siguelo_os: 'Síguelo OS (TAG y multas)', facturacion: 'Facturación electrónica', folios: 'Más folios', correo: 'Correo de salida', whatsapp: 'WhatsApp', push: 'Avisos a la app', marcha_blanca: 'Terminar la marcha blanca', otro: 'Otro' };
 panel.addEventListener('click', (ev) => {

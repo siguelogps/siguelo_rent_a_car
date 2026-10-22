@@ -96,6 +96,7 @@ tr.bo-apagada .bo-cli b { color: var(--muted); }
 .bo-int-hist { padding: 4px 18px 14px; }
 .bo-config { margin: 0 18px 14px; padding: 14px; border: 1px dashed var(--borde-gris); border-radius: 10px; display: flex; flex-direction: column; gap: 12px; background: var(--card); }
 .bo-config h4 { font-size: 13px; font-weight: 600; margin: 0; }
+.bo-gps-nota { margin: 0 18px 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .bo-config .campos-int { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; }
 .bo-config .campos-int .ancho { grid-column: 1 / -1; }
 .bo-seg { display: inline-flex; background: var(--gris-1); border-radius: 10px; padding: 3px; gap: 2px; }

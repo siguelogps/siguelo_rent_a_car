@@ -12,13 +12,15 @@
     <img src="/img/logo-siguelo.png" alt="Síguelo GPS" style="height:32px;align-self:flex-start">
     <h1 style="font-size:18px">Plataforma GPS</h1>
     <p id="estado" class="muted">Guardando la conexión…</p>
-    <a class="btn primario" href="/empresas" id="volver" hidden>Volver al backoffice</a>
+    <a class="btn primario" href="/empresas" id="volver" hidden>Volver</a>
   </div>
 </div>
 <script type="module">
 // Vuelta del ingreso con usuario y clave de la plataforma GPS: trae ?access_token=…&user_name=… (la clave nunca llega aquí).
 // 22-oct (espec. Backoffice): lo conecta el equipo Síguelo desde la ficha del cliente. La vuelta trae «estado», de un solo
 // uso, y es el servidor el que sabe a qué cliente va el token (la empresa no viaja en la dirección).
+// 22-oct, más tarde (Pablo): el cliente también la conecta él mismo desde Configuración › Conexiones. Esa vuelta trae
+// «desde=cliente» y va a la ruta del cliente, donde la empresa es la de la sesión.
 import { api } from '/comun.js';
 const p = new URLSearchParams(location.search + '&' + location.hash.slice(1));
 const estado = document.getElementById('estado'), volver = document.getElementById('volver');
@@ -34,9 +36,12 @@ if (cuenta !== 'hosting' && cuenta !== 'lite') { try { cuenta = localStorage.get
 if (!p.get('access_token')) fin(p.get('error') ? `La plataforma GPS no autorizó el acceso (${p.get('error')}).` : 'No se recibió la autorización de la plataforma GPS. Vuelve a intentarlo.', false);
 else {
   try {
-    if (!p.get('estado')) throw new Error('Este ingreso no viene del backoffice de Síguelo. Vuelve a abrirlo desde la ficha del cliente.');
-    const r = await api('backoffice/integraciones/gps/token', { body: { token: p.get('access_token'), usuario: p.get('user_name') || '', cuenta, estado: p.get('estado') } });
-    volver.href = `/empresas/${r.empresa_id}#integraciones`;
+    const desdeCliente = p.get('desde') === 'cliente';
+    if (!p.get('estado')) throw new Error(desdeCliente ? 'Este ingreso no es válido. Vuelve a presionar «Ingresar con usuario y clave» en Configuración › Conexiones.' : 'Este ingreso no viene del backoffice de Síguelo. Vuelve a abrirlo desde la ficha del cliente.');
+    const cuerpo = { token: p.get('access_token'), usuario: p.get('user_name') || '', cuenta, estado: p.get('estado') };
+    const r = await api(desdeCliente ? 'integraciones/gps/token' : 'backoffice/integraciones/gps/token', { body: cuerpo });
+    volver.href = desdeCliente ? '/configuracion#conexiones' : `/empresas/${r.empresa_id}#integraciones`;
+    volver.textContent = desdeCliente ? 'Volver a Conexiones' : 'Volver al backoffice';
     fin(r.prueba?.ok ? `Conectado como «${p.get('user_name') || 'usuario'}». ${r.prueba.mensaje}` : `Se guardó la conexión de «${p.get('user_name') || 'usuario'}», pero la prueba falló: ${r.prueba?.mensaje || 'sin detalle'}`, !!r.prueba?.ok);
   } catch (e) { fin(e.message, false); }
 }

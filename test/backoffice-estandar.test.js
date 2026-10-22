@@ -276,6 +276,10 @@ test('plataforma GPS desde el backoffice: el «estado» de la vuelta decide el c
   assert.equal(r.datos.empresa_id, E, 'la empresa sale del estado, no del cuerpo');
   assert.ok(!JSON.stringify(r.datos).includes('b'.repeat(40)));
   assert.equal((await sop.post('/api/backoffice/integraciones/gps/token', { token: 'b'.repeat(40), estado })).estado, 400, 'un solo uso');
-  assert.equal((await admin.get('/api/integraciones/gps/ingreso?cuenta=hosting')).estado, 404, 'el cliente ya no conecta la plataforma GPS');
+  // 22-oct, más tarde (Pablo): el cliente vuelve a conectar la plataforma GPS él mismo (ver test/gps-cliente.test.js), pero
+  // un «estado» creado en el backoffice no sirve en la ruta del cliente ni al revés.
+  const ing2 = new URL((await sop.get(`/api/backoffice/clientes/${E}/integraciones/gps/ingreso?cuenta=hosting`)).datos.url);
+  const estado2 = new URL(ing2.searchParams.get('redirect_uri')).searchParams.get('estado');
+  assert.equal((await admin.post('/api/integraciones/gps/token', { token: 'c'.repeat(40), estado: estado2 })).estado, 400, 'el estado del backoffice no sirve en la ruta del cliente');
   _usarFetch(null);
 });

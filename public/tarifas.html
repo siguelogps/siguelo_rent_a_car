@@ -4,7 +4,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Tarifas</title><link rel="icon" href="/img/logo-pin.png">
 <link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/img/app/apple-touch-icon.png"><meta name="theme-color" content="#FFFFFF">
-<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/flota.css">
+<script src="/tema.js"></script><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/flota.css">
 </head>
 <body>
 <main>
@@ -263,7 +263,7 @@ async function cotizar() {
       ${c.lineas.map((l) => `<tr class="${l.monto < 0 ? 'desc' : ''}"><td>${esc(l.concepto)}<small>${esc(l.detalle || '')}</small></td><td>${clp(l.monto)}</td></tr>`).join('')}
       <tr class="total"><td>Total</td><td>${clp(c.total)}</td></tr></tbody></table>
       <div class="fl-resumen-sim"><div><span>Kilometraje</span><b>${c.km_libre ? 'Libre' : `${miles(c.km_incluidos)} km`}</b></div><div><span>Km extra</span><b>${c.km_libre ? '—' : clp(c.precio_km_extra)}</b></div><div><span>Garantía</span><b>${clp(c.garantia)}</b></div><div><span>Deducible</span><b>${clp(c.deducible)}</b></div></div>
-      ${c.avisos.length ? `<div class="aviso" style="background:var(--amber-soft);color:#7C2D12">${c.avisos.map(esc).join('<br>')}</div>` : ''}`;
+      ${c.avisos.length ? `<div class="aviso" style="background:var(--amber-soft);color:var(--tx-ambar)">${c.avisos.map(esc).join('<br>')}</div>` : ''}`;
   } catch (e) { $('#sim-tem').textContent = ''; $('#sim-res').innerHTML = `<div class="aviso error">${esc(e.message)}</div>`; }
 }
 

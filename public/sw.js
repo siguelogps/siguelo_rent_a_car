@@ -1,8 +1,8 @@
 /* Síguelo On Rent · service worker (PWA y app).
    No guarda datos del negocio en el teléfono: la API siempre va a la red.
    Solo deja a mano la página «Sin conexión» y los estilos/logos para mostrarla. */
-const VERSION = 'onrent-v1';
-const BASICOS = ['/sin-conexion.html', '/app.css', '/rentacar.css', '/img/logo-pin.png', '/img/logo-siguelo.png', '/img/app/icono-192.png'];
+const VERSION = 'onrent-v2';
+const BASICOS = ['/sin-conexion.html', '/app.css', '/rentacar.css', '/tema.js', '/img/logo-pin.png', '/img/logo-siguelo.png', '/img/app/icono-192.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(VERSION).then((c) => c.addAll(BASICOS)).then(() => self.skipWaiting()));

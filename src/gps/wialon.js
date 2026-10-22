@@ -75,6 +75,7 @@ export class ClienteGps {
     if (!r?.eid) throw new Error('La plataforma GPS no devolvió una sesión (revisa el token)');
     this.sid = r.eid;
     this.usuario = r.user?.nm || null;
+    this.cuentaId = r.user?.bact != null ? String(r.user.bact) : null; // la cuenta: con ella se reconoce la entrada desde el menú Apps
     return r;
   }
 
@@ -276,6 +277,9 @@ registrarProbador('gps', async (config, empresaId) => {
   if (!config.token) throw new Error('Falta conectar con el usuario y la clave de la plataforma GPS');
   const c = new ClienteGps(config);
   const items = await c.buscarUnidades(BANDERAS.BASE);
+  // Se anota la cuenta de la plataforma de esta empresa: así quien abra On Rent desde el menú Apps de esa cuenta llega
+  // a esta empresa (src/api/15-app-plataforma.js). Lo dice la plataforma al entrar con el token, no la pantalla.
+  if (empresaId && c.cuentaId) await q('UPDATE empresas SET gps_cuenta_id = $1 WHERE id = $2', [c.cuentaId, empresaId]).catch(() => {});
   let extra = '';
   if (config.geocerca_permitida && empresaId) {
     zonasCache.delete(empresaId);

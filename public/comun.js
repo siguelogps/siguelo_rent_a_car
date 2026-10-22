@@ -198,6 +198,8 @@ const BACKOFFICE = [['empresas', 'Empresas', '/empresas'], ['planes', 'Planes', 
 
 export async function iniciarPagina({ activo, titulo = '' } = {}) {
   YO = await api('yo');
+  // Franja «Abierto desde tu plataforma de rastreo» (solo si la sesión vino del menú Apps; ver franja-plataforma.js).
+  if (!document.getElementById('rc-franja-plataforma')) { const s = document.createElement('script'); s.id = 'rc-franja-plataforma'; s.src = '/franja-plataforma.js'; document.head.appendChild(s); }
   const enBackoffice = BACKOFFICE.some(([m]) => m === activo);
   if (YO.modo === 'backoffice' && !enBackoffice) { location.replace('/empresas'); await new Promise(() => {}); }
   if (YO.modo === 'cliente' && !YO.siguelo && enBackoffice) { location.replace('/inicio'); await new Promise(() => {}); }
@@ -226,6 +228,7 @@ export async function iniciarPagina({ activo, titulo = '' } = {}) {
       <span class="titulo">${esc(titulo)}</span>
       ${YO.modo === 'backoffice' ? '<span class="chip marca">Backoffice Síguelo</span>' : `<div class="buscar">${ICONOS.buscar}<input id="rc-buscar" placeholder="Buscar patente, RUT, cliente o folio…" autocomplete="off"><div class="buscar-res" id="rc-buscar-res" hidden></div></div>`}
       <div class="acciones">
+        <span id="rc-tema"></span>
         ${e?.marcha_blanca ? '<a class="chip rc-marcha" href="/configuracion#integraciones" title="Correos, WhatsApp, cobros y documentos tributarios detenidos hasta desactivarla">● Marcha blanca</a>' : ''}
       </div>
     </header>
@@ -239,6 +242,9 @@ export async function iniciarPagina({ activo, titulo = '' } = {}) {
   app.querySelector('.btn-plegar').onclick = () => { app.classList.toggle('plegada'); try { localStorage.setItem('rc_menu_plegado', app.classList.contains('plegada') ? '1' : '0'); } catch { /* sin almacenamiento */ } };
   app.querySelector('.btn-menu-movil').onclick = () => app.classList.toggle('menu-abierto');
   app.querySelector('#rc-usuario').onclick = abrirMiCuenta;
+  // Tema Automático / Claro / Oscuro (lo maneja /tema.js, cargado en el <head>).
+  if (window.SigueloTema) app.querySelector('#rc-tema').replaceWith(window.SigueloTema.boton());
+  else app.querySelector('#rc-tema').remove();
   app.querySelector('#rc-salir-ver-como')?.addEventListener('click', async () => { const r = await api('empresa-activa', { body: { empresa_id: null } }); location.href = r.destino || '/empresas'; });
   if (YO.modo !== 'backoffice') activarBuscador(app);
   return YO;
@@ -271,7 +277,8 @@ function abrirMiCuenta() {
     if (e.target === fondo || e.target.closest('[data-cerrar]')) return cerrar();
     const ojo = e.target.closest('.rc-ojo');
     if (ojo) { const inp = ojo.previousElementSibling; inp.type = inp.type === 'password' ? 'text' : 'password'; return; }
-    if (e.target.closest('[data-salir]')) { await api('salir', { body: {} }).catch(() => {}); location.href = '/ingresar'; }
+    // Si la sesión se abrió desde el menú Apps de la plataforma GPS, «Salir» vuelve allá (franja-plataforma.js).
+    if (e.target.closest('[data-salir]')) { await api('salir', { body: {} }).catch(() => {}); location.href = (window.salidaPlataforma && window.salidaPlataforma()) || '/ingresar'; }
     if (e.target.closest('[data-eliminar]')) {
       err.hidden = true;
       const clave = f.clave_eliminar.value;

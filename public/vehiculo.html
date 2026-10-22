@@ -4,7 +4,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Vehículo</title><link rel="icon" href="/img/logo-pin.png">
 <link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/img/app/apple-touch-icon.png"><meta name="theme-color" content="#FFFFFF">
-<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/flota.css">
+<script src="/tema.js"></script><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/flota.css">
 <link rel="stylesheet" href="/vendor/leaflet/leaflet.css"><script src="/vendor/leaflet/leaflet.js" defer></script>
 </head>
 <body>
@@ -63,7 +63,7 @@ async function cargar() {
     <div class="rc-km" style="flex:1;min-width:220px"><span class="peq"><b>Próxima mantención:</b> ${m.proxima_km ? `${miles(m.proxima_km)} km` : 'sin plan por km'}${m.proxima_fecha ? ` o el ${fecha(m.proxima_fecha)}` : ''}</span>
       ${m.proxima_km ? `<div class="rc-km-barra ${cls}"><i style="width:${pct}%"></i></div><small class="peq fl-km-txt ${cls}">${m.faltan_km <= 0 ? `pasada por ${miles(-m.faltan_km)} km` : `faltan ${miles(m.faltan_km)} km`} · cada ${miles(v.mant_cada_km)} km${v.mant_cada_meses ? ` o ${v.mant_cada_meses} meses` : ''}</small>` : ''}</div>
     <span class="peq muted">Última: ${miles(v.mant_ultima_km)} km${v.mant_ultima_fecha ? ` · ${fecha(v.mant_ultima_fecha)}` : ''}</span></div>
-    ${d.bloqueos.length ? `<div class="aviso" style="background:var(--amber-soft);color:#7C2D12">${d.bloqueos.map((b) => `Bloqueado para reservas del ${fechaHora(b.inicio)} al ${fechaHora(b.fin)} · ${esc(b.motivo)}`).join('<br>')}</div>` : ''}`;
+    ${d.bloqueos.length ? `<div class="aviso" style="background:var(--amber-soft);color:var(--tx-ambar)">${d.bloqueos.map((b) => `Bloqueado para reservas del ${fechaHora(b.inicio)} al ${fechaHora(b.fin)} · ${esc(b.motivo)}`).join('<br>')}</div>` : ''}`;
 
   const filaRes = (r) => `<tr class="clic" data-href="/reservas/${r.id}"><td class="folio">${esc(r.folio)}</td><td>${esc(r.cliente || '')}</td><td class="mono peq">${fechaHora(r.retiro_real || r.inicio)}<div class="muted" style="font-family:var(--sans)">${esc(r.sucursal_retiro || '')}</div></td><td class="mono peq">${fechaHora(r.devolucion_real || r.fin)}<div class="muted" style="font-family:var(--sans)">${esc(r.sucursal_devolucion || '')}</div></td><td>${chipEstado(r.estado === 'en_curso' && new Date(r.fin) < new Date() ? 'atrasada' : r.estado, r.estado === 'en_curso' && new Date(r.fin) < new Date() ? 'Atrasada' : null)}</td><td class="monto fl-num">${clp(r.total)}</td></tr>`;
   $('#proximas').innerHTML = d.proximas.map(filaRes).join('') || '<tr><td colspan="6" class="rc-vacio">Sin reservas próximas</td></tr>';

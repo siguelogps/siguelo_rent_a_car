@@ -4,7 +4,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Conectando la plataforma GPS</title><link rel="icon" href="/img/logo-pin.png">
 <link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/img/app/apple-touch-icon.png"><meta name="theme-color" content="#FFFFFF">
-<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css">
+<script src="/tema.js"></script><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css">
 </head>
 <body>
 <div class="login">
@@ -18,7 +18,7 @@
 <script type="module">
 // Vuelta del ingreso con usuario y clave de la plataforma GPS: trae ?access_token=…&user_name=… (la clave nunca llega aquí).
 import { api } from '/comun.js';
-const p = new URLSearchParams(location.search);
+const p = new URLSearchParams(location.search + '&' + location.hash.slice(1));
 const estado = document.getElementById('estado'), volver = document.getElementById('volver');
 const fin = (msg, ok) => {
   estado.textContent = msg; estado.className = ok ? '' : 'aviso error'; volver.hidden = false;
@@ -26,8 +26,9 @@ const fin = (msg, ok) => {
   if (ok && window.opener) setTimeout(() => window.close(), 1200);
 };
 history.replaceState(null, '', location.pathname); // el token no queda en el historial
-let cuenta = 'hosting';
-try { cuenta = localStorage.getItem('rc_gps_cuenta') || 'hosting'; } catch { /* sin almacenamiento */ }
+// La cuenta viene en la vuelta (?gps=hosting|lite); si no (enlace viejo), la que se anotó antes de salir.
+let cuenta = p.get('gps');
+if (cuenta !== 'hosting' && cuenta !== 'lite') { try { cuenta = localStorage.getItem('rc_gps_cuenta') || 'hosting'; } catch { cuenta = 'hosting'; } }
 if (!p.get('access_token')) fin(p.get('error') ? `La plataforma GPS no autorizó el acceso (${p.get('error')}).` : 'No se recibió la autorización de la plataforma GPS. Vuelve a intentarlo.', false);
 else {
   try {

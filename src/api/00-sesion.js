@@ -5,6 +5,7 @@ import { crearSesion, cerrarSesion, verificarClave, requiere, soloSiguelo, cambi
 import { registrar } from '../bitacora.js';
 import { ROLES, esSiguelo } from '../permisos.js';
 import { planDeEmpresa, MODULOS_BASE } from '../planes.js';
+import { vincularTrasIngreso } from './15-app-plataforma.js';
 
 const r = express.Router();
 const intentos = new Map(); // límite simple de intentos fallidos por correo+IP
@@ -32,6 +33,8 @@ r.post('/ingresar', async (req, res) => {
   const nativa = req.body.nativa === true;
   const token = await crearSesion(res, { ...u, empresa_id: empresaId }, req.headers['user-agent'], { nativa });
   await registrar({ usuario: u, empresaId, ip: req.ip }, nativa ? 'ingreso_app' : 'ingreso', 'usuario', u.id);
+  // Si vino del menú Apps de la plataforma GPS sin estar vinculado, este ingreso lo vincula (misma empresa, 15 min).
+  if (!nativa) await vincularTrasIngreso(req, res, { ...u, empresa_id: empresaId });
   res.json({ ok: true, destino: esSiguelo(u.rol) ? '/empresas' : u.rol === 'patio' ? '/patio' : '/inicio', ...(nativa ? { token } : {}) });
 });
 

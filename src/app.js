@@ -40,6 +40,13 @@ export async function crearApp() {
   app.use('/api', api);
   app.use('/api', (_req, _res, next) => next(new ErrorHttp(404, 'Ruta no encontrada')));
 
+  // Ícono del menú Apps de la plataforma GPS: la plataforma le pega «/app/logo.png» a la URL registrada tal cual
+  // (medido en Síguelo OS). Se muestra desde el dominio de la plataforma: Cross-Origin-Resource-Policy: cross-origin.
+  const { rutasIcono, CABECERAS_ICONO } = await import('./app-plataforma.js');
+  app.get(rutasIcono(['/app-plataforma.html']), (_req, res) => {
+    res.sendFile(path.join(PUBLICO, 'app', 'logo.png'), { headers: CABECERAS_ICONO }, (err) => { if (err && !res.headersSent) res.status(404).end(); });
+  });
+
   // Archivos estáticos y fuentes (IBM Plex, sin depender de Google Fonts)
   app.use('/node_modules/@fontsource', express.static(path.join(RAIZ, 'node_modules/@fontsource'), { maxAge: '30d' }));
   app.use('/vendor/leaflet', express.static(path.join(RAIZ, 'node_modules/leaflet/dist'), { maxAge: '30d' }));

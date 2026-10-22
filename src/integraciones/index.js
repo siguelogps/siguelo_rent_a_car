@@ -10,7 +10,7 @@ export const TIPOS = {
     nombre: 'Plataforma GPS', descripcion: 'Posición en vivo, km y combustible reales, geocercas, alertas e inmovilización. Se conecta con el usuario y la clave de la plataforma GPS (los mismos del dashboard Síguelo).',
     acciones: true,
     campos: [
-      { clave: 'cuenta', etiqueta: 'Plataforma', opciones: ['hosting', 'lite'], nombres: { hosting: 'Plataforma GPS Síguelo', lite: 'Plataforma GPS Síguelo Lite' }, defecto: 'hosting' },
+      { clave: 'cuenta', etiqueta: 'Plataforma', opciones: ['hosting', 'lite'], nombres: { hosting: 'Síguelo Pro', lite: 'Síguelo Lite' }, defecto: 'hosting' },
       { clave: 'usuario', etiqueta: 'Usuario conectado', soloLectura: true, ayuda: 'Se completa al conectar con usuario y clave.' },
       { clave: 'token', etiqueta: 'Token de acceso', secreto: true, avanzado: true, ayuda: 'Se obtiene solo al conectar con usuario y clave. Pégalo aquí solo si te lo entregó soporte.' },
       { clave: 'geocerca_permitida', etiqueta: 'Geocerca de zona permitida (nombre)', ejemplo: 'Chile continental' },

@@ -1,5 +1,5 @@
 /* Estilo único de las páginas legales de Síguelo GPS (política de privacidad, eliminar cuenta) en todas las
-   herramientas: On Check, On Rent, On Bus, On Mix, On Book y Síguelo Admin (Go y OnSite). Si cambia aquí, se copia
+   herramientas: On Check, On Rent, On Bus, On Mix, On Book y Síguelo On Board (Go y OnSite). Si cambia aquí, se copia
    igual en las demás (pedido de Pablo, 18-oct: «unifica todo a un mismo estilo»). Prefijo legal-. Sin scripts. */
 @font-face { font-family: 'IBM Plex Sans'; font-weight: 400; font-display: swap; src: url(/fuentes/ibm-plex-sans-latin-400-normal.woff2) format('woff2'); }
 @font-face { font-family: 'IBM Plex Sans'; font-weight: 600; font-display: swap; src: url(/fuentes/ibm-plex-sans-latin-600-normal.woff2) format('woff2'); }

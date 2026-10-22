@@ -1,4 +1,4 @@
-// Entrada desde Síguelo Admin: el pase se verifica con la clave pública del panel, sirve una vez y solo para
+// Entrada desde Síguelo On Board: el pase se verifica con la clave pública del panel, sirve una vez y solo para
 // «rentacar»; abre el backoffice del equipo Síguelo y nunca la cuenta de un cliente.
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';

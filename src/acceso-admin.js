@@ -1,4 +1,4 @@
-// Copia de siguelo-admin/cliente/acceso-admin.js: verifica el pase de Síguelo Admin (sin secretos compartidos).
+// Copia de siguelo-admin/cliente/acceso-admin.js: verifica el pase de Síguelo On Board (sin secretos compartidos).
 //
 // El panel manda a la herramienta un POST a su «ruta de acceso» (por defecto /acceso-admin) con el campo «pase».
 // La herramienta lo verifica con esto y abre su propia sesión. No hace falta ningún secreto: la firma se comprueba

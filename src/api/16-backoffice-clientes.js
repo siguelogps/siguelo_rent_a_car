@@ -125,6 +125,8 @@ r.get('/backoffice/clientes/:id', ...base, async (req, res) => {
     empresa: { ...empresa, tiene_logo: !!e.logo_clave }, plan: plan ? { codigo: plan.codigo, nombre: plan.nombre, modulos: plan.modulos, max_vehiculos: plan.max_vehiculos, max_usuarios: plan.max_usuarios, max_sucursales: plan.max_sucursales, precio_uf: plan.precio_uf } : null,
     planes, modulos: MODULOS_PLAN, uso, integraciones, enlaces: await enlacesDe(e.id), piezas: Object.fromEntries(Object.entries(PIEZAS).map(([k, p]) => [k, p.nombre])),
     usuarios: usuarios.map((u) => ({ ...u, rol_nombre: ROLES[u.rol] })), entradas, solicitudes,
+    app: await uno('SELECT estado FROM solicitudes_app WHERE empresa_id = $1', [e.id]).catch(() => null),
+    vehiculos_gps: await uno(`SELECT count(*) FILTER (WHERE gps_unidad_id IS NOT NULL)::int AS con, count(*)::int AS total FROM vehiculos WHERE empresa_id = $1 AND activo`, [e.id]),
     puede_operar: puedeOperar(req.usuario), dias_exportar: DIAS_EXPORTAR
   });
 });

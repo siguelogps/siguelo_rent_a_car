@@ -29,6 +29,11 @@ export const ICONOS = {
   'apps-marca': I('<rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/><path d="M10 7l2-2 2 2M12 5v6"/>'),
   planes: I('<rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18"/><path d="M8 13h3M8 16h6"/>'),
   equipo: I('<circle cx="9" cy="8" r="3.5"/><path d="M2 20a7 7 0 0 1 14 0"/><circle cx="17" cy="9" r="2.5"/><path d="M16 14a5 5 0 0 1 6 5"/>'),
+  'empresa-nueva': I('<path d="M3 21h18"/><path d="M5 21V7l7-4 7 4v14"/><path d="M12 9v6M9 12h6"/>'),
+  solicitudes: I('<path d="M4 4h16v12H8l-4 4z"/><path d="M8 9h8M8 12h5"/>'),
+  conexiones: I('<path d="M9 7H6a5 5 0 0 0 0 10h3"/><path d="M15 7h3a5 5 0 0 1 0 10h-3"/><path d="M8 12h8"/>'),
+  'bitacora-global': I('<path d="M4 4h12l4 4v12H4z"/><path d="M8 10h8M8 14h8M8 18h5"/>'),
+  persona: I('<circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/>', ' width="16" height="16"'),
   ojo: I('<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>', ' width="18" height="18"'),
   plegar: I('<path d="M15 6l-6 6 6 6"/>'),
   menu: I('<path d="M4 7h16M4 12h16M4 17h16"/>'),
@@ -194,7 +199,14 @@ export const yo = () => YO;
 export const puede = (modulo, accion = 'ver') => { const n = YO?.permisos?.[modulo]; return accion === 'ver' ? !!n : n === 'editar'; };
 
 // Páginas del backoffice Síguelo (sin empresa). Cualquier otra página exige estar dentro de una empresa.
-const BACKOFFICE = [['empresas', 'Empresas', '/empresas'], ['planes', 'Planes', '/planes'], ['apps-marca', 'Apps con marca', '/apps-marca'], ['equipo', 'Equipo Síguelo', '/equipo']];
+// 22-oct (espec. Backoffice): menú propio del equipo Síguelo, oscuro y separado del menú del cliente, con franja negra.
+const BACKOFFICE_MENU = [
+  ['Clientes', [['empresas', 'Clientes', '/empresas', 'clientes'], ['empresa-nueva', 'Nuevo cliente', '/empresa-nueva'], ['solicitudes', 'Solicitudes', '/solicitudes', 'solicitudes']]],
+  ['Catálogo', [['planes', 'Planes y módulos', '/planes'], ['apps-marca', 'Apps con marca', '/apps-marca'], ['conexiones', 'Conexiones generales', '/conexiones']]],
+  ['Control', [['bitacora-global', 'Bitácora global', '/bitacora-global'], ['equipo', 'Equipo Síguelo', '/equipo']]]
+];
+const BACKOFFICE = BACKOFFICE_MENU.flatMap(([, items]) => items);
+const NIVEL = { admin: 'admin', usa: 'usa', ve: 've' };
 
 export async function iniciarPagina({ activo, titulo = '' } = {}) {
   YO = await api('yo');
@@ -203,36 +215,43 @@ export async function iniciarPagina({ activo, titulo = '' } = {}) {
   const enBackoffice = BACKOFFICE.some(([m]) => m === activo);
   if (YO.modo === 'backoffice' && !enBackoffice) { location.replace('/empresas'); await new Promise(() => {}); }
   if (YO.modo === 'cliente' && !YO.siguelo && enBackoffice) { location.replace('/inicio'); await new Promise(() => {}); }
+  // Equipo Síguelo dentro de un cliente que abre una página del backoffice: primero sale del cliente (cierra la entrada).
+  if (YO.modo === 'cliente' && YO.siguelo && enBackoffice) { await api('empresa-activa', { body: { empresa_id: null } }); location.reload(); await new Promise(() => {}); }
+  const bo = YO.modo === 'backoffice';
+  const cuenta = bo ? await api('backoffice/resumen').catch(() => null) : null;
   const main = document.querySelector('main') || document.body;
   const iniciales = YO.usuario.nombre.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
   const e = YO.empresa;
   const plegada = (() => { try { return localStorage.getItem('rc_menu_plegado') === '1'; } catch { return false; } })();
   const app = document.createElement('div');
-  app.className = `app${plegada ? ' plegada' : ''}`;
+  app.className = `app${plegada ? ' plegada' : ''}${bo ? ' bo' : ''}`;
+  const fr = franjaSiguelo(bo);
   app.innerHTML = `
   <nav class="menu" aria-label="Menú principal">
     <div class="menu-marca"><img class="logo" src="/img/logo-siguelo.png" alt="Síguelo GPS"><img class="marca-pin" src="/img/logo-pin.png" alt=""><button type="button" class="btn-plegar" aria-label="Plegar menú">${ICONOS.plegar}</button></div>
+    ${bo ? '<span class="bo-sello">Backoffice Síguelo</span><div class="bo-herramienta"><span>Herramienta</span><b>Síguelo On Rent</b></div>' : ''}
     ${e ? `<div class="rc-empresa" title="${esc(e.nombre)}">${e.logo_clave ? `<img class="rc-empresa-logo" src="/api/logo/${esc(e.slug)}" alt="">` : `<span class="rc-empresa-logo" style="background:${esc(e.color || '#0F5F58')}">${esc(e.nombre.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase())}</span>`}<div><b>${esc(e.nombre)}</b><span>On Rent · Plan ${esc(YO.plan?.nombre || (e.plan || 'pro').replace(/^./, (c) => c.toUpperCase()))}</span></div></div>` : ''}
-    ${YO.modo === 'backoffice' ? `<div class="menu-grupo">Backoffice Síguelo</div>${BACKOFFICE.filter(([m]) => m !== 'equipo' || YO.usuario.rol === 'superadmin').map(([m, n, href]) => `<a class="item" href="${href}" title="${n}"${m === activo ? ' aria-current="page"' : ''}>${ICONOS[m]}<span>${n}</span></a>`).join('')}`
+    ${bo ? BACKOFFICE_MENU.map(([g, items]) => `<div class="menu-grupo">${g}</div>${items.filter(([m]) => m !== 'equipo' || YO.usuario.rol === 'superadmin').map(([m, n, href, k]) => `<a class="item" href="${href}" title="${n}"${m === activo ? ' aria-current="page"' : ''}>${ICONOS[m]}<span>${n}</span>${k && cuenta?.[k] ? `<i class="n">${cuenta[k]}</i>` : ''}</a>`).join('')}`).join('')
     : MENU.map(([g, items]) => {
       const vis = items.filter(([m]) => YO.permisos[m] || (m === 'apps' && YO.permisos.configuracion));
       return vis.length ? `<div class="menu-grupo">${g}</div>${vis.map(([m, n, href]) => `<a class="item" href="${href}" title="${n}"${m === activo ? ' aria-current="page"' : ''}>${ICONOS[m]}<span>${n}</span></a>`).join('')}` : '';
     }).join('')}
     <div class="menu-pie">
-      <button type="button" class="menu-usuario" id="rc-usuario"><span class="avatar">${esc(iniciales)}</span><div><b>${esc(YO.usuario.nombre)}</b><span>${esc(YO.usuario.rol_nombre)}</span></div></button>
+      <button type="button" class="menu-usuario" id="rc-usuario"><span class="avatar">${esc(iniciales)}</span><div><b>${esc(YO.usuario.nombre)}</b><span>${YO.siguelo ? `Equipo Síguelo · ${esc(NIVEL[YO.siguelo_nivel] || '')}` : esc(YO.usuario.rol_nombre)}</span></div></button>
     </div>
   </nav>
   <div class="principal">
-    <header class="barra">
+    ${fr}
+    <header class="barra"${fr ? ' style="top:var(--bo-franja-alto)"' : ''}>
       <button type="button" class="btn-icono btn-menu-movil" aria-label="Abrir menú">${ICONOS.menu}</button>
       <span class="titulo">${esc(titulo)}</span>
-      ${YO.modo === 'backoffice' ? '<span class="chip marca">Backoffice Síguelo</span>' : `<div class="buscar">${ICONOS.buscar}<input id="rc-buscar" placeholder="Buscar patente, RUT, cliente o folio…" autocomplete="off"><div class="buscar-res" id="rc-buscar-res" hidden></div></div>`}
+      ${bo ? '' : `<div class="buscar">${ICONOS.buscar}<input id="rc-buscar" placeholder="Buscar patente, RUT, cliente o folio…" autocomplete="off"><div class="buscar-res" id="rc-buscar-res" hidden></div></div>`}
       <div class="acciones">
         <span id="rc-tema"></span>
-        ${e?.marcha_blanca ? '<a class="chip rc-marcha" href="/configuracion#integraciones" title="Correos, WhatsApp, cobros y documentos tributarios detenidos hasta desactivarla">● Marcha blanca</a>' : ''}
+        ${e?.marcha_blanca ? '<a class="chip rc-marcha" href="/configuracion#conexiones" title="Correos, WhatsApp, cobros y documentos tributarios detenidos hasta que Síguelo GPS la termine">● Marcha blanca</a>' : ''}
+        ${e?.estado === 'baja' ? `<span class="chip error" title="Puedes revisar y exportar tus datos hasta esa fecha">Cuenta dada de baja · exportar hasta ${fecha(e.exportar_hasta)}</span>` : ''}
       </div>
     </header>
-    ${YO.ver_como ? `<div class="rc-ver-como" role="status">${ICONOS.ojo}<span>Estás viendo la cuenta de <b>${esc(e?.nombre || '')}</b> como equipo Síguelo. Lo que hagas queda registrado a tu nombre en su bitácora.</span><button type="button" class="btn peq" id="rc-salir-ver-como">Volver al backoffice</button></div>` : ''}
   </div>`;
   main.classList.add('contenido');
   app.querySelector('.principal').appendChild(main);
@@ -245,9 +264,19 @@ export async function iniciarPagina({ activo, titulo = '' } = {}) {
   // Tema Automático / Claro / Oscuro (lo maneja /tema.js, cargado en el <head>).
   if (window.SigueloTema) app.querySelector('#rc-tema').replaceWith(window.SigueloTema.boton());
   else app.querySelector('#rc-tema').remove();
-  app.querySelector('#rc-salir-ver-como')?.addEventListener('click', async () => { const r = await api('empresa-activa', { body: { empresa_id: null } }); location.href = r.destino || '/empresas'; });
+  app.querySelector('#bo-volver')?.addEventListener('click', async () => { const r = await api('empresa-activa', { body: { empresa_id: null } }); location.href = YO.empresa ? `/empresas/${YO.empresa.id}#usuarios` : r.destino || '/empresas'; });
   if (YO.modo !== 'backoffice') activarBuscador(app);
   return YO;
+}
+
+// Franja superior del equipo Síguelo: negra en el backoffice; azul en «Ver como» (solo lectura); amarilla al «Operar».
+// El color dice de un vistazo si lo que hagas tiene efecto. Mientras se opera no aparece el menú Síguelo: se vuelve con la franja.
+function franjaSiguelo(bo) {
+  if (bo) return `<div class="bo-franja" role="note">${ICONOS.persona}<span><b>Equipo Síguelo · On Rent</b> · backoffice de clientes</span><span class="bo-pase">${YO.siguelo_nivel ? `Nivel On Board <i>${esc(YO.siguelo_nivel)}</i> · ` : ''}<a href="https://admin.siguelogps.com">Volver a On Board</a></span></div>`;
+  if (!YO.siguelo_modo) return '';
+  const nombre = esc(YO.empresa?.nombre || '');
+  if (YO.siguelo_modo === 'ver') return `<div class="bo-franja ver" role="status">${ICONOS.ojo}<span><b>Ver como · ${nombre}</b> · solo lectura, no puedes cambiar nada</span><button type="button" class="btn" id="bo-volver">← Volver al backoffice</button></div>`;
+  return `<div class="bo-franja operar" role="status">${ICONOS.persona}<span><b>Operando como Síguelo en ${nombre}</b> · todo lo que hagas queda en la bitácora del cliente con tu nombre</span><span class="bo-pase">${YO.siguelo_desde ? `Desde ${hora(YO.siguelo_desde)} · ` : ''}motivo: ${esc(YO.siguelo_motivo || '—')}</span><button type="button" class="btn" id="bo-volver">← Volver al backoffice</button></div>`;
 }
 
 // «Mi cuenta» (igual que en los demás sistemas Síguelo): cambiar la clave y salir.

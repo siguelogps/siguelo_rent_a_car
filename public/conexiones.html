@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Conexiones generales</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/img/app/apple-touch-icon.png"><meta name="theme-color" content="#FFFFFF">
+<script src="/tema.js"></script><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/config.css"><link rel="stylesheet" href="/css/backoffice.css">
+</head>
+<body>
+<main>
+  <div class="pagina-cab"><div><h1>Conexiones generales</h1><p>Servicios de Síguelo comunes a todos los clientes. Los secretos quedan cifrados y no se vuelven a mostrar.</p></div></div>
+  <div class="bo-integ" id="lista"><p class="rc-cargando">Cargando…</p></div>
+  <div class="tarjeta bloque" id="extra"></div>
+</main>
+<script type="module">
+// Backoffice Síguelo · Conexiones generales (22-oct): almacenamiento S3 (antes de cada cliente), correo de Síguelo y CRM.
+import { iniciarPagina, api, esc, fechaHora, toast, toastError, leerForm } from '/comun.js';
+const yo = await iniciarPagina({ activo: 'conexiones', titulo: 'Conexiones generales' });
+const ed = yo.usuario.rol === 'superadmin';
+const SIN_AUTORRELLENO = ' autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true"';
+const ICO = { almacenamiento: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6"/><path d="M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3"/></svg>',
+  correo_siguelo: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>',
+  crm: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4h16v12H8l-4 4z"/></svg>' };
+async function cargar() {
+  const D = await api('backoffice/conexiones');
+  const campo = (c, f) => {
+    const v = c.config[f.clave] ?? '';
+    const ancho = /url|endpoint|aviso|remitente/.test(f.clave) ? ' ancho' : '';
+    if (f.opciones) return `<label class="etiqueta${ancho}">${esc(f.etiqueta)}<select class="campo" name="${f.clave}"${ed ? '' : ' disabled'}>${f.opciones.map((o) => `<option${String(v) === o ? ' selected' : ''}>${esc(o)}</option>`).join('')}</select></label>`;
+    return `<label class="etiqueta${ancho}">${esc(f.etiqueta)}<input class="campo${f.secreto ? ' mono bo-secreto' : ''}" name="${f.clave}" type="${f.tipo === 'numero' ? 'number' : 'text'}" value="${esc(v)}" placeholder="${esc(f.ejemplo || '')}"${SIN_AUTORRELLENO}${ed ? '' : ' disabled'}></label>`;
+  };
+  document.getElementById('lista').innerHTML = D.conexiones.map((c) => `<article class="bo-int" id="c-${c.tipo}">
+    <div class="bo-int-cab"><span class="bo-int-ico">${ICO[c.tipo]}</span><div><h3>${esc(c.nombre)}</h3><p>${esc(c.descripcion)}</p></div><div class="der"><span class="chip ${c.lista ? 'ok' : 'aviso'}">${c.lista ? 'Configurada' : 'Faltan datos'}</span></div></div>
+    <div class="bo-config"><form class="campos-int" onsubmit="return false">${c.campos.map((f) => campo(c, f)).join('')}</form>${ed ? '<div><button class="btn primario peq" data-guardar>Guardar</button></div>' : '<p class="peq muted">Solo un superadmin cambia las conexiones generales.</p>'}</div>
+    <div class="bo-int-pie"><span class="peq">${c.estado_prueba ? `${c.estado_prueba.startsWith('ok') ? '✓' : '✕'} ${esc(c.estado_prueba.replace(/^(ok|error):\s*/, ''))} · ${fechaHora(c.probado_en)}` : '<span class="muted">Sin pruebas todavía</span>'}</span>${ed ? '<button class="btn peq" data-probar>Probar</button>' : ''}</div></article>`).join('');
+  document.getElementById('extra').innerHTML = `<h2>También comunes a todos</h2>
+    <div class="rejilla-3"><div class="dato"><span>Avisos a la app (push)</span><span class="v">${D.push.configurado ? `configurado · ${esc(D.push.proyecto)}` : 'sin configurar'} · <a href="/apps-marca">Apps con marca</a></span></div>
+    <div class="dato"><span>Herramienta en el CRM</span><span class="v mono">${esc(D.herramienta)}</span></div>
+    <div class="dato"><span>Clientes con almacenamiento propio (heredado)</span><span class="v">${D.almacenamiento_propio.length ? D.almacenamiento_propio.map((e) => `<a href="/empresas/${e.id}">${esc(e.nombre)}</a>`).join(', ') : 'ninguno'}</span></div></div>
+    <p class="peq muted">Los clientes que ya tenían su propio bucket lo siguen usando para no perder archivos; los nuevos archivos de los demás van al almacenamiento de Síguelo.</p>`;
+  for (const c of D.conexiones) {
+    const card = document.getElementById(`c-${c.tipo}`);
+    card.querySelector('[data-guardar]')?.addEventListener('click', async () => { try { await api(`backoffice/conexiones/${c.tipo}`, { method: 'PUT', body: leerForm(card.querySelector('form')) }); toast('Guardado', 'ok'); cargar(); } catch (e) { toastError(e); } });
+    card.querySelector('[data-probar]')?.addEventListener('click', async (ev) => { ev.target.disabled = true; try { const r = await api(`backoffice/conexiones/${c.tipo}/probar`, { body: {} }); toast(r.mensaje, r.ok ? 'ok' : 'error'); cargar(); } catch (e) { toastError(e); ev.target.disabled = false; } });
+  }
+}
+cargar().catch(toastError);
+</script>
+</body>
+</html>

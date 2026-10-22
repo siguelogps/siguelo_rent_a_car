@@ -133,3 +133,22 @@
 .cf-gps-manual[open] { display: flex; flex-direction: column; gap: 8px; }
 .cf-gps-manual .rc-fila { display: flex; gap: 8px; }
 .cf-gps-manual .campo { flex: 1; min-width: 0; }
+
+/* Configuración › Conexiones (22-oct, espec. Backoffice): tarjetas de solo lectura «Gestionado por Síguelo GPS». */
+.cf-gest-banner { display: flex; gap: 14px; align-items: center; padding: 14px 18px; border-radius: 12px; background: var(--card); border: 1px solid var(--line); flex-wrap: wrap; }
+.cf-gest-banner img { height: 30px; width: auto; }
+.cf-gest-banner > div:not(.der) { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 220px; }
+.cf-gest-banner span { font-size: 13px; color: var(--muted); }
+.cf-gest-banner .der { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.cf-gest { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.cf-gest .tarjeta { display: flex; flex-direction: column; min-width: 0; }
+.cf-gest .cab { display: flex; gap: 12px; align-items: flex-start; padding: 16px 18px 10px; }
+.cf-gest .cab > div { flex: 1; min-width: 0; }
+.cf-gest .cab h3 { font-size: 15px; font-weight: 600; }
+.cf-gest .cab p { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+.cf-gest .cuerpo { padding: 0 18px 12px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px 14px; }
+.cf-gest .pie { margin-top: auto; display: flex; gap: 8px; align-items: center; justify-content: space-between; padding: 10px 18px; border-top: 1px solid var(--line-2); flex-wrap: wrap; }
+.cf-sello-gest { font-size: 12px; font-weight: 600; color: var(--marca-texto); }
+.cf-subtitulo { font-size: 16px; font-weight: 600; margin-top: 6px; }
+.chip.mb { background: var(--amber-soft); color: var(--tx-ambar); }
+@media (max-width: 900px) { .cf-gest { grid-template-columns: minmax(0, 1fr); } }

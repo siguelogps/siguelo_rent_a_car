@@ -46,7 +46,7 @@ export const TIPOS = {
     nombre: 'Transbank Webpay Plus', descripcion: 'Cobro de reservas y garantía con captura diferida (retener y luego capturar o liberar).',
     acciones: true,
     campos: [
-      { clave: 'ambiente', etiqueta: 'Ambiente', opciones: ['integracion', 'produccion'], defecto: 'integracion' },
+      { clave: 'ambiente', etiqueta: 'Ambiente', opciones: ['integracion', 'produccion'], nombres: { integracion: 'Integración (pruebas)', produccion: 'Producción' }, defecto: 'integracion' },
       { clave: 'codigo_comercio', etiqueta: 'Código de comercio (Webpay Plus)' },
       { clave: 'codigo_comercio_diferido', etiqueta: 'Código de comercio captura diferida' },
       { clave: 'api_key', etiqueta: 'API Key secret', secreto: true }
@@ -67,7 +67,7 @@ export const TIPOS = {
     descripcionCliente: 'Boletas, facturas y notas de crédito ante el SII, desde Facturación.',
     acciones: true,
     campos: [
-      { clave: 'ambiente', etiqueta: 'Ambiente', opciones: ['certificacion', 'produccion'], defecto: 'certificacion' },
+      { clave: 'ambiente', etiqueta: 'Ambiente', opciones: ['certificacion', 'produccion'], nombres: { certificacion: 'Certificación', produccion: 'Producción' }, defecto: 'certificacion' },
       { clave: 'api_key', etiqueta: 'API key SimpleAPI', secreto: true },
       { clave: 'rut_certificado', etiqueta: 'RUT del titular del certificado' },
       { clave: 'clave_certificado', etiqueta: 'Clave del certificado (.pfx)', secreto: true },

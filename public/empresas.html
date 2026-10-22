@@ -2,112 +2,108 @@
 <html lang="es-CL">
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Empresas</title><link rel="icon" href="/img/logo-pin.png">
+<title>Clientes</title><link rel="icon" href="/img/logo-pin.png">
 <link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/img/app/apple-touch-icon.png"><meta name="theme-color" content="#FFFFFF">
 <script src="/tema.js"></script><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/config.css"><link rel="stylesheet" href="/css/backoffice.css">
 </head>
 <body>
 <main>
   <div class="pagina-cab">
-    <div><h1>Empresas</h1><p>Clientes de Síguelo On Rent · backoffice</p></div>
-    <div class="acciones"><input class="campo" id="filtro" placeholder="Buscar por nombre, RUT o slug…" style="min-width:240px"><button class="btn primario" id="nueva">+ Nueva empresa</button></div>
+    <div><h1>Clientes de Síguelo On Rent</h1><p>Altas, planes, integraciones y estado de cada rentacar. Todo cambio queda en la bitácora.</p></div>
+    <div class="acciones"><a class="btn primario" href="/empresa-nueva" id="nueva">+ Nuevo cliente</a></div>
   </div>
   <div class="kpis" id="kpis"></div>
-  <div class="tarjeta"><div class="tabla-env"><table class="tabla">
-    <thead><tr><th>Empresa</th><th>Portal</th><th>Plan</th><th>Uso del plan</th><th>Marcha blanca</th><th>Estado</th><th>Alta</th><th></th></tr></thead>
-    <tbody id="lista"><tr><td colspan="8" class="rc-cargando">Cargando…</td></tr></tbody>
-  </table></div></div>
+  <div class="tarjeta">
+    <div class="bo-filtros" id="filtros"></div>
+    <div class="tabla-env"><table class="tabla">
+      <thead><tr><th>Cliente</th><th>Estado</th><th>Plan y módulos</th><th>Vehículos</th><th>Usuarios</th><th>Integraciones</th><th>Última actividad</th><th></th></tr></thead>
+      <tbody id="lista"><tr><td colspan="8" class="rc-cargando">Cargando…</td></tr></tbody>
+    </table></div>
+    <div class="bo-leyenda" id="leyenda"></div>
+  </div>
 </main>
 <script type="module">
-import { iniciarPagina, api, esc, fecha, rut, validarRut, modal, confirmar, toast, toastError, leerForm } from '/comun.js';
-import { detallePlan, precio, usos } from '/js/backoffice.js';
-const yo = await iniciarPagina({ activo: 'empresas', titulo: 'Empresas' });
-if (!yo.siguelo) {
-  document.querySelector('main').innerHTML = '<p class="aviso error">Solo el equipo de Síguelo puede administrar las empresas.</p>';
-  throw new Error('sin permiso');
-}
-let LISTA = [], PLANES = [], MODULOS = {};
-const planDe = (c) => PLANES.find((p) => p.codigo === c);
-async function cargar() {
-  const [l, pl] = await Promise.all([api('empresas'), api('backoffice/planes')]);
-  LISTA = l; PLANES = pl.planes; MODULOS = pl.modulos;
-  pintar();
+// Backoffice Síguelo · lista de clientes (22-oct, espec. aprobada por Pablo, mockup 01-clientes).
+import { iniciarPagina, api, esc, fecha, hora, rut, modal, toastError } from '/comun.js';
+const yo = await iniciarPagina({ activo: 'empresas', titulo: 'Clientes' });
+const LETRA = { gps: 'G', simpleapi: 'F', correo: 'C', whatsapp: 'W', dashboard_siguelo: 'O' };
+const NOMBRE_SALUD = { ok: 'funciona', esp: 'en preparación', mal: 'falla', no: 'no contratada' };
+const F = { estado: 'todos', plan: '', integ: '', texto: '' };
+let D = { clientes: [], tipos: [] };
+if (!yo.puede_operar) document.getElementById('nueva').hidden = true;
+
+const iniciales = (n) => n.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
+const cuando = (v) => {
+  if (!v) return '—';
+  const d = Math.round((Date.parse(new Date().toISOString().slice(0, 10)) - Date.parse(new Date(v).toISOString().slice(0, 10))) / 864e5);
+  return d === 0 ? `hoy ${hora(v)}` : d === 1 ? `ayer ${hora(v)}` : fecha(v);
+};
+const estadoDe = (e) => (e.estado === 'activo' && e.marcha_blanca ? 'marcha' : e.estado);
+function chipEstado(e) {
+  if (e.estado === 'suspendido') return `<span class="chip susp">Suspendido</span><div class="peq muted">${esc(e.estado_motivo || '')}${e.estado_en ? ` · ${fecha(e.estado_en)}` : ''}</div>`;
+  if (e.estado === 'baja') return `<span class="chip bajac">Baja</span><div class="peq muted">exportar hasta ${fecha(e.exportar_hasta)}</div>`;
+  return e.marcha_blanca ? '<span class="chip mb">Marcha blanca</span>' : '<span class="chip ok">Activo</span>';
 }
 
-function pintar() {
-  const t = document.getElementById('filtro').value.trim().toLowerCase();
-  const vis = LISTA.filter((e) => !t || [e.nombre, e.slug, e.rut, e.razon_social].some((x) => String(x || '').toLowerCase().includes(t)));
-  document.getElementById('kpis').innerHTML = `
-    <div class="kpi"><span>Empresas</span><b>${LISTA.length}</b><small>${LISTA.filter((e) => e.activa).length} activas</small></div>
-    <div class="kpi"><span>Vehículos</span><b>${LISTA.reduce((s, e) => s + e.vehiculos, 0).toLocaleString('es-CL')}</b><small>en todas las empresas</small></div>
-    <div class="kpi"><span>Usuarios</span><b>${LISTA.reduce((s, e) => s + e.usuarios, 0)}</b><small>de los clientes</small></div>
-    <div class="kpi"><span>En marcha blanca</span><b>${LISTA.filter((e) => e.marcha_blanca).length}</b><small>aún sin salidas reales</small></div>`;
-  document.getElementById('lista').innerHTML = vis.map((e) => {
-    const ini = e.nombre.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
-    const p = planDe(e.plan);
-    return `<tr><td><div class="rc-fila" style="flex-wrap:nowrap">${e.logo_clave ? `<img class="rc-empresa-logo" src="/api/logo/${esc(e.slug)}" alt="">` : `<span class="rc-empresa-logo" style="background:${esc(e.color || '#0F5F58')}">${esc(ini)}</span>`}
-      <div><b>${esc(e.nombre)}</b><div class="peq muted mono">${e.rut ? rut(e.rut) : 'sin RUT'}</div></div></div></td>
-      <td style="white-space:nowrap"><a class="mono peq" href="/reservar/${esc(e.slug)}" target="_blank" rel="noopener">/reservar/${esc(e.slug)}</a></td>
-      <td><div class="bo-plan-celda"><select class="campo" data-plan="${e.id}" aria-label="Plan">${PLANES.filter((x) => x.activo || x.codigo === e.plan).map((x) => `<option value="${esc(x.codigo)}"${x.codigo === e.plan ? ' selected' : ''}>${esc(x.nombre)}</option>`).join('')}${p ? '' : `<option selected>${esc(e.plan)} (no existe)</option>`}</select>
-        ${p ? `<button class="btn peq" data-detalle="${e.id}">Ver detalle</button>` : ''}</div><div class="peq muted">${p ? precio(p) : ''}</div></td>
-      <td>${p ? usos(e, p) : ''}</td>
-      <td>${e.marcha_blanca ? '<span class="chip rc-marcha">● Activa</span>' : '<span class="chip ok">Operación real</span>'}</td>
-      <td><label class="cf-switch-et"><span class="switch"><input type="checkbox" data-activa="${e.id}"${e.activa ? ' checked' : ''} aria-label="Empresa activa"><span></span></span><span>${e.activa ? 'Activa' : 'Suspendida'}</span></label></td>
-      <td class="mono peq" style="white-space:nowrap">${fecha(e.creado_en)}</td>
-      <td style="text-align:right"><button class="btn peq primario" data-entrar="${e.id}" title="Entrar a la cuenta del cliente como equipo Síguelo">Ver como</button></td></tr>`;
-  }).join('') || '<tr><td colspan="8" class="rc-vacio">Sin empresas</td></tr>';
+async function cargar() {
+  D = await api('backoffice/clientes');
+  pintar();
 }
-document.getElementById('filtro').oninput = pintar;
-document.getElementById('lista').addEventListener('click', async (ev) => {
-  const d = ev.target.closest('[data-detalle]');
-  if (d) { const e = LISTA.find((x) => x.id === Number(d.dataset.detalle)); const p = planDe(e.plan); return modal({ titulo: `Plan ${p.nombre} · ${e.nombre}`, html: detallePlan(p, MODULOS, e) }); }
-  const b = ev.target.closest('[data-entrar]');
-  if (!b) return;
-  try { const r = await api('empresa-activa', { body: { empresa_id: Number(b.dataset.entrar) } }); location.href = r.destino || '/inicio'; } catch (e) { toastError(e); }
+function pintar() {
+  const L = D.clientes;
+  const n = (f) => L.filter(f).length;
+  const conFalla = n((e) => Object.values(e.salud).includes('mal'));
+  const solicitudes = L.reduce((s, e) => s + e.solicitudes, 0);
+  document.getElementById('kpis').innerHTML = `
+    <div class="kpi"><span>Activos</span><b>${n((e) => e.estado === 'activo')}</b><small>de ${L.length} clientes</small></div>
+    <div class="kpi"><span>En marcha blanca</span><b>${n((e) => e.estado === 'activo' && e.marcha_blanca)}</b><small>sin mensajes reales todavía</small></div>
+    <div class="kpi"><span>Suspendidos</span><b>${n((e) => e.estado === 'suspendido')}</b><small>sin acceso a la herramienta</small></div>
+    <div class="kpi"><span>Integraciones con falla</span><b class="${conFalla ? 'mal' : ''}">${conFalla}</b><small class="${conFalla ? 'mal' : ''}">última prueba con error</small></div>
+    <div class="kpi"><span>Solicitudes pendientes</span><b>${solicitudes}</b><small><a href="/solicitudes">ver la bandeja</a></small></div>`;
+  const planes = [...new Map(L.map((e) => [e.plan, e.plan_nombre || e.plan])).entries()];
+  const filtro = (k, t, c) => `<button type="button" class="filtro" data-estado="${k}" aria-pressed="${F.estado === k}">${t} <span class="n">${c}</span></button>`;
+  document.getElementById('filtros').innerHTML = `
+    <label class="buscar"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg><input id="f-texto" type="search" placeholder="Nombre, RUT o portal" value="${esc(F.texto)}"></label>
+    ${filtro('todos', 'Todos', L.length)}${filtro('activo', 'Activos', n((e) => e.estado === 'activo' && !e.marcha_blanca))}${filtro('marcha', 'Marcha blanca', n((e) => estadoDe(e) === 'marcha'))}${filtro('suspendido', 'Suspendidos', n((e) => e.estado === 'suspendido'))}${filtro('baja', 'Baja', n((e) => e.estado === 'baja'))}
+    <select class="campo" id="f-plan" aria-label="Plan"><option value="">Todos los planes</option>${planes.map(([c, t]) => `<option value="${esc(c)}"${F.plan === c ? ' selected' : ''}>${esc(t)}</option>`).join('')}</select>
+    <select class="campo" id="f-integ" aria-label="Integraciones"><option value="">Integraciones: todas</option><option value="mal"${F.integ === 'mal' ? ' selected' : ''}>Con falla</option><option value="esp"${F.integ === 'esp' ? ' selected' : ''}>En preparación</option></select>`;
+  const t = F.texto.toLowerCase().replace(/[.\-\s]/g, '');
+  const vis = L.filter((e) => (F.estado === 'todos' || (F.estado === 'activo' ? e.estado === 'activo' && !e.marcha_blanca : estadoDe(e) === F.estado))
+    && (!F.plan || e.plan === F.plan) && (!F.integ || Object.values(e.salud).includes(F.integ))
+    && (!t || [e.nombre, e.razon_social, e.rut, e.slug].some((x) => String(x || '').toLowerCase().replace(/[.\-\s]/g, '').includes(t))));
+  document.getElementById('lista').innerHTML = vis.map((e) => {
+    const apagado = e.estado !== 'activo';
+    return `<tr class="${apagado ? 'bo-apagada' : ''}">
+      <td><a class="bo-cli" href="/empresas/${e.id}">${e.logo_clave ? `<img class="rc-empresa-logo" src="/api/logo/${esc(e.slug)}" alt="">` : `<span class="rc-empresa-logo" style="background:${esc(e.color || '#0F5F58')}">${esc(iniciales(e.nombre))}</span>`}
+        <span><b>${esc(e.nombre)}</b><small>${e.rut ? rut(e.rut) : 'sin RUT'} · desde ${fecha(e.creado_en)}</small></span></a></td>
+      <td>${chipEstado(e)}</td>
+      <td><span class="chip">${esc(e.plan_nombre || e.plan)}</span>${(e.modulos_extra || []).includes('app_propia') ? ' <span class="chip marca">App con marca</span>' : ''}</td>
+      <td class="mono">${e.vehiculos}</td><td class="mono">${e.usuarios}</td>
+      <td><span class="bo-salud">${D.tipos.map((x) => `<i class="${e.salud[x.tipo]}" title="${esc(x.nombre)}: ${NOMBRE_SALUD[e.salud[x.tipo]]}">${LETRA[x.tipo] || '?'}</i>`).join('')}</span></td>
+      <td class="mono peq" style="white-space:nowrap">${cuando(e.ultima_actividad)}</td>
+      <td><div class="bo-acc"><button class="btn peq" data-ver="${e.id}">Ver como</button><button class="btn peq" data-operar="${e.id}"${apagado || !yo.puede_operar ? ' disabled title="A un cliente suspendido o dado de baja solo se puede «Ver como»"' : ''}>Operar</button><a class="btn peq primario" href="/empresas/${e.id}">Abrir</a></div></td></tr>`;
+  }).join('') || '<tr><td colspan="8" class="rc-vacio">Sin clientes con estos filtros</td></tr>';
+  document.getElementById('leyenda').innerHTML = `<span class="mono">${vis.length} de ${L.length}</span>
+    ${D.tipos.map((x) => `<span><b class="mono">${LETRA[x.tipo]}</b> ${esc(x.nombre)}</span>`).join('')}
+    <span style="margin-left:auto"><span class="bo-salud"><i class="ok">✓</i></span> funciona</span><span><span class="bo-salud"><i class="esp">…</i></span> en preparación</span><span><span class="bo-salud"><i class="mal">!</i></span> falla</span><span><span class="bo-salud"><i class="no">–</i></span> no contratada</span>`;
+}
+
+const main = document.querySelector('main');
+main.addEventListener('click', async (ev) => {
+  const f = ev.target.closest('[data-estado]');
+  if (f) { F.estado = f.dataset.estado; return pintar(); }
+  const v = ev.target.closest('[data-ver]');
+  if (v) { try { const r = await api(`backoffice/clientes/${v.dataset.ver}/entrar`, { body: { modo: 'ver' } }); location.href = r.destino; } catch (e) { toastError(e); } return; }
+  const o = ev.target.closest('[data-operar]');
+  if (o) {
+    const c = D.clientes.find((x) => x.id === Number(o.dataset.operar));
+    modal({ titulo: `Operar en ${c.nombre}`, html: `<p class="peq muted">Actúas como administrador del cliente. La franja amarilla queda arriba todo el rato y cada cambio va a la bitácora del cliente con tu nombre y este motivo.</p>
+      <label class="etiqueta">Motivo<input class="campo" name="motivo" placeholder="Soporte, ticket 1187" maxlength="300"></label>`,
+    botones: [{ texto: 'Cancelar' }, { texto: 'Operar', clase: 'contorno', accion: async (cu) => { const r = await api(`backoffice/clientes/${c.id}/entrar`, { body: { modo: 'operar', motivo: cu.querySelector('[name=motivo]').value } }); location.href = r.destino; } }] });
+  }
 });
-document.getElementById('lista').addEventListener('change', async (ev) => {
-  const a = ev.target.closest('[data-activa]'), p = ev.target.closest('[data-plan]');
-  try {
-    if (a) {
-      const e = LISTA.find((x) => x.id === Number(a.dataset.activa));
-      if (!a.checked && !await confirmar('Suspender empresa', `<b>${esc(e.nombre)}</b> dejará de aparecer en el portal de reservas. Sus usuarios conservan sus datos.`, { boton: 'Suspender', peligro: true })) { a.checked = true; return; }
-      await api(`configuracion/empresas/${e.id}`, { method: 'PATCH', body: { activa: a.checked } });
-      toast(a.checked ? 'Empresa activada' : 'Empresa suspendida', 'ok'); cargar();
-    }
-    if (p) { await api(`configuracion/empresas/${p.dataset.plan}`, { method: 'PATCH', body: { plan: p.value } }); toast('Plan actualizado', 'ok'); cargar(); }
-  } catch (e) { toastError(e); cargar(); }
-});
-const claveAzar = () => { const abc = 'abcdefghjkmnpqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789'; return Array.from(crypto.getRandomValues(new Uint8Array(10)), (x) => abc[x % abc.length]).join(''); };
-document.getElementById('nueva').onclick = () => modal({ titulo: 'Nueva empresa (rentacar)', ancho: true, html: `
-  <div class="cf-form">
-    <label class="etiqueta">Nombre comercial<input class="campo" name="nombre" required placeholder="Patagonia Rent a Car"></label>
-    <label class="etiqueta">Identificador del portal (slug)<input class="campo mono" name="slug" placeholder="se genera desde el nombre"></label>
-    <label class="etiqueta">RUT<input class="campo" name="rut" placeholder="76.123.456-7"></label>
-    <label class="etiqueta">Razón social<input class="campo" name="razon_social"></label>
-    <label class="etiqueta">Dirección<input class="campo" name="direccion"></label>
-    <label class="etiqueta">Comuna<input class="campo" name="comuna"></label>
-    <label class="etiqueta">Ciudad<input class="campo" name="ciudad"></label>
-    <label class="etiqueta">Teléfono<input class="campo" name="telefono"></label>
-    <label class="etiqueta">Correo de contacto<input class="campo" type="email" name="correo"></label>
-    <label class="etiqueta">Primera sucursal<input class="campo" name="sucursal" placeholder="Casa matriz"></label>
-    <label class="etiqueta">Plan<select class="campo" name="plan">${PLANES.filter((x) => x.activo).map((x) => `<option value="${esc(x.codigo)}"${x.codigo === 'pro' ? ' selected' : ''}>${esc(x.nombre)} · ${precio(x)}</option>`).join('')}</select></label>
-  </div>
-  <h3 style="font-size:14px">Administrador inicial</h3>
-  <div class="cf-form">
-    <label class="etiqueta">Nombre<input class="campo" name="admin_nombre" required></label>
-    <label class="etiqueta">Correo<input class="campo" type="email" name="admin_correo" required></label>
-    <label class="etiqueta">Clave temporal<input class="campo mono" name="admin_clave" value="${claveAzar()}" required></label>
-  </div>
-  <p class="cf-ayuda">La empresa parte en <b>marcha blanca</b>, con las plantillas por defecto y sin integraciones activas.</p>`,
-botones: [{ texto: 'Cancelar' }, { texto: 'Crear empresa', clase: 'primario', accion: async (c) => {
-  const d = leerForm(c);
-  if (d.rut && !validarRut(d.rut)) throw new Error('El RUT de la empresa no es válido');
-  if ((d.admin_clave || '').length < 10) throw new Error('La clave del administrador debe tener al menos 10 caracteres');
-  const e = await api('empresas', { body: d });
-  toast(`${e.nombre} creada · portal /reservar/${e.slug}`, 'ok');
-  setTimeout(() => modal({ titulo: 'Empresa creada', html: `<p>Entrega estos datos al administrador de <b>${esc(e.nombre)}</b>:</p><div class="cf-clave" style="font-size:15px;text-align:left">Correo: ${esc(d.admin_correo)}<br>Clave temporal: ${esc(d.admin_clave)}</div><p class="peq muted">Puede cambiar la clave en «Mi cuenta» (su nombre, abajo en el menú).</p>` }), 50);
-  cargar();
-} }] });
+main.addEventListener('input', (ev) => { if (ev.target.id === 'f-texto') { F.texto = ev.target.value; const pos = ev.target.selectionStart; pintar(); const i = document.getElementById('f-texto'); i.focus(); i.setSelectionRange(pos, pos); } });
+main.addEventListener('change', (ev) => { if (ev.target.id === 'f-plan') { F.plan = ev.target.value; pintar(); } if (ev.target.id === 'f-integ') { F.integ = ev.target.value; pintar(); } });
 cargar().catch(toastError);
 </script>
 </body>

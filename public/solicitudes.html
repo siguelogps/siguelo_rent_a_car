@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Solicitudes</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/img/app/apple-touch-icon.png"><meta name="theme-color" content="#FFFFFF">
+<script src="/tema.js"></script><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/config.css"><link rel="stylesheet" href="/css/backoffice.css">
+</head>
+<body>
+<main>
+  <div class="pagina-cab"><div><h1>Solicitudes</h1><p>Lo que piden los clientes con «Solicitar a Síguelo». Cada una también llega por correo al equipo y abre un ticket en Síguelo Gestión.</p></div>
+    <div class="acciones"><button class="btn" id="reintentar">Reintentar envíos al CRM</button></div></div>
+  <div class="filtros-fila" id="filtros"></div>
+  <div class="tarjeta"><div class="tabla-env"><table class="tabla">
+    <thead><tr><th>Fecha</th><th>Cliente</th><th>Pide</th><th>Detalle</th><th>Quién</th><th>Correo / CRM</th><th>Estado</th><th></th></tr></thead>
+    <tbody id="lista"><tr><td colspan="8" class="rc-cargando">Cargando…</td></tr></tbody></table></div></div>
+</main>
+<script type="module">
+// Backoffice Síguelo · bandeja «Solicitudes» (22-oct, espec. Backoffice).
+import { iniciarPagina, api, esc, fechaHora, modal, toast, toastError, leerForm } from '/comun.js';
+const yo = await iniciarPagina({ activo: 'solicitudes', titulo: 'Solicitudes' });
+const EST = { pendiente: ['mb', 'Pendiente'], en_curso: ['info', 'En curso'], resuelta: ['ok', 'Resuelta'], descartada: ['', 'Descartada'] };
+let filtro = '';
+let D = { solicitudes: [], tipos: {} };
+if (!yo.puede_operar) document.getElementById('reintentar').hidden = true;
+async function cargar() {
+  D = await api(`backoffice/solicitudes${filtro ? `?estado=${filtro}` : ''}`);
+  document.getElementById('filtros').innerHTML = [['', 'Todas'], ['pendiente', 'Pendientes'], ['en_curso', 'En curso'], ['resuelta', 'Resueltas'], ['descartada', 'Descartadas']].map(([k, t]) => `<button class="filtro" data-f="${k}" aria-pressed="${filtro === k}">${t}</button>`).join('');
+  document.getElementById('lista').innerHTML = D.solicitudes.map((s) => `<tr>
+    <td class="mono peq" style="white-space:nowrap">${fechaHora(s.creado_en)}</td><td><a href="/empresas/${s.empresa_id}#actividad"><b>${esc(s.empresa)}</b></a></td>
+    <td>${esc(D.tipos[s.tipo] || s.tipo)}</td><td class="peq" style="max-width:320px">${esc(s.detalle || '—')}${s.nota ? `<div class="muted">Nota: ${esc(s.nota)}</div>` : ''}</td>
+    <td class="peq">${esc(s.solicitante_nombre || '—')}<div class="muted">${esc(s.solicitante_correo || '')}</div></td>
+    <td class="peq">${s.correo_estado === 'enviado' ? 'correo enviado' : `<span class="muted" title="${esc(s.correo_estado || '')}">correo pendiente</span>`}<br>${s.crm_ticket ? `<span class="mono">ticket ${esc(s.crm_ticket)}</span>` : `<span class="muted" title="${esc(s.crm_estado || '')}">CRM ${s.crm_estado?.startsWith('pendiente') ? 'reintentando' : '—'}</span>`}</td>
+    <td><span class="chip ${EST[s.estado][0]}">${EST[s.estado][1]}</span>${s.resuelta_por_nombre ? `<div class="peq muted">${esc(s.resuelta_por_nombre)}</div>` : ''}</td>
+    <td>${yo.puede_operar ? `<button class="btn peq" data-cambiar="${s.id}">Cambiar estado</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="8" class="rc-vacio">Sin solicitudes</td></tr>';
+}
+document.querySelector('main').addEventListener('click', async (ev) => {
+  const f = ev.target.closest('[data-f]');
+  if (f) { filtro = f.dataset.f; return cargar().catch(toastError); }
+  if (ev.target.closest('#reintentar')) { try { const r = await api('backoffice/solicitudes/reintentar-crm', { body: {} }); toast(`${r.reintentadas} reintentadas`, 'ok'); cargar(); } catch (e) { toastError(e); } return; }
+  const c = ev.target.closest('[data-cambiar]');
+  if (!c) return;
+  const s = D.solicitudes.find((x) => x.id === Number(c.dataset.cambiar));
+  modal({ titulo: `${D.tipos[s.tipo] || s.tipo} · ${s.empresa}`, html: `<label class="etiqueta">Estado<select class="campo" name="estado">${Object.entries(EST).map(([k, [, t]]) => `<option value="${k}"${k === s.estado ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
+    <label class="etiqueta">Nota (la ve el cliente en su bitácora)<textarea class="campo" name="nota">${esc(s.nota || '')}</textarea></label>`,
+  botones: [{ texto: 'Cancelar' }, { texto: 'Guardar', clase: 'primario', accion: async (cu) => { await api(`backoffice/solicitudes/${s.id}`, { method: 'PATCH', body: leerForm(cu) }); toast('Solicitud actualizada', 'ok'); cargar(); } }] });
+});
+cargar().catch(toastError);
+</script>
+</body>
+</html>

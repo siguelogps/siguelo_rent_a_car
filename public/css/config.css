@@ -120,3 +120,16 @@
 .cf-codigo-pre select { min-width: 260px; }
 .cf-colores-portal { display: flex; flex-wrap: wrap; gap: 14px 28px; }
 .cf-indicadores { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 12px; }
+
+/* Conectar la plataforma GPS (22-oct, igual que On Tow): Síguelo Pro / Síguelo Lite, botón amarillo y el token plegado */
+.cf-gps { flex-direction: column; align-items: stretch; max-width: 520px; }
+.cf-gps > .chip { align-self: flex-start; }
+.cf-gps-seg { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px; padding: 4px; border-radius: 12px; background: var(--soft); border: 1px solid var(--line); }
+.cf-gps-seg button { height: 40px; border: 0; border-radius: 9px; background: transparent; color: inherit; font: 600 14px var(--sans, inherit); cursor: pointer; }
+.cf-gps-seg button[aria-checked="true"] { background: var(--ink); color: var(--card); }
+.cf-gps-seg button:focus-visible { outline: 2px solid var(--marca, #FFD500); outline-offset: 2px; }
+.cf-gps-ir { min-height: 48px; font-size: 15px; width: 100%; justify-content: center; }
+.cf-gps-manual summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+.cf-gps-manual[open] { display: flex; flex-direction: column; gap: 8px; }
+.cf-gps-manual .rc-fila { display: flex; gap: 8px; }
+.cf-gps-manual .campo { flex: 1; min-width: 0; }

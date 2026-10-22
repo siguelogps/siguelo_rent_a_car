@@ -46,12 +46,13 @@ r.post('/integraciones/:tipo/probar', requiere('integraciones', 'ver'), async (r
 });
 
 // Plataforma GPS: ingreso con usuario y clave en la página de la propia plataforma (OAuth). Vuelve a
-// /integracion-gps con el token, que se guarda cifrado; la clave nunca pasa por este sistema.
+// /integracion-gps?gps=<cuenta> con el token, que se guarda cifrado; la clave nunca pasa por este sistema.
+// 22-oct (Pablo): la cuenta viaja en la vuelta (antes solo en el navegador, que podía no tenerla) y la página sale en español.
 r.get('/integraciones/gps/ingreso', requiere('integraciones', 'editar'), async (req, res) => {
   const cuenta = req.query.cuenta === 'lite' ? 'lite' : 'hosting';
-  const volver = `${configApp.urlBase}/integracion-gps`;
-  const url = `${HOST_SESION_GPS[cuenta]}/login.html?client_id=SigueloRentacar&access_type=-1&activation_time=0&duration=0&flags=0x1&redirect_uri=${encodeURIComponent(volver)}`;
-  res.json({ url, cuenta });
+  const p = new URLSearchParams({ client_id: 'SigueloRentacar', access_type: '-1', activation_time: '0', duration: '0', flags: '0x1', lang: 'es',
+    redirect_uri: `${configApp.urlBase}/integracion-gps?gps=${cuenta}` });
+  res.json({ url: `${HOST_SESION_GPS[cuenta]}/login.html?${p}`, cuenta });
 });
 
 r.post('/integraciones/gps/token', requiere('integraciones', 'editar'), async (req, res) => {

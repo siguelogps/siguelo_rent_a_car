@@ -72,7 +72,7 @@ npm run ios              # abre Xcode (solo en Mac)
 
 ## Versiones
 
-GitHub Actions numera solo: versión `1.0.N` y número de compilación `N` (N = número de ejecución). Cada subida a las tiendas necesita un N mayor que la anterior: basta con volver a correr el flujo.
+GitHub Actions numera solo: versión `1.0.N` y número de compilación `N` (N = número de ejecución). Cada subida a las tiendas necesita un N mayor que la anterior: basta con correr el flujo de nuevo con **Run workflow**. Ojo: **«Re-run jobs» repite el mismo N** y Play rechaza el AAB por versionCode repetido.
 
 ## Apps con la marca del cliente (marca blanca)
 

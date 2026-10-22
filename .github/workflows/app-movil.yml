@@ -1,7 +1,7 @@
 # App «Síguelo On Rent» para el personal del rentacar.
 #  · Android: app NATIVA (Kotlin + Jetpack Compose) en android/ (ver android/README.md). Reemplaza a la de Capacitor.
 #      1. pruebas:    lógica en Kotlin (android/core) y servidor (npm test).
-#      2. apk-prueba: APK de prueba (debug, cl.siguelogps.onrent.prueba) + capturas como prueba de humo. Queda 14 días.
+#      2. apk-prueba: APK de prueba (debug, cl.siguelogps.onrent.prueba). Queda 14 días.
 #      3. firmado:    AAB y APK firmados para Play (cl.siguelogps.onrent), solo con los 4 secretos de la llave
 #                     (si faltan, se omite y lo dice).
 #      4. capturas:   dibuja las pantallas y las deja en la rama «capturas-android» (git fetch para mirarlas).
@@ -84,13 +84,15 @@ jobs:
         env:
           GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
         run: .github/scripts/google-services.sh cl.siguelogps.onrent.prueba
-      - name: Compilar el APK de prueba y dibujar las pantallas
+      # Las pantallas se dibujan en el trabajo «capturas» (con Robolectric, en un proceso aparte): juntas con la
+      # compilación, el dibujo nativo abortaba el proceso de pruebas (código 134) en el equipo de GitHub.
+      - name: Compilar el APK de prueba
         working-directory: android
         shell: bash
         run: |
           chmod +x gradlew
           set -o pipefail
-          ../.github/scripts/gradle-reintento.sh "$RUNNER_TEMP/gradle.log" assembleDebug testDebugUnitTest --no-daemon --stacktrace
+          ./gradlew assembleDebug --no-daemon --stacktrace 2>&1 | tee "$RUNNER_TEMP/gradle.log"
       - name: Avisar el error en el pull request
         if: failure()
         run: .github/scripts/comentar-fallo.sh "$RUNNER_TEMP/gradle.log" "APK de prueba · Síguelo On Rent"

@@ -4,7 +4,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Reserva</title><link rel="icon" href="/img/logo-pin.png">
 <link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/img/app/apple-touch-icon.png"><meta name="theme-color" content="#FFFFFF">
-<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/reservas.css">
+<script src="/tema.js"></script><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/reservas.css">
 </head>
 <body>
 <main><p class="rc-cargando">Cargando reserva…</p></main>
@@ -211,7 +211,7 @@ function pintar(f) {
         <div class="monto">${clp(gar?.monto ?? r.garantia)}</div>
         <div class="rc-gar-barra">${[1, 2, 3, 4].map((i) => `<i class="${i <= garPaso ? 'on' : ''}"></i>`).join('')}</div>
         <div class="rc-gar-pasos">${['Solicitada', 'Retenida', 'Liberada o capturada', 'Cerrada'].map((t, i) => (i + 1 === garPaso ? `<b>${t}</b>` : `<span>${t}</span>`)).join('')}</div>
-        <div style="font-size:12px;color:#AEB4BE">${gar ? `${gar.tarjeta ? `Tarjeta ···· ${esc(gar.tarjeta)} · ` : ''}${gar.vence_retencion ? `la retención vence el ${fecha(gar.vence_retencion)}` : `estado: ${esc(gar.estado)}`}` : 'Aún no se ha solicitado. Se registra en Pagos y garantías.'}</div>
+        <div style="font-size:12px;color:var(--tx-tenue-osc)">${gar ? `${gar.tarjeta ? `Tarjeta ···· ${esc(gar.tarjeta)} · ` : ''}${gar.vence_retencion ? `la retención vence el ${fecha(gar.vence_retencion)}` : `estado: ${esc(gar.estado)}`}` : 'Aún no se ha solicitado. Se registra en Pagos y garantías.'}</div>
       </div>
 
       <div class="tarjeta bloque">${tarjetaContrato(r, contrato)}</div>

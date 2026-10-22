@@ -4,7 +4,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Mantención</title><link rel="icon" href="/img/logo-pin.png">
 <link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/img/app/apple-touch-icon.png"><meta name="theme-color" content="#FFFFFF">
-<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/flota.css">
+<script src="/tema.js"></script><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/flota.css">
 </head>
 <body>
 <main>
@@ -43,7 +43,7 @@ async function cargar() {
   const [ots, sug, res] = await Promise.all([api('ordenes-trabajo'), api('mantencion/sugeridas'), api('mantencion/resumen')]);
   OTS = ots;
   $('#kpis').innerHTML = `
-    <div class="kpi"><span>En taller</span><b style="${res.en_taller ? 'color:#B45309' : ''}">${res.en_taller}</b><small>bloqueados en el calendario</small></div>
+    <div class="kpi"><span>En taller</span><b style="${res.en_taller ? 'color:var(--tx-naranjo)' : ''}">${res.en_taller}</b><small>bloqueados en el calendario</small></div>
     <div class="kpi"><span>Programadas</span><b>${res.programadas}</b><small>por ingresar al taller</small></div>
     <div class="kpi"><span>Sugeridas</span><b>${sug.length}</b><small class="${sug.some((s) => s.urgencia === 'vencida') ? 'mal' : ''}">${((n) => `${n} ${n === 1 ? 'vencida' : 'vencidas'}`)(sug.filter((s) => s.urgencia === 'vencida').length)}</small></div>
     <div class="kpi"><span>Costo del mes</span><b class="monto" style="font-size:24px">${clp(res.costo_mes)}</b><small>${res.terminadas_mes} ${res.terminadas_mes === 1 ? 'orden terminada' : 'órdenes terminadas'}</small></div>
@@ -54,7 +54,7 @@ async function cargar() {
       : s.faltan_dias < 0 ? `Venció el ${fecha(s.proxima_fecha)}` : `Vence el ${fecha(s.proxima_fecha)} (en ${s.faltan_dias} ${s.faltan_dias === 1 ? 'día' : 'días'})`;
     const res = s.reserva ? ` · ${s.reserva.estado === 'en_curso' ? 'arrendado' : 'reserva'} hasta el ${fecha(s.reserva.fin).slice(0, 5)}` : '';
     const titulo = s.tipo === 'revision_tecnica' ? 'Revisión técnica' : s.motivo;
-    return `<div class="rc-alerta-venc"${s.urgencia === 'vencida' ? ' style="border-color:#F2C9C4"' : ''}><span class="ic ${s.urgencia === 'vencida' ? 'rojo' : 'ambar'}">${ic}</span><div><b>${esc(titulo)} · ${pat(s.patente)}</b><small>${esc(s.marca || '')} ${esc(s.modelo || '')} · ${det}${res}</small></div>${EDITA ? `<button class="btn peq" data-sug="${i}">Crear OT</button>` : ''}</div>`;
+    return `<div class="rc-alerta-venc"${s.urgencia === 'vencida' ? ' style="border-color:var(--borde-rojo)"' : ''}><span class="ic ${s.urgencia === 'vencida' ? 'rojo' : 'ambar'}">${ic}</span><div><b>${esc(titulo)} · ${pat(s.patente)}</b><small>${esc(s.marca || '')} ${esc(s.modelo || '')} · ${det}${res}</small></div>${EDITA ? `<button class="btn peq" data-sug="${i}">Crear OT</button>` : ''}</div>`;
   }).join('') || '<p class="rc-vacio" style="grid-column:1/-1;padding:14px">Nada pendiente: toda la flota está al día</p>';
   $('#sugeridas').onclick = (e) => { const b = e.target.closest('[data-sug]'); if (b) { const s = sug[Number(b.dataset.sug)]; formOt(null, { vehiculo_id: s.vehiculo_id, tipo: s.tipo, motivo: s.motivo, km_programado: s.km_programado, fecha_programada: s.fecha_programada }); } };
   const max = Math.max(1, ...res.costo_por_vehiculo.map((x) => x.costo));

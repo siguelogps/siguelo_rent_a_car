@@ -4,7 +4,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Reservas</title><link rel="icon" href="/img/logo-pin.png">
 <link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/img/app/apple-touch-icon.png"><meta name="theme-color" content="#FFFFFF">
-<link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/reservas.css">
+<script src="/tema.js"></script><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/reservas.css">
 </head>
 <body>
 <main>
@@ -35,13 +35,13 @@
         </div>
       </div>
       <div class="rc-leyenda">
-        <span><i style="background:#fff;border:1.5px dashed #9AA1AD;border-left:3px solid #9AA1AD"></i>Cotización</span>
+        <span><i style="background:var(--card);border:1.5px dashed #9AA1AD;border-left:3px solid #9AA1AD"></i>Cotización</span>
         <span><i style="background:var(--blue-soft);border-color:var(--blue)"></i>Confirmada</span>
         <span><i style="background:var(--green-soft);border-color:var(--green)"></i>En curso</span>
         <span><i style="background:var(--red-soft);border-color:var(--red)"></i>Atrasada</span>
         <span><i style="background:var(--purple-soft);border-color:var(--purple)"></i>Devuelta (por cerrar)</span>
-        <span><i style="background:#ECEEF1;border-color:#B8BEC7"></i>Cerrada</span>
-        <span><i style="background:repeating-linear-gradient(135deg,#FEF3E2 0 4px,#FCE7C8 4px 8px);border-color:#D97706"></i>Mantención (bloqueado)</span>
+        <span><i style="background:var(--gris-1b);border-color:var(--borde-gris)"></i>Cerrada</span>
+        <span><i style="background:repeating-linear-gradient(135deg,var(--rayas-a) 0 4px,var(--rayas-b) 4px 8px);border-color:#D97706"></i>Mantención (bloqueado)</span>
       </div>
     </div>
     <div class="rs-scroll"><div class="rc-gantt" id="gantt"><p class="rc-cargando">Cargando calendario…</p></div></div>

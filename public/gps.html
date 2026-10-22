@@ -4,7 +4,7 @@
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Plataforma GPS</title><link rel="icon" href="/img/logo-pin.png">
 <link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/img/app/apple-touch-icon.png"><meta name="theme-color" content="#FFFFFF">
-<link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
+<script src="/tema.js"></script><link rel="stylesheet" href="/vendor/leaflet/leaflet.css">
 <link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/gps.css">
 </head>
 <body>
@@ -32,7 +32,7 @@
       <div class="leyenda" id="leyenda">
         <span><i style="background:#0F5F58"></i> Arrendado</span><span><i style="background:#1E7B3A"></i> Disponible</span>
         <span><i style="background:#1E3A8A"></i> Reservado</span><span><i style="background:#D97706"></i> En mantención</span>
-        <span><i style="background:#B42318"></i> Fuera de servicio / atrasado</span><span><i style="background:#fff;border:2px dashed #5B6370"></i> Sin señal (+6 h)</span>
+        <span><i style="background:#B42318"></i> Fuera de servicio / atrasado</span><span><i style="background:var(--card);border:2px dashed #5B6370"></i> Sin señal (+6 h)</span>
       </div>
       <div class="gps-actualizado" id="actualizado"><span class="rc-gps-punto"></span><span>—</span></div>
     </section>

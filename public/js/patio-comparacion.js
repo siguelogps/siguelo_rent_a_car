@@ -72,7 +72,7 @@ export async function montarComparacion(main, reservaId) {
   const nDif = ch.diferencias.length;
 
   const filaDano = (d) => (d.nuevo
-    ? `<div class="rc-dano" style="border-color:#F2C9C4;background:#FFF8F7"><span class="n ${d.tipo} nuevo">${d.n}</span><div><b>${esc(d.titulo)}</b><small>Nuevo${d.zona ? ` · ${esc(d.zona)}` : ''}${dD?.realizado_por ? ` · marcado por ${esc(dD.realizado_por)}` : ''}</small></div>${d.incidente_id ? `<a class="chip error" href="/incidentes/${d.incidente_id}">${esc(d.incidente_folio)}</a>` : '<span class="chip error">Nuevo</span>'}</div>`
+    ? `<div class="rc-dano" style="border-color:var(--borde-rojo);background:var(--bg-rojo-tenue)"><span class="n ${d.tipo} nuevo">${d.n}</span><div><b>${esc(d.titulo)}</b><small>Nuevo${d.zona ? ` · ${esc(d.zona)}` : ''}${dD?.realizado_por ? ` · marcado por ${esc(dD.realizado_por)}` : ''}</small></div>${d.incidente_id ? `<a class="chip error" href="/incidentes/${d.incidente_id}">${esc(d.incidente_folio)}</a>` : '<span class="chip error">Nuevo</span>'}</div>`
     : `<div class="rc-dano"><span class="n ${d.tipo}">${d.n}</span><div><b>${esc(d.titulo)}</b><small>Sin cambios respecto de la entrega</small></div><span class="chip">Igual</span></div>`);
 
   const recibido = dD ? `${dD.realizado_por ? `recibido por ${esc(dD.realizado_por)} (patio)` : 'recibido'} en sucursal ${esc(dD.sucursal || R.sucursal_devolucion || '')}` : 'devolución pendiente';

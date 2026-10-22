@@ -10,7 +10,7 @@
 .gps-item:hover { background: var(--soft); }
 .gps-item[aria-pressed="true"] { background: var(--marca-suave); box-shadow: inset 4px 0 0 var(--marca); }
 .gps-item .gps-bola { width: 12px; height: 12px; border-radius: 50%; background: var(--c); flex-shrink: 0; box-shadow: 0 0 0 3px color-mix(in srgb, var(--c) 18%, transparent); }
-.gps-item .gps-bola.sin { background: #fff; border: 2px dashed var(--c); box-shadow: none; }
+.gps-item .gps-bola.sin { background: var(--card); border: 2px dashed var(--c); box-shadow: none; }
 .gps-item .t { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
 .gps-item .t small { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .gps-item .d { display: flex; flex-direction: column; align-items: flex-end; gap: 3px; flex-shrink: 0; font-size: 12px; }
@@ -23,7 +23,7 @@
 .gps-actualizado { position: absolute; right: 12px; bottom: 12px; z-index: 500; background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; font-size: 12px; color: var(--ink-2); display: flex; gap: 6px; align-items: center; }
 .pin.gps-pin-alerta { box-shadow: 0 0 0 3px var(--red), 0 2px 6px rgba(0,0,0,.28); }
 .pin.gps-inmov::after { content: ''; position: absolute; width: 10px; height: 10px; border-radius: 50%; background: var(--ink); border: 2px solid var(--marca); transform: translate(13px, -13px); }
-.leaflet-tooltip.gps-etiqueta { background: var(--ink); color: #fff; border: 0; font: 600 11px/1 var(--mono); padding: 3px 6px; border-radius: 5px; box-shadow: none; letter-spacing: .03em; }
+.leaflet-tooltip.gps-etiqueta { background: var(--osc); color: #fff; border: 0; font: 600 11px/1 var(--mono); padding: 3px 6px; border-radius: 5px; box-shadow: none; letter-spacing: .03em; }
 .leaflet-tooltip.gps-etiqueta::before { display: none; }
 .leaflet-container { font-family: var(--sans); }
 
@@ -43,8 +43,8 @@
 .gps-recorrido span { font-size: 11px; color: var(--muted); }
 .gps-recorrido b { font: 600 14px var(--mono); }
 .gps-recorrido > .flecha { text-align: center; color: var(--muted); border: 0; padding: 0; }
-.gps-total { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 10px 12px; border-radius: 10px; background: var(--ink); color: #fff; }
-.gps-total span { font-size: 12px; color: #AEB4BE; }
+.gps-total { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; padding: 10px 12px; border-radius: 10px; background: var(--osc); color: #fff; }
+.gps-total span { font-size: 12px; color: var(--tx-tenue-osc); }
 .gps-total b { font: 600 20px var(--mono); color: var(--marca); }
 .gps-spark { width: 100%; height: 46px; display: block; }
 .gps-spark polyline { fill: none; stroke: var(--teal); stroke-width: 2; vector-effect: non-scaling-stroke; }
@@ -55,7 +55,7 @@
 .gps-alerta .ic { width: 34px; height: 34px; border-radius: 9px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .gps-alerta .ic.geocerca { background: var(--purple-soft); color: var(--purple); }
 .gps-alerta .ic.velocidad { background: var(--red-soft); color: var(--red); }
-.gps-alerta .ic.detenido_fuera_horario { background: var(--amber-soft); color: #B45309; }
+.gps-alerta .ic.detenido_fuera_horario { background: var(--amber-soft); color: var(--tx-naranjo); }
 .gps-alerta .ic.sin_senal, .gps-alerta .ic.combustible { background: var(--line-2); color: var(--ink-2); }
 .gps-alerta .tx { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; font-size: 13px; }
 .gps-alerta .tx small { color: var(--muted); font-size: 12px; }
@@ -83,12 +83,12 @@
 .gps-eventos li.simulada::before { background: var(--blue); }
 .gps-eventos li.enviada::before { background: var(--green); }
 .gps-eventos small { color: var(--muted); display: block; }
-.chip.gps-st-solicitada { background: var(--amber-soft); color: #7C2D12; }
+.chip.gps-st-solicitada { background: var(--amber-soft); color: var(--tx-ambar); }
 .chip.gps-st-confirmada { background: var(--marca-suave); color: var(--marca-texto); }
-.chip.gps-st-enviada { background: var(--green-soft); color: #14532D; }
+.chip.gps-st-enviada { background: var(--green-soft); color: var(--tx-verde); }
 .chip.gps-st-simulada { background: var(--blue-soft); color: var(--blue); }
-.chip.gps-st-rechazada, .chip.gps-st-fallida { background: var(--red-soft); color: #8F1B12; }
-.chip.gps-st-cancelada { background: #E6E8EC; color: var(--muted); }
+.chip.gps-st-rechazada, .chip.gps-st-fallida { background: var(--red-soft); color: var(--tx-rojo); }
+.chip.gps-st-cancelada { background: var(--gris-1); color: var(--muted); }
 .chip.gps-inmovilizado { background: var(--ink); color: var(--marca); }
 
 .gps-bitacora td:first-child, .gps-bitacora td:nth-child(2) { white-space: nowrap; }
@@ -120,14 +120,14 @@
 .tm-tabla .portico small { color: var(--muted); font-size: 12px; }
 .tm-tabla .sub { display: block; color: var(--muted); font-size: 12px; }
 .chip.tm-asignado, .chip.tm-asignada { background: var(--teal-soft); color: var(--teal); }
-.chip.tm-sin_contrato { background: var(--red-soft); color: #8F1B12; }
-.chip.tm-revisar { background: var(--amber-soft); color: #7C2D12; }
+.chip.tm-sin_contrato { background: var(--red-soft); color: var(--tx-rojo); }
+.chip.tm-revisar { background: var(--amber-soft); color: var(--tx-ambar); }
 .chip.tm-notificada { background: var(--blue-soft); color: var(--blue); }
-.chip.tm-cobrado, .chip.tm-cobrada, .chip.tm-pagada { background: var(--green-soft); color: #14532D; }
-.chip.tm-condonado, .chip.tm-condonada { background: #E6E8EC; color: var(--muted); }
+.chip.tm-cobrado, .chip.tm-cobrada, .chip.tm-pagada { background: var(--green-soft); color: var(--tx-verde); }
+.chip.tm-condonado, .chip.tm-condonada { background: var(--gris-1); color: var(--muted); }
 .chip.tm-origen { background: var(--soft); border: 1px solid var(--line); color: var(--ink-2); font-weight: 500; }
 .tm-candidatos { display: flex; flex-direction: column; gap: 6px; margin-top: 6px; }
-.tm-candidato { display: flex; align-items: center; gap: 8px; justify-content: space-between; padding: 6px 8px; border: 1px dashed #D97706; border-radius: 8px; background: #FFFBF3; font-size: 12px; }
+.tm-candidato { display: flex; align-items: center; gap: 8px; justify-content: space-between; padding: 6px 8px; border: 1px dashed #D97706; border-radius: 8px; background: var(--bg-ambar-tenue); font-size: 12px; }
 .tm-candidato div { display: flex; flex-direction: column; line-height: 1.25; min-width: 0; }
 .tm-candidato small { color: var(--muted); }
 .tm-grupos { display: grid; grid-template-columns: repeat(auto-fill, minmax(340px, 1fr)); gap: 14px; padding: 16px; }
@@ -150,7 +150,7 @@
 .tm-cob-leyenda { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--ink-2); }
 .tm-cob-leyenda span { display: inline-flex; align-items: center; gap: 6px; }
 .tm-cob-leyenda i { width: 10px; height: 10px; border-radius: 3px; }
-.tm-errores { margin: 0; padding-left: 18px; font-size: 12px; color: #7A1A12; display: flex; flex-direction: column; gap: 2px; }
+.tm-errores { margin: 0; padding-left: 18px; font-size: 12px; color: var(--tx-rojo2); display: flex; flex-direction: column; gap: 2px; }
 .tm-mapeo { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 10px 14px; }
 .tm-mapeo label { display: flex; flex-direction: column; gap: 5px; font-size: 12px; color: var(--muted); }
 .tm-mapeo label b { color: var(--ink); font-weight: 600; }
@@ -158,7 +158,7 @@
 .tm-previa { overflow: auto; border: 1px solid var(--line); border-radius: 10px; max-height: 260px; }
 .tm-previa table { font-size: 12px; }
 .tm-previa td.err { color: var(--red); }
-.tm-soltar { border: 2px dashed #B8BEC7; border-radius: 12px; padding: 26px 16px; text-align: center; color: var(--muted); display: flex; flex-direction: column; gap: 8px; align-items: center; cursor: pointer; background: var(--soft); }
+.tm-soltar { border: 2px dashed var(--borde-gris); border-radius: 12px; padding: 26px 16px; text-align: center; color: var(--muted); display: flex; flex-direction: column; gap: 8px; align-items: center; cursor: pointer; background: var(--soft); }
 .tm-soltar.sobre { border-color: var(--marca-ambar); background: var(--marca-suave); }
 .tm-soltar b { color: var(--ink); }
 .tm-resultado { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 8px; }

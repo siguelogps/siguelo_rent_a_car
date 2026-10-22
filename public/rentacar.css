@@ -408,3 +408,6 @@ html.nativa-ios .rc-movil-pie { padding-bottom: calc(18px + env(safe-area-inset-
 :root[data-theme="oscuro"] .cf-vista.wa { background: #1F3B2A; border-color: #2E5A3E; }
 :root[data-theme="oscuro"] .rc-ver-como { background: #2B323C; }
 :root[data-theme="oscuro"] .rc-circulo { box-shadow: 0 0 0 2px rgba(0,0,0,.6); }
+:root[data-theme="oscuro"] .bloque h2 .num { color: #15181D; }
+/* Sobre amarillo, siempre letras oscuras */
+:root[data-theme="oscuro"] .rc-pasos .actual i, :root[data-theme="oscuro"] .pt-estados .actual i, :root[data-theme="oscuro"] .rs-sec h3 .num, :root[data-theme="oscuro"] .gps-pasos .actual i, :root[data-theme="oscuro"] .tm-tabs button[aria-selected="true"] .n, :root[data-theme="oscuro"] .rc-calor i { color: #15181D; }

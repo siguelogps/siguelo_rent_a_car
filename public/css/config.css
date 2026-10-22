@@ -152,3 +152,6 @@
 .cf-subtitulo { font-size: 16px; font-weight: 600; margin-top: 6px; }
 .chip.mb { background: var(--amber-soft); color: var(--tx-ambar); }
 @media (max-width: 900px) { .cf-gest { grid-template-columns: minmax(0, 1fr); } }
+/* 22-oct: bloque «Conectar» de la plataforma GPS dentro de la tarjeta del cliente (columna: el texto no se estira). */
+.cf-gest .cf-gps { padding: 0 18px 14px; max-width: none; }
+.cf-gest .cf-gps small { flex: none; }

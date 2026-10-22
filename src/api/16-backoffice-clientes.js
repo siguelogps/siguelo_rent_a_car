@@ -9,11 +9,10 @@ import express from 'express';
 import { q, uno } from '../db.js';
 import { requiere, soloSiguelo, soloSuperadmin, puedeOperar, ErrorHttp } from '../auth.js';
 import { registrar } from '../bitacora.js';
-import { hashSha256, tokenAleatorio } from '../cifrado.js';
-import { config } from '../config.js';
 import { normalizarRut, validarRut } from '../util/rut.js';
 import { MODULOS_PLAN, planDeEmpresa, usoDeEmpresa, limpiarCachePlanes } from '../planes.js';
-import { TIPOS, leer, leerPublica, guardar, activar, registrarPrueba, desconectarTodo, tiposDe, HOST_SESION_GPS, limpiarCache } from '../integraciones/index.js';
+import { TIPOS, leer, leerPublica, guardar, activar, marcarApagada, registrarPrueba, desconectarTodo, tiposDe, limpiarCache } from '../integraciones/index.js';
+import { crearIngreso, consumirIngreso, tokenValido, cuentaValida } from '../gps/ingreso.js';
 import { probador } from '../integraciones/probadores.js';
 import { crearEmpresa } from './01-empresas.js';
 import { entrarComoSiguelo } from './00-sesion.js';
@@ -250,6 +249,9 @@ r.post('/backoffice/clientes/:id/integraciones/:tipo/activar', ...base, cambia, 
   const e = await empresaDe(req.params.id);
   const tipo = tipoSiguelo(req.params.tipo);
   await activar(e.id, tipo, !!req.body?.activa, req.usuario.id);
+  // Apagarla aquí es una decisión de Síguelo: el cliente ya no puede conectar la plataforma GPS por su cuenta hasta que
+  // Síguelo la vuelva a encender. (Desconectar, en cambio, solo borra la cuenta: el cliente puede volver a conectarla.)
+  await marcarApagada(e.id, tipo, !req.body?.activa, req.usuario.id);
   await registrar({ usuario: req.usuario, empresaId: e.id, ip: req.ip }, req.body?.activa ? 'integracion_activada' : 'integracion_desactivada', 'integracion', null, { tipo, por: req.usuario.nombre, siguelo: { modo: 'backoffice' } });
   res.json(await integracionFicha(e.id, tipo));
 });
@@ -274,22 +276,17 @@ r.post('/backoffice/clientes/:id/integraciones/:tipo/desconectar', ...base, camb
 });
 
 // Plataforma GPS: «Ingresar con usuario y clave» en nombre del cliente. La vuelta trae un «estado» de un solo uso que dice a
-// qué cliente va el token (la empresa nunca viaja escrita en la dirección ni en el cuerpo).
+// qué cliente va el token (la empresa nunca viaja escrita en la dirección ni en el cuerpo). 22-oct (Pablo): el cliente
+// también la conecta él mismo desde Configuración › Conexiones (src/gps/ingreso.js, origen 'cliente'); esta puerta queda
+// para cuando Síguelo lo hace desde la ficha.
 r.get('/backoffice/clientes/:id/integraciones/gps/ingreso', ...base, cambia, async (req, res) => {
   const e = await empresaDe(req.params.id);
-  const cuenta = req.query.cuenta === 'lite' ? 'lite' : 'hosting';
-  const estado = tokenAleatorio(18);
-  await q(`DELETE FROM gps_ingresos WHERE vence_en < now()`);
-  await q(`INSERT INTO gps_ingresos (estado_hash, empresa_id, usuario_id, cuenta, vence_en) VALUES ($1,$2,$3,$4, now() + interval '20 minutes')`, [hashSha256(estado), e.id, req.usuario.id, cuenta]);
-  const p = new URLSearchParams({ client_id: 'SigueloRentacar', access_type: '-1', activation_time: '0', duration: '0', flags: '0x1', lang: 'es',
-    redirect_uri: `${config.urlBase}/integracion-gps?gps=${cuenta}&estado=${estado}` });
-  res.json({ url: `${HOST_SESION_GPS[cuenta]}/login.html?${p}`, cuenta });
+  res.json(await crearIngreso({ empresaId: e.id, usuarioId: req.usuario.id, cuenta: req.query.cuenta, origen: 'backoffice' }));
 });
 
 async function guardarTokenGps(req, empresaId, { token, cuenta, usuario }) {
-  token = String(token || '').trim();
-  if (!/^[A-Za-z0-9]{20,200}$/.test(token)) throw new ErrorHttp(400, 'La plataforma GPS no devolvió un token válido. Vuelve a intentarlo.');
-  cuenta = cuenta === 'lite' ? 'lite' : 'hosting';
+  token = tokenValido(token);
+  cuenta = cuentaValida(cuenta);
   await guardar(empresaId, 'gps', { token, cuenta, usuario: String(usuario || '').slice(0, 120) }, req.usuario.id);
   await registrar({ usuario: req.usuario, empresaId, ip: req.ip }, 'integracion_gps_conectada', 'integracion', null, { tipo: 'gps', cuenta, usuario: usuario || null, por: req.usuario.nombre, siguelo: { modo: 'backoffice' } });
   return { integracion: await integracionFicha(empresaId, 'gps'), prueba: await probarYAnotar(empresaId, 'gps') };
@@ -298,8 +295,7 @@ async function guardarTokenGps(req, empresaId, { token, cuenta, usuario }) {
 // Vuelta del ingreso (página /integracion-gps): el estado decide el cliente y debe ser de quien lo pidió.
 r.post('/backoffice/integraciones/gps/token', ...base, cambia, async (req, res) => {
   const b = req.body || {};
-  const [ing] = await q(`DELETE FROM gps_ingresos WHERE estado_hash = $1 AND usuario_id = $2 AND vence_en > now() RETURNING empresa_id, cuenta`, [hashSha256(String(b.estado || '')), req.usuario.id]);
-  if (!ing) throw new ErrorHttp(400, 'Este ingreso venció o ya se usó. Vuelve a abrir «Ingresar con usuario y clave» desde la ficha del cliente.');
+  const ing = await consumirIngreso({ estado: b.estado, usuarioId: req.usuario.id, origen: 'backoffice' });
   const r2 = await guardarTokenGps(req, ing.empresa_id, { token: b.token, cuenta: ing.cuenta, usuario: b.usuario });
   res.json({ ...r2, empresa_id: ing.empresa_id });
 });

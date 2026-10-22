@@ -202,10 +202,14 @@ function datosInt(i) {
   return '';
 }
 function tarjeta(i) {
-  const [cls, txt] = SALUD[i.salud];
+  // La plataforma GPS sin cuenta y no apagada por Síguelo no está «no contratada»: la conecta el cliente.
+  const [cls, txt] = i.tipo === 'gps' && i.salud === 'no' && !i.apagada_por_siguelo ? ['aviso', 'Sin conectar · la conecta el cliente'] : SALUD[i.salud];
   const cliente = i.administra === 'cliente';
   const hist = i.historial.length ? `<ul class="historial bo-int-hist">${i.historial.slice(0, 3).map((h) => `<li><span class="marca-ev ${h.accion.includes('desactiv') || h.accion.includes('descon') ? 'error' : 'persona'}"></span><p>${esc(ACC[h.accion] || h.accion.replace(/_/g, ' '))}${h.detalle?.cuenta ? ` (${CUENTA[h.detalle.cuenta]})` : ''}<small class="mono">${fechaHora(h.creado_en)} · ${esc(h.usuario || 'sistema')}</small></p></li>`).join('')}</ul>` : '';
-  const gps = i.tipo === 'gps' && ed() ? `<div class="bo-config"><h4>Configurar en nombre del cliente</h4>
+  // 22-oct, más tarde (Pablo): la plataforma GPS la conecta el propio cliente en Configuración › Conexiones. Desde aquí
+  // Síguelo también puede conectarla, desconectarla, pegar un token (soporte) o apagarla: apagada, el cliente no la conecta.
+  const notaGps = i.tipo === 'gps' ? `<p class="peq muted bo-gps-nota">${i.apagada_por_siguelo ? '<span class="chip error">Apagada por Síguelo</span> El cliente no puede conectarla hasta que la vuelvas a encender.' : 'La conecta el propio cliente en Configuración › Conexiones, con su usuario y clave (también tú, entrando con «Operar»). Si la apagas aquí, el cliente ya no podrá conectarla.'}</p>` : '';
+  const gps = i.tipo === 'gps' && ed() ? `<div class="bo-config"><h4>Conectar desde aquí</h4>
       <div class="bo-gps-fila"><div class="bo-seg" role="radiogroup" aria-label="Plataforma"><button type="button" role="radio" data-cta="hosting" aria-checked="${i.config.cuenta !== 'lite'}">Síguelo Pro</button><button type="button" role="radio" data-cta="lite" aria-checked="${i.config.cuenta === 'lite'}">Síguelo Lite</button></div>
         <button type="button" class="btn primario" data-ingresar-gps>Ingresar con usuario y clave →</button><span class="peq muted">Se abre la página oficial de la plataforma. Escribe ahí el usuario del cliente: la clave no pasa por On Rent.</span></div>
       <details><summary class="peq muted">Pegar un token a mano (soporte)</summary><div class="rc-fila" style="margin-top:8px"><input class="campo mono bo-secreto" data-token-gps placeholder="Token de la cuenta"${SIN_AUTORRELLENO} style="flex:1"><button type="button" class="btn peq" data-token-guardar>Guardar y probar</button></div></details></div>` : '';
@@ -217,7 +221,7 @@ function tarjeta(i) {
       <div class="der"><span class="chip ${cls}">${cliente ? (i.activa ? 'Activa · la configura el cliente' : 'Sin activar · la configura el cliente') : txt}</span>
         ${cliente ? '' : `<label class="cf-switch-et"><span>${i.activa ? 'Activa' : 'Apagada'}</span><span class="switch"><input type="checkbox" data-activar${i.activa ? ' checked' : ''}${ed() ? '' : ' disabled'} aria-label="Activar ${esc(i.nombre)}"><span></span></span></label>`}</div></div>
     <div class="bo-int-datos">${datosInt(i)}</div>
-    ${gps}${carga}
+    ${notaGps}${gps}${carga}
     ${!cliente && ed() ? `<details class="bo-config" data-form${i.configurada || i.tipo === 'gps' ? '' : ' open'}><summary class="peq"><b>Configurar</b> · datos de la conexión (los secretos no se muestran)</summary>${formulario(i)}<div><button type="button" class="btn primario peq" data-guardar>Guardar</button></div></details>` : ''}
     ${hist}
     <div class="bo-int-pie"><span class="peq">${cliente ? 'Para ayudar al cliente, entra con «Operar».' : prueba(i)}</span>
@@ -227,7 +231,7 @@ function tarjeta(i) {
 function integraciones() {
   const e = D.empresa;
   const sig = D.integraciones.filter((i) => i.administra === 'siguelo'), cli = D.integraciones.filter((i) => i.administra === 'cliente');
-  $('#panel').innerHTML = `<div class="tarjeta bloque"><p>Solo el equipo Síguelo configura estas conexiones. El cliente las ve como <b>«Gestionado por Síguelo GPS»</b>, sin claves ni tokens. Los secretos quedan cifrados en el servidor y no se vuelven a mostrar, tampoco aquí.</p>
+  $('#panel').innerHTML = `<div class="tarjeta bloque"><p>Solo el equipo Síguelo configura estas conexiones, salvo la <b>plataforma GPS</b>, que la conecta el propio cliente con su usuario y clave. El cliente las ve como <b>«Gestionado por Síguelo GPS»</b>, sin claves ni tokens. Los secretos quedan cifrados en el servidor y no se vuelven a mostrar, tampoco aquí.</p>
       <div style="display:flex;justify-content:flex-end">${e.marcha_blanca ? '<span class="chip mb">Marcha blanca encendida · nada sale todavía</span>' : '<span class="chip ok">Marcha blanca apagada · los mensajes salen de verdad</span>'}</div></div>
     <div class="bo-integ">${sig.map(tarjeta).join('')}</div>
     <h2 style="font-size:16px">Cobros en línea · los configura el cliente</h2>

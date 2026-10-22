@@ -4,6 +4,7 @@
 import { q, uno } from '../db.js';
 import { TIPOS, leer, tiposDe } from '../integraciones/index.js';
 import { configuracionPush } from '../app-nativa/push.js';
+import { incluye } from '../planes.js';
 
 const CUENTA = { hosting: 'Síguelo Pro', lite: 'Síguelo Lite' };
 const SIN = '—';
@@ -24,13 +25,16 @@ export function salud(tipo, v) {
   return 'ok';
 }
 
-const ESTADO_CLIENTE = { ok: 'activo', mal: 'activo', esp: 'en_preparacion', no: 'no_contratado' };
+// Estado que ve el cliente (22-oct, Pablo): activo · en preparación (encendida por Síguelo pero sin configurar: «Síguelo
+// GPS la está dejando lista», sin «Solicitar») · no contratado. Una apagada con datos guardados no está «en preparación»:
+// Síguelo la apagó, así que para el cliente no está contratada (antes salía «En preparación» con «Solicitar un cambio»).
+const estadoCliente = (tipo, v) => (!v.activa ? 'no_contratado' : configurada(tipo, v.config) ? 'activo' : 'en_preparacion');
 
 async function datosDe(empresaId, tipo, v) {
   const c = v.config;
   if (tipo === 'gps') {
     const n = await uno(`SELECT count(*) FILTER (WHERE gps_unidad_id IS NOT NULL)::int AS con, count(*)::int AS total FROM vehiculos WHERE empresa_id = $1 AND activo`, [empresaId]);
-    return [['Cuenta', c.token ? CUENTA[c.cuenta] || CUENTA.hosting : SIN], ['Vehículos vinculados', c.token ? `${n.con} de ${n.total}` : SIN, true]];
+    return [['Cuenta', c.token ? CUENTA[c.cuenta] || CUENTA.hosting : SIN], ['Usuario conectado', c.token && c.usuario ? c.usuario : SIN, true], ['Unidades vinculadas', c.token ? `${n.con} de ${n.total}` : SIN, true]];
   }
   if (tipo === 'simpleapi') {
     let folios = SIN;
@@ -55,13 +59,36 @@ async function datosDe(empresaId, tipo, v) {
   return [];
 }
 
+// 22-oct (Pablo): la plataforma GPS la conecta el propio cliente (su administrador, o Síguelo con «Operar»), con el
+// ingreso con usuario y clave. Antes la tarjeta salía «No contratado · Solicitar a Síguelo» y no dejaba conectar nada.
+// Estados de la tarjeta GPS:
+//   · no_contratado: el plan no trae la plataforma GPS, o Síguelo la apagó a propósito → «Solicitar a Síguelo».
+//   · por_conectar: se puede conectar y aún no tiene cuenta → selector Síguelo Pro / Síguelo Lite + «Ingresar…».
+//   · activo: conectada y encendida → cuenta, usuario, unidades y «Cambiar de cuenta».
+//   · en_preparacion: tiene cuenta, pero Síguelo aún no la enciende (la conectó desde el backoffice).
+// puedeConectar lo decide la ruta (administrador del cliente o Síguelo en «Operar»; «Ver como» no) y el servidor lo vuelve
+// a exigir al conectar: la pantalla solo esconde el botón.
+async function tarjetaGps(empresaId, v, { puedeConectar }) {
+  const enPlan = await incluye(empresaId, 'gps');
+  const conectable = enPlan && !v.apagada_por_siguelo;
+  const estado = !conectable ? 'no_contratado' : !v.config.token ? 'por_conectar' : v.activa ? 'activo' : 'en_preparacion';
+  return {
+    tipo: 'gps', nombre: TIPOS.gps.nombreCliente || TIPOS.gps.nombre, descripcion: TIPOS.gps.descripcionCliente || TIPOS.gps.descripcion,
+    estado, datos: estado === 'por_conectar' || estado === 'no_contratado' ? [] : await datosDe(empresaId, 'gps', v),
+    conexion: { la_conecta: 'cliente', conectable, puede_conectar: conectable && !!puedeConectar, cuenta: v.config.cuenta === 'lite' ? 'lite' : 'hosting',
+      motivo: !enPlan ? 'plan' : v.apagada_por_siguelo ? 'apagada' : null }
+  };
+}
+
 // Lista para la vista del cliente: una tarjeta por conexión gestionada por Síguelo + los avisos push (servicio general).
-export async function tarjetasCliente(empresaId) {
+// Las demás (facturación, correo, WhatsApp, Síguelo OS) solo las activa Síguelo: activo · en preparación (encendida por
+// Síguelo pero sin configurar) · no contratado.
+export async function tarjetasCliente(empresaId, { puedeConectar = false } = {}) {
   const out = [];
   for (const tipo of tiposDe('siguelo')) {
     const v = await leer(empresaId, tipo);
-    const s = salud(tipo, v);
-    out.push({ tipo, nombre: TIPOS[tipo].nombreCliente || TIPOS[tipo].nombre, descripcion: TIPOS[tipo].descripcionCliente || TIPOS[tipo].descripcion, estado: ESTADO_CLIENTE[s], datos: await datosDe(empresaId, tipo, v) });
+    if (tipo === 'gps') { out.push(await tarjetaGps(empresaId, v, { puedeConectar })); continue; }
+    out.push({ tipo, nombre: TIPOS[tipo].nombreCliente || TIPOS[tipo].nombre, descripcion: TIPOS[tipo].descripcionCliente || TIPOS[tipo].descripcion, estado: estadoCliente(tipo, v), datos: await datosDe(empresaId, tipo, v) });
   }
   const push = await configuracionPush().catch(() => ({ configurado: false }));
   const disp = await uno('SELECT count(*)::int AS n FROM dispositivos WHERE empresa_id = $1', [empresaId]).catch(() => null);

@@ -129,9 +129,9 @@ export async function leer(empresaId, tipo) {
   const k = `${empresaId}:${tipo}`;
   const c = cache.get(k);
   if (c && Date.now() - c.en < TTL) return c;
-  const r = await uno('SELECT activa, config_cifrada, estado_prueba, probado_en, actualizado_en FROM integraciones WHERE empresa_id = $1 AND tipo = $2', [empresaId, tipo]);
+  const r = await uno('SELECT activa, apagada_por_siguelo, config_cifrada, estado_prueba, probado_en, actualizado_en FROM integraciones WHERE empresa_id = $1 AND tipo = $2', [empresaId, tipo]);
   const defecto = Object.fromEntries((TIPOS[tipo]?.campos || []).filter((f) => f.defecto !== undefined).map((f) => [f.clave, f.defecto]));
-  const v = { activa: !!r?.activa, config: { ...defecto, ...(r ? descifrar(r.config_cifrada) : {}) }, estado_prueba: r?.estado_prueba || null, probado_en: r?.probado_en || null, en: Date.now() };
+  const v = { activa: !!r?.activa, apagada_por_siguelo: !!r?.apagada_por_siguelo, config: { ...defecto, ...(r ? descifrar(r.config_cifrada) : {}) }, estado_prueba: r?.estado_prueba || null, probado_en: r?.probado_en || null, en: Date.now() };
   if (tipo === 'correo' && !v.config.modo) v.config.modo = v.config.host ? 'smtp' : 'siguelo'; // los que ya tenían SMTP siguen con el suyo
   if (tipo === 'dashboard_siguelo') {
     // El dashboard reconoce al cliente con el mismo token de la plataforma GPS: se reutiliza la conexión GPS.
@@ -150,7 +150,7 @@ export async function leerPublica(empresaId, tipo) {
   const config = { ...v.config };
   for (const f of TIPOS[tipo].campos) if (f.secreto && config[f.clave]) config[f.clave] = '••••••••';
   if ('token_plataforma' in config) { config.conexion_plataforma = !!config.token_plataforma; delete config.token_plataforma; }
-  return { tipo, ...TIPOS[tipo], activa: v.activa, config, configurada: tieneDatos(tipo, v.config), estado_prueba: v.estado_prueba, probado_en: v.probado_en };
+  return { tipo, ...TIPOS[tipo], activa: v.activa, apagada_por_siguelo: v.apagada_por_siguelo, config, configurada: tieneDatos(tipo, v.config), estado_prueba: v.estado_prueba, probado_en: v.probado_en };
 }
 
 const tieneDatos = (tipo, c) => {
@@ -183,6 +183,15 @@ export async function activar(empresaId, tipo, activa, usuarioId) {
   await q(`INSERT INTO integraciones (empresa_id, tipo, activa, actualizado_por) VALUES ($1,$2,$3,$4)
            ON CONFLICT (empresa_id, tipo) DO UPDATE SET activa = EXCLUDED.activa, actualizado_por = EXCLUDED.actualizado_por, actualizado_en = now()`,
     [empresaId, tipo, !!activa, usuarioId]);
+  cache.delete(`${empresaId}:${tipo}`);
+}
+
+// 22-oct (Pablo): Síguelo apagó la integración a propósito desde el backoffice. Para la plataforma GPS es lo único que
+// impide al cliente conectarla él mismo (una integración que nadie ha tocado también está inactiva, y esa sí puede).
+export async function marcarApagada(empresaId, tipo, apagada, usuarioId) {
+  await q(`INSERT INTO integraciones (empresa_id, tipo, apagada_por_siguelo, actualizado_por) VALUES ($1,$2,$3,$4)
+           ON CONFLICT (empresa_id, tipo) DO UPDATE SET apagada_por_siguelo = EXCLUDED.apagada_por_siguelo, actualizado_por = EXCLUDED.actualizado_por, actualizado_en = now()`,
+    [empresaId, tipo, !!apagada, usuarioId]);
   cache.delete(`${empresaId}:${tipo}`);
 }
 

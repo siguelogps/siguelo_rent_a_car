@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Subir certificado y folios · Síguelo GPS</title><link rel="icon" href="/img/logo-pin.png">
+<meta name="referrer" content="no-referrer"><meta name="theme-color" content="#FFFFFF">
+<script src="/tema.js"></script><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css">
+</head>
+<body>
+<div class="login">
+  <form class="caja" id="f" style="width:min(560px,100%)">
+    <img src="/img/logo-siguelo.png" alt="Síguelo GPS" style="height:36px;align-self:flex-start">
+    <div><h1 style="font-size:20px">Certificado digital y folios del SII</h1><p class="muted peq" id="bajada">Cargando…</p></div>
+    <div id="campos" hidden style="display:flex;flex-direction:column;gap:14px"></div>
+    <div class="aviso error" id="err" hidden></div>
+    <div class="aviso ok" id="ok" hidden></div>
+    <p class="peq muted">Este enlace sirve una sola vez y vence en 72 horas. Los archivos se guardan cifrados; nadie los envía por correo.</p>
+  </form>
+</div>
+<script type="module">
+// Enlace de carga de un solo uso (22-oct, espec. Backoffice): el cliente sube su certificado y sus CAF sin mandarlos por correo.
+import { api, esc, fechaHora } from '/comun.js';
+const token = location.pathname.split('/').pop();
+history.replaceState(null, '', '/carga');
+const f = document.getElementById('f'), err = document.getElementById('err'), campos = document.getElementById('campos');
+const mal = (m) => { err.textContent = m; err.hidden = false; };
+let info = null;
+try {
+  info = await api(`carga/${encodeURIComponent(token)}`);
+  document.getElementById('bajada').textContent = `${info.empresa} · vence el ${fechaHora(info.vence_en)}`;
+  campos.innerHTML = info.piezas.map((p) => `<label class="etiqueta">${esc(p.nombre)}<input class="campo" type="file" name="${p.clave}" accept="${p.clave === 'certificado' ? '.pfx,.p12' : '.xml'}" required style="padding-top:7px"></label>`).join('')
+    + (info.pide_clave ? '<label class="etiqueta">RUT del titular del certificado<input class="campo" name="rut_certificado" placeholder="11.111.111-1"></label><label class="etiqueta">Clave del certificado<input class="campo" type="password" name="clave_certificado" autocomplete="off" required></label>' : '')
+    + '<button class="btn primario grande" type="submit">Subir archivos</button>';
+  campos.hidden = false;
+} catch (e) { document.getElementById('bajada').textContent = ''; mal(e.message); }
+const base64 = (archivo) => new Promise((ok, no) => { const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1]); r.onerror = no; r.readAsDataURL(archivo); });
+f.onsubmit = async (ev) => {
+  ev.preventDefault(); err.hidden = true;
+  const archivos = {};
+  for (const p of info.piezas) { const a = f[p.clave].files[0]; if (!a) return mal(`Falta: ${p.nombre}`); archivos[p.clave] = { nombre: a.name, base64: await base64(a) }; }
+  const b = f.querySelector('button'); b.disabled = true; b.textContent = 'Subiendo…';
+  try {
+    await api(`carga/${encodeURIComponent(token)}`, { body: { archivos, rut_certificado: f.rut_certificado?.value || '', clave_certificado: f.clave_certificado?.value || '' } });
+    campos.hidden = true;
+    const ok = document.getElementById('ok'); ok.textContent = 'Listo: recibimos tus archivos. El equipo Síguelo GPS terminará la configuración y te avisará.'; ok.hidden = false;
+  } catch (e) { mal(e.message); b.disabled = false; b.textContent = 'Subir archivos'; }
+};
+</script>
+</body>
+</html>

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Crear mi clave · Síguelo On Rent</title><link rel="icon" href="/img/logo-pin.png">
+<meta name="referrer" content="no-referrer"><meta name="theme-color" content="#FFFFFF">
+<script src="/tema.js"></script><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css">
+</head>
+<body>
+<div class="login">
+  <form class="caja" id="f">
+    <img src="/img/logo-siguelo.png" alt="Síguelo GPS" style="height:36px;align-self:flex-start">
+    <div><h1 style="font-size:20px">Crea tu clave</h1><p class="muted peq" id="bajada">Cargando tu invitación…</p></div>
+    <div id="campos" hidden style="display:flex;flex-direction:column;gap:14px">
+      <label class="etiqueta">Clave nueva (mínimo 10 caracteres)<input class="campo" name="clave" type="password" autocomplete="new-password" required minlength="10"></label>
+      <label class="etiqueta">Repite la clave<input class="campo" name="repite" type="password" autocomplete="new-password" required></label>
+      <button class="btn primario grande" type="submit">Crear clave e ingresar</button>
+    </div>
+    <div class="aviso error" id="err" hidden></div>
+    <p class="peq muted">Nadie de Síguelo GPS te pedirá tu clave. ¿Dudas? soporte@siguelogps.cl</p>
+  </form>
+</div>
+<script type="module">
+// Invitación al administrador (22-oct, espec. Backoffice): crea su propia clave; Síguelo no la escribe ni la ve.
+import { api } from '/comun.js';
+const token = location.pathname.split('/').pop();
+history.replaceState(null, '', '/invitacion'); // el enlace no queda en el historial
+const f = document.getElementById('f'), err = document.getElementById('err');
+const mal = (m) => { err.textContent = m; err.hidden = false; };
+let correo = '';
+try {
+  const i = await api(`invitacion/${encodeURIComponent(token)}`);
+  correo = i.correo;
+  document.getElementById('bajada').textContent = `${i.nombre} · ${i.correo} · ${i.empresa}`;
+  document.getElementById('campos').hidden = false;
+} catch (e) { document.getElementById('bajada').textContent = ''; mal(e.message); }
+f.onsubmit = async (ev) => {
+  ev.preventDefault(); err.hidden = true;
+  if (f.clave.value.length < 10) return mal('La clave debe tener al menos 10 caracteres.');
+  if (f.clave.value !== f.repite.value) return mal('Las claves no coinciden.');
+  try {
+    await api(`invitacion/${encodeURIComponent(token)}`, { body: { clave: f.clave.value } });
+    await api('ingresar', { body: { correo, clave: f.clave.value } });
+    location.href = '/inicio';
+  } catch (e) { mal(e.message); }
+};
+</script>
+</body>
+</html>

@@ -12,11 +12,13 @@
     <img src="/img/logo-siguelo.png" alt="Síguelo GPS" style="height:32px;align-self:flex-start">
     <h1 style="font-size:18px">Plataforma GPS</h1>
     <p id="estado" class="muted">Guardando la conexión…</p>
-    <a class="btn primario" href="/configuracion#integraciones" id="volver" hidden>Volver a Integraciones</a>
+    <a class="btn primario" href="/empresas" id="volver" hidden>Volver al backoffice</a>
   </div>
 </div>
 <script type="module">
 // Vuelta del ingreso con usuario y clave de la plataforma GPS: trae ?access_token=…&user_name=… (la clave nunca llega aquí).
+// 22-oct (espec. Backoffice): lo conecta el equipo Síguelo desde la ficha del cliente. La vuelta trae «estado», de un solo
+// uso, y es el servidor el que sabe a qué cliente va el token (la empresa no viaja en la dirección).
 import { api } from '/comun.js';
 const p = new URLSearchParams(location.search + '&' + location.hash.slice(1));
 const estado = document.getElementById('estado'), volver = document.getElementById('volver');
@@ -32,7 +34,9 @@ if (cuenta !== 'hosting' && cuenta !== 'lite') { try { cuenta = localStorage.get
 if (!p.get('access_token')) fin(p.get('error') ? `La plataforma GPS no autorizó el acceso (${p.get('error')}).` : 'No se recibió la autorización de la plataforma GPS. Vuelve a intentarlo.', false);
 else {
   try {
-    const r = await api('integraciones/gps/token', { body: { token: p.get('access_token'), usuario: p.get('user_name') || '', cuenta } });
+    if (!p.get('estado')) throw new Error('Este ingreso no viene del backoffice de Síguelo. Vuelve a abrirlo desde la ficha del cliente.');
+    const r = await api('backoffice/integraciones/gps/token', { body: { token: p.get('access_token'), usuario: p.get('user_name') || '', cuenta, estado: p.get('estado') } });
+    volver.href = `/empresas/${r.empresa_id}#integraciones`;
     fin(r.prueba?.ok ? `Conectado como «${p.get('user_name') || 'usuario'}». ${r.prueba.mensaje}` : `Se guardó la conexión de «${p.get('user_name') || 'usuario'}», pero la prueba falló: ${r.prueba?.mensaje || 'sin detalle'}`, !!r.prueba?.ok);
   } catch (e) { fin(e.message, false); }
 }

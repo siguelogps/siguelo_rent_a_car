@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Bitácora global</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/img/app/apple-touch-icon.png"><meta name="theme-color" content="#FFFFFF">
+<script src="/tema.js"></script><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/config.css"><link rel="stylesheet" href="/css/backoffice.css">
+</head>
+<body>
+<main>
+  <div class="pagina-cab"><div><h1>Bitácora global</h1><p>Todo lo que pasa en todos los clientes y en el backoffice, lo más reciente primero.</p></div></div>
+  <div class="filtros-fila"><label class="cf-check-linea"><input type="checkbox" id="equipo"> Solo el equipo Síguelo</label></div>
+  <div class="tarjeta"><div class="tabla-env"><table class="tabla"><thead><tr><th>Fecha</th><th>Cliente</th><th>Quién</th><th>Acción</th><th>Detalle</th></tr></thead><tbody id="lista"></tbody></table></div>
+    <div class="cf-paginas"><span class="muted" id="pag"></span><button class="btn peq" id="ant">← Anterior</button><button class="btn peq" id="sig">Siguiente →</button></div></div>
+</main>
+<script type="module">
+import { iniciarPagina, api, esc, fechaHora, toastError } from '/comun.js';
+await iniciarPagina({ activo: 'bitacora-global', titulo: 'Bitácora global' });
+let pagina = 1;
+const ACCION = (a) => ({ siguelo_entro_operar: 'Entró a operar', siguelo_entro_ver: 'Entró con «Ver como»', siguelo_salio: 'Salió del cliente' })[a] || a.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+async function cargar() {
+  const r = await api(`backoffice/bitacora?pagina=${pagina}${document.getElementById('equipo').checked ? '&equipo=1' : ''}`);
+  document.getElementById('lista').innerHTML = r.filas.map((f) => `<tr><td class="mono peq" style="white-space:nowrap">${fechaHora(f.creado_en)}</td><td>${f.empresa_id ? `<a href="/empresas/${f.empresa_id}">${esc(f.empresa)}</a>` : '<span class="muted">Backoffice</span>'}</td>
+    <td>${esc(f.usuario || 'Sistema')}${['superadmin', 'soporte'].includes(f.rol) ? ' <span class="chip marca">Síguelo</span>' : ''}</td><td>${esc(ACCION(f.accion))}</td>
+    <td class="peq"><div class="cf-detalle-json">${esc(f.detalle?.motivo ? `motivo: ${f.detalle.motivo}` : Object.keys(f.detalle || {}).length ? JSON.stringify(f.detalle) : '')}</div></td></tr>`).join('') || '<tr><td colspan="5" class="rc-vacio">Sin registros</td></tr>';
+  document.getElementById('pag').textContent = `página ${pagina}`;
+  document.getElementById('ant').disabled = pagina <= 1;
+  document.getElementById('sig').disabled = r.filas.length < 100;
+}
+document.getElementById('equipo').onchange = () => { pagina = 1; cargar().catch(toastError); };
+document.getElementById('ant').onclick = () => { pagina -= 1; cargar().catch(toastError); };
+document.getElementById('sig').onclick = () => { pagina += 1; cargar().catch(toastError); };
+cargar().catch(toastError);
+</script>
+</body>
+</html>

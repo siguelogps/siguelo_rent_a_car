@@ -1,0 +1,366 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cliente</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/img/app/apple-touch-icon.png"><meta name="theme-color" content="#FFFFFF">
+<script src="/tema.js"></script><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/config.css"><link rel="stylesheet" href="/css/backoffice.css">
+</head>
+<body>
+<main>
+  <div class="bo-migas"><a href="/empresas">Clientes</a> › <span id="miga">…</span></div>
+  <div id="cab"></div>
+  <nav class="bo-tabs" id="tabs" aria-label="Secciones de la ficha"></nav>
+  <section id="panel" style="display:flex;flex-direction:column;gap:18px"><p class="rc-cargando">Cargando…</p></section>
+</main>
+<script type="module">
+// Backoffice Síguelo · ficha del cliente (22-oct, espec. aprobada por Pablo; mockups 03, 04, 05 en On Bus, aquí con el
+// estilo de On Rent). Pestañas: Datos, Plan y módulos, Integraciones, Usuarios, Apps con marca, Actividad y bitácora.
+// Nunca llega un secreto: los campos secretos vienen como «••••••••» y solo se reemplazan si se escribe uno nuevo.
+import { iniciarPagina, api, esc, fecha, fechaHora, hora, rut, validarRut, modal, confirmar, toast, toastError, leerForm, ICONOS } from '/comun.js';
+const yo = await iniciarPagina({ activo: 'empresas', titulo: 'Clientes' });
+const ID = Number(location.pathname.split('/').pop());
+const $ = (s) => document.querySelector(s);
+let D = null;
+const ed = () => D?.puede_operar;
+const SIN = '—';
+
+const TABS = [['datos', 'Datos'], ['plan', 'Plan y módulos'], ['integraciones', 'Integraciones'], ['usuarios', 'Usuarios'], ['apps', 'Apps con marca'], ['actividad', 'Actividad y bitácora']];
+const tab = () => (TABS.some(([k]) => k === location.hash.slice(1)) ? location.hash.slice(1) : 'datos');
+addEventListener('hashchange', () => pintar());
+
+async function cargar() { D = await api(`backoffice/clientes/${ID}`); pintar(); }
+const iniciales = (n) => n.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
+const estadoChip = (e) => e.estado === 'suspendido' ? '<span class="chip susp">Suspendido</span>' : e.estado === 'baja' ? '<span class="chip bajac">Baja</span>' : e.marcha_blanca ? '<span class="chip mb">Marcha blanca</span>' : '<span class="chip ok">Activo</span>';
+
+function pintar() {
+  const e = D.empresa;
+  document.title = `${e.nombre} · Backoffice`;
+  $('#miga').textContent = e.nombre;
+  const activos = D.usuarios.filter((u) => u.activo).length;
+  const sig = D.integraciones.filter((i) => i.administra === 'siguelo');
+  const okInt = sig.filter((i) => i.salud === 'ok').length, malInt = sig.some((i) => i.salud === 'mal');
+  $('#cab').innerHTML = `<div class="bo-ficha-cab">
+    <div class="bo-logo" style="background:${esc(e.color || '#0F5F58')}">${e.tiene_logo ? `<img src="/api/logo/${esc(e.slug)}" alt="">` : esc(iniciales(e.nombre))}</div>
+    <div><h1>${esc(e.nombre)}</h1><div class="meta">${estadoChip(e)}<span class="chip">Plan ${esc(D.plan?.nombre || e.plan)}</span><span class="mono">${e.rut ? rut(e.rut) : 'sin RUT'}</span><span>· cliente desde ${fecha(e.creado_en)}</span><span>· ${D.uso.vehiculos} vehículos · ${activos} usuarios</span></div></div>
+    <div class="acciones"><button class="btn" data-entrar="ver">Ver como</button><button class="btn contorno" data-entrar="operar"${e.estado !== 'activo' || !ed() ? ' disabled' : ''}>Operar</button>${ed() ? '<a class="btn" href="#datos">Editar datos</a>' : ''}</div></div>`;
+  const n = { integraciones: [`${okInt} de ${sig.length}`, malInt ? 'mal' : ''], usuarios: [String(activos)], actividad: [String(D.solicitudes.filter((s) => ['pendiente', 'en_curso'].includes(s.estado)).length || '')] };
+  $('#tabs').innerHTML = TABS.map(([k, t]) => `<a href="#${k}"${k === tab() ? ' aria-current="page"' : ''}>${t}${n[k]?.[0] ? ` <span class="n ${n[k][1] || ''}">${n[k][0]}</span>` : ''}</a>`).join('');
+  $('#panel').onclick = null; // cada pestaña pone los suyos
+  ({ datos, plan, integraciones, usuarios, apps, actividad })[tab()]();
+}
+
+// ═════════ Entrar ═════════
+document.querySelector('main').addEventListener('click', async (ev) => {
+  const b = ev.target.closest('[data-entrar]');
+  if (!b) return;
+  const modo = b.dataset.entrar;
+  const motivoEnLinea = document.getElementById('motivo-operar');
+  if (modo === 'operar' && !(motivoEnLinea && b.closest('.bo-entrar'))) {
+    return modal({ titulo: `Operar en ${D.empresa.nombre}`, html: `<p class="peq muted">Actúas como administrador del cliente. La franja amarilla queda arriba todo el rato y cada cambio va a la bitácora del cliente con tu nombre y este motivo.</p>
+      <label class="etiqueta">Motivo<input class="campo" name="motivo" placeholder="Soporte, ticket 1187" maxlength="300"></label>`,
+    botones: [{ texto: 'Cancelar' }, { texto: 'Operar', clase: 'contorno', accion: async (c) => entrar('operar', c.querySelector('[name=motivo]').value) }] });
+  }
+  try { await entrar(modo, motivoEnLinea?.value); } catch (e) { toastError(e); }
+});
+async function entrar(modo, motivo) {
+  const r = await api(`backoffice/clientes/${ID}/entrar`, { body: { modo, motivo } });
+  location.href = r.destino;
+}
+
+// ═════════ Datos ═════════
+function datos() {
+  const e = D.empresa;
+  const dis = ed() ? '' : ' disabled';
+  const c = (k, t, extra = '') => `<label class="etiqueta">${t}<input class="campo" name="${k}" value="${esc(k === 'rut' && e.rut ? rut(e.rut) : e[k] ?? '')}"${dis} ${extra}></label>`;
+  const admin = D.usuarios.find((u) => u.rol === 'administrador');
+  $('#panel').innerHTML = `<div class="bo-col-der">
+    <form class="tarjeta bloque" id="f-datos"><h2>Datos de la empresa</h2>
+      <div class="cf-form">${c('nombre', 'Nombre de fantasía', 'required')}${c('razon_social', 'Razón social')}${c('rut', 'RUT')}${c('giro', 'Giro')}${c('direccion', 'Dirección')}${c('comuna', 'Comuna')}${c('ciudad', 'Ciudad')}${c('telefono', 'Teléfono')}${c('correo', 'Correo de contacto', 'type="email"')}</div>
+      ${ed() ? '<div class="cf-pie"><button class="btn primario" type="submit">Guardar datos</button></div>' : ''}</form>
+    <div class="tarjeta bloque bo-resumen"><h2>Resumen</h2>
+      <div class="dato"><span>Portal de reservas</span><a class="mono peq" href="/reservar/${esc(e.slug)}" target="_blank" rel="noopener">/reservar/${esc(e.slug)}</a></div>
+      <div class="dato"><span>Primer administrador</span><span class="v">${admin ? `${esc(admin.nombre)} · ${esc(admin.correo)}` : SIN}</span></div>
+      <div class="dato"><span>Distribuidor</span><span class="v">Síguelo GPS</span></div>
+      <div class="dato"><span>Estado</span><span class="v">${estadoChip(e)} ${e.estado_motivo ? `<span class="peq muted">${esc(e.estado_motivo)} · ${fecha(e.estado_en)}</span>` : ''}</span></div>
+      <p class="peq muted">El logo, las sucursales, las reglas y las plantillas los administra el cliente en su Configuración.</p></div></div>`;
+  $('#f-datos').onsubmit = async (ev) => {
+    ev.preventDefault();
+    const d = leerForm(ev.target);
+    if (d.rut && !validarRut(d.rut)) return toast('El RUT no es válido', 'error');
+    try { await api(`backoffice/clientes/${ID}`, { method: 'PATCH', body: d }); toast('Datos guardados', 'ok'); cargar(); } catch (e) { toastError(e); }
+  };
+}
+
+// ═════════ Plan y módulos ═════════
+function plan() {
+  const e = D.empresa, p = D.plan;
+  const extras = new Set(e.modulos_extra || []);
+  const usoDe = (n, max, t) => `<div class="dato"><span>${t}</span><span class="v mono${max != null && n >= max ? ' mal' : ''}">${n} de ${max ?? '∞'}</span></div>`;
+  const activo = e.estado === 'activo';
+  $('#panel').innerHTML = `<div class="bo-col-der"><div style="display:flex;flex-direction:column;gap:18px;min-width:0">
+    <div class="tarjeta bloque"><h2>Plan</h2>
+      <div class="bo-alta-planes" role="radiogroup">${D.planes.filter((x) => x.activo || x.codigo === e.plan).map((x) => `<button type="button" class="bo-alta-plan" role="radio" data-plan="${esc(x.codigo)}" aria-checked="${x.codigo === e.plan}"${ed() ? '' : ' disabled'}><b>${esc(x.nombre)}</b><span class="mono">${x.precio_uf != null ? `${Number(x.precio_uf).toLocaleString('es-CL')} UF/mes` : 'precio por definir'}</span><small>hasta ${x.max_vehiculos ?? '∞'} vehículos · ${x.max_usuarios ?? '∞'} usuarios</small></button>`).join('')}</div>
+      <div class="rejilla-3">${usoDe(D.uso.vehiculos, p?.max_vehiculos, 'Vehículos')}${usoDe(D.uso.usuarios, p?.max_usuarios, 'Usuarios')}${usoDe(D.uso.sucursales, p?.max_sucursales, 'Sucursales')}</div></div>
+    <div class="tarjeta bloque"><h2>Módulos <span class="peq muted" style="font-weight:400">lo que el cliente ve en su menú; un módulo apagado se oculta y su API responde «no incluido en tu plan»</span></h2>
+      <div class="bo-modulos-sw">${Object.entries(D.modulos).map(([k, n]) => {
+    const incl = D.planes.find((x) => x.codigo === e.plan)?.modulos.includes(k);
+    return `<label><span>${esc(n)}<small>${incl ? 'incluido en el plan' : extras.has(k) ? 'extra, fuera del plan' : 'no incluido'}</small></span><span class="switch"><input type="checkbox" data-mod="${k}"${incl || extras.has(k) ? ' checked' : ''}${incl || !ed() ? ' disabled' : ''} aria-label="${esc(n)}"><span></span></span></label>`;
+  }).join('')}</div>
+      ${ed() ? '<div class="cf-pie"><button class="btn primario" id="g-plan">Guardar plan y módulos</button></div>' : ''}</div></div>
+    <div style="display:flex;flex-direction:column;gap:18px;min-width:0">
+      <div class="tarjeta bloque"><div class="bo-mb"><div><h2 style="margin-bottom:6px">Marcha blanca</h2><p class="peq muted">${e.marcha_blanca ? `Encendida${e.marcha_blanca_en ? ` desde el ${fecha(e.marcha_blanca_en)}` : ''}. Correos, WhatsApp, cobros, boletas y bloqueos se registran pero no salen.` : `Apagada${e.marcha_blanca_en ? ` desde el ${fecha(e.marcha_blanca_en)}` : ''}: los mensajes y cobros salen de verdad.`} Solo el equipo Síguelo la cambia.</p></div>
+        <label class="switch"><input type="checkbox" id="mb"${e.marcha_blanca ? ' checked' : ''}${ed() && e.estado !== 'baja' ? '' : ' disabled'} aria-label="Marcha blanca"><span></span></label></div></div>
+      <div class="tarjeta bo-riesgo">
+        ${e.estado === 'suspendido' ? `<div class="sec"><div><b>Reactivar</b><small>Suspendido por «${esc(e.estado_motivo || SIN)}» el ${fecha(e.estado_en)}. Al reactivar, sus usuarios vuelven a entrar.</small></div><button class="btn" id="reactivar"${ed() ? '' : ' disabled'}>Reactivar</button></div>`
+    : activo ? `<div class="sec"><div><b>Suspender</b><small>El cliente no puede entrar ni recibir mensajes. Sus datos e integraciones se conservan. Se reactiva en un clic.</small></div><button class="btn peligro" id="suspender"${ed() ? '' : ' disabled'}>Suspender</button></div>` : ''}
+        ${e.estado !== 'baja' ? `<div class="sec"><div><b>Dar de baja</b><small>Fin del contrato: se desconectan las integraciones, se borran los secretos y los datos se guardan ${D.dias_exportar} días para exportarlos. Después se eliminan o anonimizan.</small></div><button class="btn peligro" id="baja"${ed() ? '' : ' disabled'}>Dar de baja</button></div>`
+    : `<div class="sec"><div><b>Dado de baja</b><small>El ${fecha(e.estado_en)} (${esc(e.estado_motivo || SIN)}). El cliente puede exportar hasta el ${fecha(e.exportar_hasta)}${e.datos_eliminados_en ? `; datos anonimizados el ${fecha(e.datos_eliminados_en)}` : ''}.</small></div></div>`}
+      </div></div></div>`;
+  let elegido = e.plan;
+  $('#panel').querySelectorAll('[data-plan]').forEach((b) => b.onclick = () => {
+    elegido = b.dataset.plan;
+    $('#panel').querySelectorAll('[data-plan]').forEach((x) => x.setAttribute('aria-checked', String(x === b)));
+  });
+  $('#g-plan')?.addEventListener('click', async () => {
+    const mods = [...$('#panel').querySelectorAll('[data-mod]')].filter((x) => x.checked && !x.disabled).map((x) => x.dataset.mod);
+    try { await api(`backoffice/clientes/${ID}/plan`, { method: 'PUT', body: { plan: elegido, modulos_extra: mods } }); toast('Plan y módulos guardados', 'ok'); cargar(); } catch (x) { toastError(x); }
+  });
+  $('#mb')?.addEventListener('change', async (ev) => {
+    const activa = ev.target.checked;
+    const r = await modal({ titulo: activa ? 'Encender la marcha blanca' : 'Apagar la marcha blanca', html: `${activa ? '<p>Correos, WhatsApp, cobros, boletas e inmovilizaciones quedarán retenidos o simulados.</p>' : `<div class="aviso error">Desde ahora, con las integraciones activas, <b>saldrán correos y WhatsApp a los clientes de ${esc(e.nombre)}, se harán cobros reales y se emitirán documentos ante el SII</b>.</div>`}
+      <label class="etiqueta">Motivo (queda en la bitácora)<input class="campo" name="motivo" placeholder="${activa ? 'Revisión de plantillas' : 'Cliente aprobó la puesta en marcha'}"></label>`,
+    botones: [{ texto: 'Cancelar', valor: false }, { texto: activa ? 'Encender' : 'Apagar marcha blanca', clase: activa ? 'primario' : 'peligro', accion: async (c) => { await api(`backoffice/clientes/${ID}/marcha-blanca`, { body: { activa, motivo: c.querySelector('[name=motivo]').value } }); return true; } }] });
+    if (r === true) { toast(activa ? 'Marcha blanca encendida' : 'Marcha blanca apagada', 'ok'); cargar(); } else ev.target.checked = !activa;
+  });
+  $('#suspender')?.addEventListener('click', () => confirmarEstado('suspender'));
+  $('#baja')?.addEventListener('click', () => confirmarEstado('baja'));
+  $('#reactivar')?.addEventListener('click', () => modal({ titulo: `Reactivar a ${e.nombre}`, html: '<label class="etiqueta">Motivo (queda en la bitácora)<input class="campo" name="motivo" placeholder="Pagos al día"></label>',
+    botones: [{ texto: 'Cancelar' }, { texto: 'Reactivar', clase: 'primario', accion: async (c) => { await api(`backoffice/clientes/${ID}/reactivar`, { body: { motivo: c.querySelector('[name=motivo]').value } }); toast('Cliente reactivado', 'ok'); cargar(); } }] }));
+}
+
+function confirmarEstado(accion) {
+  const e = D.empresa, baja = accion === 'baja';
+  const n = D.usuarios.filter((u) => u.activo).length;
+  const motivos = baja ? ['Fin del contrato', 'Cambio de proveedor', 'Cierre del negocio', 'Pago pendiente', 'Otro'] : ['Pago pendiente', 'Solicitud del cliente', 'Uso indebido', 'Otro'];
+  return modal({ titulo: `${baja ? 'Dar de baja' : 'Suspender'} a ${e.nombre}`, html: `
+    <div class="aviso error">${baja ? `Se desconectan las integraciones y se borran sus secretos. Los ${n} usuarios quedan en solo lectura por ${D.dias_exportar} días para exportar sus datos; después se eliminan o anonimizan. No se puede deshacer.` : `Sus ${n} usuarios pierden el acceso ahora mismo, el portal de reservas se cierra y no sale ningún mensaje. No se borra nada.`}</div>
+    <div class="rejilla-2"><label class="etiqueta">Motivo<select class="campo" name="motivo">${motivos.map((m) => `<option>${m}</option>`).join('')}</select></label>
+      <label class="etiqueta">Avisar al administrador del cliente<select class="campo" name="avisar"><option value="1">Sí, por correo</option><option value="">No</option></select></label></div>
+    <label class="etiqueta">Detalle (queda en la bitácora)<textarea class="campo" name="detalle" placeholder="${baja ? 'Contrato terminado el …' : 'Facturas de agosto y septiembre impagas…'}"></textarea></label>
+    <label class="etiqueta">Para confirmar, escribe el nombre del cliente<input class="campo" name="confirmacion" placeholder="${esc(e.nombre)}" autocomplete="off"></label>`,
+  botones: [{ texto: 'Cancelar' }, { texto: baja ? 'Dar de baja' : 'Suspender cliente', clase: 'peligro', accion: async (c) => {
+    const d = leerForm(c);
+    await api(`backoffice/clientes/${ID}/${accion}`, { body: { ...d, avisar: !!d.avisar } });
+    toast(baja ? 'Cliente dado de baja' : 'Cliente suspendido', 'ok'); cargar();
+  } }] });
+}
+
+// ═════════ Integraciones ═════════
+const IC = {
+  gps: ICONOS.gps, dashboard_siguelo: ICONOS.tag_multas, simpleapi: ICONOS.facturacion, webpay: ICONOS.pagos, mercadopago: ICONOS.pagos,
+  whatsapp: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 20l1.3-3.9A8 8 0 1 1 8 19z"/></svg>',
+  correo: '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 7l9 6 9-6"/></svg>'
+};
+const SALUD = { ok: ['ok', 'Activa'], mal: ['error', 'Falla'], esp: ['aviso', 'En preparación'], no: ['', 'No contratada'] };
+const CUENTA = { hosting: 'Síguelo Pro', lite: 'Síguelo Lite' };
+const ACC = { integracion_configurada: 'Datos guardados', integracion_activada: 'Activada', integracion_desactivada: 'Apagada', integracion_gps_conectada: 'Conectada con usuario y clave', integracion_desconectada: 'Desconectada' };
+const SIN_AUTORRELLENO = ' autocomplete="off" autocapitalize="off" spellcheck="false" data-lpignore="true" data-1p-ignore="true"';
+const dato = (t, v, mono = false) => `<div class="dato"><span>${t}</span><span class="v${mono ? ' mono' : ''}">${v ?? SIN}</span></div>`;
+function prueba(i) {
+  const p = i.estado_prueba || '';
+  if (!p) return '<span class="peq muted">Sin pruebas todavía</span>';
+  return `<span class="peq ${p.startsWith('ok') ? '' : 'muted'}">${p.startsWith('ok') ? '✓' : '✕'} ${esc(p.replace(/^(ok|error):\s*/, ''))}${i.probado_en ? ` · ${fechaHora(i.probado_en)}` : ''}</span>`;
+}
+function campo(i, f) {
+  const v = i.config[f.clave] ?? '';
+  const ancho = /url|remitente|geocerca|responder/.test(f.clave) ? ' ancho' : '';
+  if (f.soloLectura || f.tipo === 'archivo') return '';
+  if (f.opciones) return `<label class="etiqueta${ancho}">${esc(f.etiqueta)}<select class="campo" name="${f.clave}"${SIN_AUTORRELLENO}>${f.opciones.map((o) => `<option value="${esc(o)}"${String(v) === o ? ' selected' : ''}>${esc(f.nombres?.[o] || o)}</option>`).join('')}</select></label>`;
+  const oculto = /wialon/i.test(String(v));
+  return `<label class="etiqueta${ancho}">${esc(f.etiqueta)}<input class="campo${f.secreto ? ' mono bo-secreto' : ''}" name="${f.clave}" type="${f.tipo === 'numero' ? 'number' : 'text'}" value="${oculto ? '' : esc(v)}" placeholder="${esc(/wialon/i.test(f.ejemplo || '') ? '' : f.ejemplo || '')}"${oculto ? ' data-oculto' : ''}${SIN_AUTORRELLENO}></label>`;
+}
+const CAMPOS_FUERA = { gps: ['cuenta', 'token', 'usuario'], correo: [] };
+function formulario(i) {
+  let campos = i.campos.filter((f) => !(CAMPOS_FUERA[i.tipo] || []).includes(f.clave));
+  if (i.tipo === 'correo') campos = campos.filter((f) => i.config.modo === 'smtp' ? true : ['modo', 'remitente_nombre', 'responder_a'].includes(f.clave));
+  return `<form class="campos-int" onsubmit="return false">${campos.map((f) => campo(i, f)).join('')}</form>`;
+}
+function datosInt(i) {
+  const c = i.config;
+  if (i.tipo === 'gps') return dato('Cuenta del cliente', c.usuario ? esc(c.usuario) : SIN, true) + dato('Plataforma', c.token ? CUENTA[c.cuenta] || CUENTA.hosting : SIN) + dato('Vehículos vinculados', `${D.vehiculos_gps.con} de ${D.vehiculos_gps.total}`, true);
+  if (i.tipo === 'simpleapi') {
+    const rec = (k) => (c[k] ? 'recibido' : 'falta');
+    return dato('Emisor', D.empresa.rut ? rut(D.empresa.rut) : SIN, true) + dato('Certificado digital', rec('certificado_archivo_id')) + dato('Ambiente', c.ambiente === 'produccion' ? 'producción' : 'certificación')
+      + dato('CAF boletas', rec('caf_boleta_archivo_id')) + dato('CAF facturas', rec('caf_factura_archivo_id')) + dato('CAF notas de crédito', rec('caf_nota_credito_archivo_id'));
+  }
+  if (i.tipo === 'correo') return c.modo === 'smtp' ? dato('Sale por', 'servidor SMTP propio') + dato('Servidor', esc(c.host || SIN), true) + dato('Remitente', esc(c.remitente || SIN)) : dato('Sale por', 'servidor de Síguelo') + dato('Remitente visible', esc(c.remitente_nombre || D.empresa.nombre)) + dato('Responder a', esc(c.responder_a || D.empresa.correo || SIN), true);
+  if (i.tipo === 'whatsapp') return dato('Número (Phone ID)', esc(c.phone_id || SIN), true) + dato('Plantilla', esc(c.plantilla || SIN)) + dato('Token', c.token ? 'guardado, cifrado' : SIN);
+  if (i.tipo === 'dashboard_siguelo') return dato('Acceso', c.conexion_plataforma ? 'con la plataforma GPS' : 'falta la plataforma GPS') + dato('Datos que lee', 'TAG · multas') + dato('Cada', `${c.sincronizar_cada_horas ?? SIN} h`, true);
+  if (i.tipo === 'webpay') return dato('Ambiente', c.ambiente === 'produccion' ? 'producción' : 'integración') + dato('Código de comercio', esc(c.codigo_comercio || SIN), true) + dato('API key', c.api_key ? 'guardada, cifrada' : SIN);
+  if (i.tipo === 'mercadopago') return dato('Public key', c.public_key ? 'cargada' : SIN) + dato('Access token', c.access_token ? 'guardado, cifrado' : SIN);
+  return '';
+}
+function tarjeta(i) {
+  const [cls, txt] = SALUD[i.salud];
+  const cliente = i.administra === 'cliente';
+  const hist = i.historial.length ? `<ul class="historial bo-int-hist">${i.historial.slice(0, 3).map((h) => `<li><span class="marca-ev ${h.accion.includes('desactiv') || h.accion.includes('descon') ? 'error' : 'persona'}"></span><p>${esc(ACC[h.accion] || h.accion.replace(/_/g, ' '))}${h.detalle?.cuenta ? ` (${CUENTA[h.detalle.cuenta]})` : ''}<small class="mono">${fechaHora(h.creado_en)} · ${esc(h.usuario || 'sistema')}</small></p></li>`).join('')}</ul>` : '';
+  const gps = i.tipo === 'gps' && ed() ? `<div class="bo-config"><h4>Configurar en nombre del cliente</h4>
+      <div class="bo-gps-fila"><div class="bo-seg" role="radiogroup" aria-label="Plataforma"><button type="button" role="radio" data-cta="hosting" aria-checked="${i.config.cuenta !== 'lite'}">Síguelo Pro</button><button type="button" role="radio" data-cta="lite" aria-checked="${i.config.cuenta === 'lite'}">Síguelo Lite</button></div>
+        <button type="button" class="btn primario" data-ingresar-gps>Ingresar con usuario y clave →</button><span class="peq muted">Se abre la página oficial de la plataforma. Escribe ahí el usuario del cliente: la clave no pasa por On Rent.</span></div>
+      <details><summary class="peq muted">Pegar un token a mano (soporte)</summary><div class="rc-fila" style="margin-top:8px"><input class="campo mono bo-secreto" data-token-gps placeholder="Token de la cuenta"${SIN_AUTORRELLENO} style="flex:1"><button type="button" class="btn peq" data-token-guardar>Guardar y probar</button></div></details></div>` : '';
+  const carga = i.tipo === 'simpleapi' && ed() ? `<div class="bo-config"><h4>Certificado y folios del cliente</h4><p class="peq muted">Son del cliente: se le envía un enlace de carga de un solo uso (vence en 72 h). Los archivos quedan cifrados y aquí solo se ven como «recibido».</p>
+      ${D.enlaces.length ? `<ul class="historial">${D.enlaces.slice(0, 3).map((x) => `<li><span class="marca-ev ${x.estado === 'recibido' ? 'persona' : x.estado === 'esperando' ? '' : 'error'}"></span><p>${x.estado === 'recibido' ? 'Recibido' : x.estado === 'esperando' ? 'Esperando al cliente' : x.estado === 'vencido' ? 'Venció sin uso' : 'Anulado'}: ${x.piezas.map((p) => esc(D.piezas[p])).join(', ')}<small class="mono">${fechaHora(x.usado_en || x.creado_en)} · ${esc(x.correo)}</small></p></li>`).join('')}</ul>` : ''}
+      <div><button type="button" class="btn" data-enlace>Enviar enlace de carga</button></div></div>` : '';
+  return `<article class="bo-int${i.tipo === 'gps' ? ' ancha' : ''}" id="int-${i.tipo}">
+    <div class="bo-int-cab"><span class="bo-int-ico">${IC[i.tipo] || ''}</span><div><h3>${esc(i.nombreCliente && i.tipo !== 'dashboard_siguelo' ? i.nombreCliente : i.nombre)}</h3><p>${esc(i.descripcion)}</p></div>
+      <div class="der"><span class="chip ${cls}">${cliente ? (i.activa ? 'Activa · la configura el cliente' : 'Sin activar · la configura el cliente') : txt}</span>
+        ${cliente ? '' : `<label class="cf-switch-et"><span>${i.activa ? 'Activa' : 'Apagada'}</span><span class="switch"><input type="checkbox" data-activar${i.activa ? ' checked' : ''}${ed() ? '' : ' disabled'} aria-label="Activar ${esc(i.nombre)}"><span></span></span></label>`}</div></div>
+    <div class="bo-int-datos">${datosInt(i)}</div>
+    ${gps}${carga}
+    ${!cliente && ed() ? `<details class="bo-config" data-form${i.configurada || i.tipo === 'gps' ? '' : ' open'}><summary class="peq"><b>Configurar</b> · datos de la conexión (los secretos no se muestran)</summary>${formulario(i)}<div><button type="button" class="btn primario peq" data-guardar>Guardar</button></div></details>` : ''}
+    ${hist}
+    <div class="bo-int-pie"><span class="peq">${cliente ? 'Para ayudar al cliente, entra con «Operar».' : prueba(i)}</span>
+      ${!cliente && i.tipo !== 'correo' ? `<button type="button" class="btn peq" data-probar>Probar</button>` : ''}
+      ${!cliente && ed() && i.configurada && ['gps', 'whatsapp'].includes(i.tipo) ? '<button type="button" class="btn peq peligro" data-desconectar>Desconectar</button>' : ''}</div></article>`;
+}
+function integraciones() {
+  const e = D.empresa;
+  const sig = D.integraciones.filter((i) => i.administra === 'siguelo'), cli = D.integraciones.filter((i) => i.administra === 'cliente');
+  $('#panel').innerHTML = `<div class="tarjeta bloque"><p>Solo el equipo Síguelo configura estas conexiones. El cliente las ve como <b>«Gestionado por Síguelo GPS»</b>, sin claves ni tokens. Los secretos quedan cifrados en el servidor y no se vuelven a mostrar, tampoco aquí.</p>
+      <div style="display:flex;justify-content:flex-end">${e.marcha_blanca ? '<span class="chip mb">Marcha blanca encendida · nada sale todavía</span>' : '<span class="chip ok">Marcha blanca apagada · los mensajes salen de verdad</span>'}</div></div>
+    <div class="bo-integ">${sig.map(tarjeta).join('')}</div>
+    <h2 style="font-size:16px">Cobros en línea · los configura el cliente</h2>
+    <p class="peq muted" style="margin-top:-10px">El dinero va a la cuenta del rentacar: sus datos de comercio los carga su administrador en Configuración › Conexiones. Síguelo puede ayudarlo entrando con «Operar».</p>
+    <div class="bo-integ">${cli.map(tarjeta).join('')}</div>
+    <p class="peq muted">El almacenamiento de fotos y documentos, el correo de Síguelo y el CRM son comunes a todos los clientes: se ven en <a href="/conexiones">Conexiones generales</a>.</p>`;
+  for (const i of sig) conectar(i);
+}
+function reemplazar(n) {
+  const i = D.integraciones.findIndex((x) => x.tipo === n.tipo);
+  D.integraciones[i] = { ...D.integraciones[i], ...n };
+  const tmp = document.createElement('div'); tmp.innerHTML = tarjeta(D.integraciones[i]);
+  document.getElementById(`int-${n.tipo}`).replaceWith(tmp.firstElementChild); conectar(D.integraciones[i]);
+}
+function conectar(i) {
+  const card = document.getElementById(`int-${i.tipo}`);
+  let cuenta = i.config.cuenta === 'lite' ? 'lite' : 'hosting';
+  card.querySelectorAll('[data-cta]').forEach((b) => b.onclick = () => { cuenta = b.dataset.cta; card.querySelectorAll('[data-cta]').forEach((x) => x.setAttribute('aria-checked', String(x === b))); });
+  card.querySelector('[data-ingresar-gps]')?.addEventListener('click', async () => {
+    try { const { url } = await api(`backoffice/clientes/${ID}/integraciones/gps/ingreso?cuenta=${cuenta}`); const v = window.open(url, 'rc_gps', 'width=520,height=720'); if (!v) location.href = url; } catch (e) { toastError(e); }
+  });
+  card.querySelector('[data-token-guardar]')?.addEventListener('click', async (ev) => {
+    const inp = card.querySelector('[data-token-gps]');
+    if (!inp.value.trim()) return toast('Pega el token de la cuenta', 'error');
+    ev.target.disabled = true;
+    try { const r = await api(`backoffice/clientes/${ID}/integraciones/gps/token`, { body: { token: inp.value.trim(), cuenta } }); toast(r.prueba?.ok ? `Conectada. ${r.prueba.mensaje}` : `Se guardó, pero la prueba falló: ${r.prueba?.mensaje || 'sin detalle'}`, r.prueba?.ok ? 'ok' : 'error'); reemplazar(r.integracion); }
+    catch (e) { toastError(e); ev.target.disabled = false; }
+  });
+  card.querySelector('[data-guardar]')?.addEventListener('click', async () => {
+    const f = card.querySelector('[data-form] form');
+    const d = leerForm(f);
+    f.querySelectorAll('[data-oculto]').forEach((x) => { if (!x.value.trim()) delete d[x.name]; });
+    try { reemplazar(await api(`backoffice/clientes/${ID}/integraciones/${i.tipo}`, { method: 'PUT', body: d })); toast('Datos guardados', 'ok'); } catch (e) { toastError(e); }
+  });
+  card.querySelector('[data-form] select[name=modo]')?.addEventListener('change', (ev) => { i.config.modo = ev.target.value; const f = card.querySelector('[data-form] form'); f.outerHTML = formulario(i); conectar(i); });
+  card.querySelector('[data-activar]')?.addEventListener('change', async (ev) => {
+    const activa = ev.target.checked;
+    try { reemplazar(await api(`backoffice/clientes/${ID}/integraciones/${i.tipo}/activar`, { body: { activa } })); toast(activa ? 'Activada' : 'Apagada', 'ok'); } catch (e) { ev.target.checked = !activa; toastError(e); }
+  });
+  card.querySelector('[data-probar]')?.addEventListener('click', async (ev) => {
+    ev.target.disabled = true; ev.target.textContent = 'Probando…';
+    try { const r = await api(`backoffice/clientes/${ID}/integraciones/${i.tipo}/probar`, { body: {} }); toast(r.mensaje, r.ok ? 'ok' : 'error'); i.estado_prueba = `${r.ok ? 'ok' : 'error'}: ${r.mensaje}`; i.probado_en = new Date().toISOString(); reemplazar(i); }
+    catch (e) { toastError(e); ev.target.disabled = false; ev.target.textContent = 'Probar'; }
+  });
+  card.querySelector('[data-desconectar]')?.addEventListener('click', async () => {
+    if (!await confirmar('Desconectar', `Se borran los datos secretos de «${esc(i.nombre)}» y queda apagada. El cliente deja de usarla.`, { boton: 'Desconectar', peligro: true })) return;
+    try { reemplazar(await api(`backoffice/clientes/${ID}/integraciones/${i.tipo}/desconectar`, { body: {} })); toast('Desconectada', 'ok'); } catch (e) { toastError(e); }
+  });
+  card.querySelector('[data-enlace]')?.addEventListener('click', () => {
+    const admin = D.usuarios.find((u) => u.rol === 'administrador' && u.activo);
+    modal({ titulo: 'Enviar enlace de carga', html: `<p class="peq muted">El cliente recibe un enlace de un solo uso (vence en 72 h) para subir lo que marques. Un enlace nuevo anula el anterior.</p>
+      <div class="bo-mods-edit">${Object.entries(D.piezas).map(([k, n]) => `<label><input type="checkbox" name="p_${k}" checked> ${esc(n)}</label>`).join('')}</div>
+      <label class="etiqueta">Enviar a<input class="campo" type="email" name="correo" value="${esc(admin?.correo || D.empresa.correo || '')}"></label>`,
+    botones: [{ texto: 'Cancelar' }, { texto: 'Enviar enlace', clase: 'primario', accion: async (c) => {
+      const d = leerForm(c);
+      const r = await api(`backoffice/clientes/${ID}/enlace-carga`, { body: { correo: d.correo, piezas: Object.keys(D.piezas).filter((k) => d[`p_${k}`]) } });
+      if (r.enviado) toast(`Enlace enviado a ${d.correo}`, 'ok');
+      else setTimeout(() => modal({ titulo: 'No se pudo enviar el correo', html: `<p>${esc(r.motivo)}</p><p class="peq muted">Entrega este enlace al cliente por otro medio (vence en 72 h, un solo uso):</p><div class="cf-clave mono" style="font-size:12px;word-break:break-all">${esc(r.enlace)}</div>` }), 50);
+      cargar();
+    } }] });
+  });
+}
+addEventListener('message', (ev) => { if (ev.origin === location.origin && ev.data?.tipo === 'gps-conectado') { toast(ev.data.mensaje, ev.data.ok ? 'ok' : 'error'); cargar(); } });
+
+// ═════════ Usuarios ═════════
+function usuarios() {
+  const e = D.empresa;
+  const estado = (u) => !u.activo ? '<span class="chip">Desactivado</span>' : u.sin_clave ? (u.invitacion_vigente ? '<span class="chip mb">Invitación enviada</span>' : '<span class="chip susp">Invitación vencida</span>') : '<span class="chip ok">Activo</span>';
+  $('#panel').innerHTML = `<div class="tarjeta bloque"><h2>Entrar a la cuenta del cliente</h2>
+      <div class="bo-entrar">
+        <div class="op"><h3>${ICONOS.ojo} Ver como</h3><p>Ves la herramienta tal como la ve su administrador, en <b>solo lectura</b>: el servidor rechaza cualquier cambio. Para revisar una consulta sin riesgo.</p><button class="btn" data-entrar="ver">Ver como ${esc(e.nombre)}</button></div>
+        <div class="op"><h3>${ICONOS.configuracion} Operar</h3><p>Actúas como administrador del cliente. Pide un <b>motivo</b>; la franja amarilla queda arriba todo el rato y cada cambio va a la bitácora del cliente con tu nombre.</p>
+          <div class="rc-fila"><input class="campo" id="motivo-operar" placeholder="Soporte, ticket 1187" maxlength="300"${e.estado !== 'activo' || !ed() ? ' disabled' : ''}><button class="btn contorno" data-entrar="operar"${e.estado !== 'activo' || !ed() ? ' disabled' : ''}>Operar</button></div></div></div>
+      <p class="peq muted">Disponible para todos los clientes activos. A un cliente suspendido o dado de baja solo se puede «Ver como». Tu nivel en Síguelo On Board decide si puedes operar.</p></div>
+    <div class="tarjeta"><div class="bloque" style="padding-bottom:8px"><h2>Usuarios del cliente ${ed() ? '<span class="rc-fila"><button class="btn primario peq" id="nuevo-u">+ Nuevo usuario</button></span>' : ''}</h2>
+      <p class="ayuda">El cliente administra sus propios usuarios. Desde aquí Síguelo puede crear el primero (con invitación), reenviar la invitación, cerrar sesiones o desactivar en caso de soporte. Nadie ve las claves.</p></div>
+      <div class="tabla-env"><table class="tabla"><thead><tr><th>Nombre</th><th>Correo</th><th>Rol</th><th>Último ingreso</th><th>Estado</th><th></th></tr></thead><tbody>
+      ${D.usuarios.map((u) => `<tr${u.activo ? '' : ' class="bo-apagada"'}><td><b>${esc(u.nombre)}</b></td><td>${esc(u.correo)}</td><td><span class="chip">${esc(u.rol_nombre || u.rol)}</span></td><td class="mono peq">${u.ultimo_acceso ? fechaHora(u.ultimo_acceso) : SIN}</td><td>${estado(u)}</td>
+        <td><div class="bo-acc">${ed() ? `${u.sin_clave && u.activo ? `<button class="btn peq" data-inv="${u.id}">Reenviar invitación</button>` : ''}${u.activo ? `<button class="btn peq" data-sesiones="${u.id}">Cerrar sesiones</button>` : ''}<button class="btn peq${u.activo ? ' peligro' : ''}" data-act="${u.id}">${u.activo ? 'Desactivar' : 'Activar'}</button>` : ''}</div></td></tr>`).join('') || '<tr><td colspan="6" class="rc-vacio">Sin usuarios</td></tr>'}
+      </tbody></table></div></div>
+    <div class="tarjeta bloque"><h2>Entradas del equipo Síguelo a esta cuenta <a class="peq" href="#actividad">Ver bitácora completa</a></h2>
+      ${D.entradas.length ? `<ul class="historial">${D.entradas.map((x) => `<li><span class="marca-ev ${x.modo === 'operar' ? '' : 'persona'}"></span><p><b>${x.modo === 'operar' ? 'Operar' : 'Ver como'}</b> · ${esc(x.usuario)}${x.motivo ? ` · motivo: ${esc(x.motivo)}` : ''} · ${x.cambios ? `${x.cambios} ${x.cambios === 1 ? 'cambio' : 'cambios'}` : 'sin cambios'}<small class="mono">${fecha(x.inicio)} ${hora(x.inicio)} – ${x.fin ? hora(x.fin) : 'en curso'}</small></p></li>`).join('')}</ul>` : '<p class="peq muted">Nadie del equipo Síguelo ha entrado todavía.</p>'}</div>`;
+  const avisoInv = (inv, correo) => inv.enviado ? toast(`Invitación enviada a ${correo}`, 'ok') : setTimeout(() => modal({ titulo: 'No se pudo enviar la invitación', html: `<p>${esc(inv.motivo)}</p><p class="peq muted">Entrega este enlace a la persona por otro medio (vence en 72 h, un solo uso). Con él crea su propia clave:</p><div class="cf-clave mono" style="font-size:12px;word-break:break-all">${esc(inv.enlace)}</div>` }), 50);
+  $('#nuevo-u')?.addEventListener('click', () => modal({ titulo: 'Nuevo usuario del cliente', html: `<div class="cf-form"><label class="etiqueta">Nombre<input class="campo" name="nombre"></label><label class="etiqueta">Correo<input class="campo" type="email" name="correo"></label>
+      <label class="etiqueta">Teléfono<input class="campo" name="telefono"></label><label class="etiqueta">Rol<select class="campo" name="rol"><option value="administrador">Administrador</option><option value="counter">Counter</option><option value="patio">Patio</option><option value="finanzas">Finanzas</option></select></label></div>
+      <p class="peq muted">Recibe una invitación por correo para crear su clave (vence en 72 h). Síguelo no escribe ni ve la clave.</p>`,
+  botones: [{ texto: 'Cancelar' }, { texto: 'Crear e invitar', clase: 'primario', accion: async (c) => { const d = leerForm(c); const r = await api(`backoffice/clientes/${ID}/usuarios`, { body: d }); avisoInv(r.invitacion, d.correo); cargar(); } }] }));
+  $('#panel').onclick = async (ev) => {
+    const inv = ev.target.closest('[data-inv]'), ses = ev.target.closest('[data-sesiones]'), act = ev.target.closest('[data-act]');
+    try {
+      if (inv) { const u = D.usuarios.find((x) => x.id === Number(inv.dataset.inv)); avisoInv(await api(`backoffice/clientes/${ID}/usuarios/${u.id}/invitacion`, { body: {} }), u.correo); cargar(); }
+      if (ses) { await api(`backoffice/clientes/${ID}/usuarios/${ses.dataset.sesiones}/cerrar-sesiones`, { body: {} }); toast('Sesiones cerradas', 'ok'); }
+      if (act) {
+        const u = D.usuarios.find((x) => x.id === Number(act.dataset.act));
+        if (u.activo && !await confirmar('Desactivar usuario', `<b>${esc(u.nombre)}</b> no podrá ingresar y se cerrarán sus sesiones.`, { boton: 'Desactivar', peligro: true })) return;
+        await api(`backoffice/clientes/${ID}/usuarios/${u.id}`, { method: 'PATCH', body: { activo: !u.activo } }); toast('Listo', 'ok'); cargar();
+      }
+    } catch (e) { toastError(e); }
+  };
+}
+
+// ═════════ Apps con marca ═════════
+const ESTADO_APP = { borrador: 'Borrador', enviada: 'Enviada', en_revision: 'En revisión', con_observaciones: 'Con observaciones', compilando: 'Compilando', lista: 'Lista', publicada: 'Publicada' };
+function apps() {
+  const tiene = (D.empresa.modulos_extra || []).includes('app_propia') || D.plan?.modulos.includes('app_propia');
+  $('#panel').innerHTML = `<div class="tarjeta bloque"><h2>Apps con la marca del cliente</h2>
+    ${dato('Módulo «App con marca»', tiene ? 'contratado' : 'no contratado (se activa en Plan y módulos)')}
+    ${dato('Solicitud', D.app ? ESTADO_APP[D.app.estado] || D.app.estado : 'sin solicitud')}
+    <p class="peq muted">La solicitud, las versiones y la publicación en Google Play se manejan en <a href="/apps-marca">Apps con marca</a>.</p></div>`;
+}
+
+// ═════════ Actividad y bitácora ═════════
+const TIPO_SOL = { gps: 'Plataforma GPS', siguelo_os: 'Síguelo OS', facturacion: 'Facturación electrónica', folios: 'Más folios', correo: 'Correo de salida', whatsapp: 'WhatsApp', push: 'Avisos a la app', marcha_blanca: 'Terminar la marcha blanca', plan: 'Cambio de plan', otro: 'Otro' };
+const ESTADO_SOL = { pendiente: ['mb', 'Pendiente'], en_curso: ['info', 'En curso'], resuelta: ['ok', 'Resuelta'], descartada: ['', 'Descartada'] };
+const ACCION = (a) => ({ siguelo_entro_operar: 'Equipo Síguelo entró a operar', siguelo_entro_ver: 'Equipo Síguelo entró con «Ver como»', siguelo_salio: 'Equipo Síguelo salió', cliente_suspendido: 'Cliente suspendido', cliente_reactivado: 'Cliente reactivado', cliente_baja: 'Cliente dado de baja', cliente_alta: 'Alta del cliente', solicitud_siguelo: 'Solicitud a Síguelo' })[a] || a.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+async function actividad(pagina = 1, soloEquipo = false) {
+  const b = await api(`backoffice/clientes/${ID}/bitacora?pagina=${pagina}${soloEquipo ? '&siguelo=1' : ''}`);
+  $('#panel').innerHTML = `<div class="tarjeta"><div class="bloque" style="padding-bottom:8px"><h2>Solicitudes del cliente <a class="peq" href="/solicitudes">Bandeja de solicitudes</a></h2></div>
+      <div class="tabla-env"><table class="tabla"><thead><tr><th>Fecha</th><th>Pide</th><th>Detalle</th><th>Quién</th><th>Estado</th><th>CRM</th></tr></thead><tbody>
+      ${D.solicitudes.map((s) => `<tr><td class="mono peq">${fechaHora(s.creado_en)}</td><td>${esc(TIPO_SOL[s.tipo] || s.tipo)}</td><td class="peq">${esc(s.detalle || '')}</td><td class="peq">${esc(s.solicitante_nombre || '')}</td><td><span class="chip ${ESTADO_SOL[s.estado][0]}">${ESTADO_SOL[s.estado][1]}</span></td><td class="mono peq">${s.crm_ticket ? `ticket ${esc(s.crm_ticket)}` : s.crm_estado?.startsWith('pendiente') ? 'reintentando' : SIN}</td></tr>`).join('') || '<tr><td colspan="6" class="rc-vacio">Sin solicitudes</td></tr>'}
+      </tbody></table></div></div>
+    <div class="tarjeta"><div class="bloque" style="padding-bottom:8px"><h2>Bitácora <label class="cf-check-linea peq" style="font-weight:400"><input type="checkbox" id="solo-eq"${soloEquipo ? ' checked' : ''}> Solo el equipo Síguelo</label></h2></div>
+      <div class="tabla-env"><table class="tabla"><thead><tr><th>Fecha</th><th>Quién</th><th>Acción</th><th>Detalle</th></tr></thead><tbody>
+      ${b.filas.map((f) => `<tr><td class="mono peq" style="white-space:nowrap">${fechaHora(f.creado_en)}</td><td>${f.usuario ? esc(f.usuario) : '<span class="muted">Sistema / portal</span>'}${['superadmin', 'soporte'].includes(f.rol) ? ' <span class="chip marca">Síguelo</span>' : ''}</td><td>${esc(ACCION(f.accion))}</td>
+        <td class="peq"><div class="cf-detalle-json">${esc(f.detalle?.motivo || f.detalle?.siguelo?.motivo ? `motivo: ${f.detalle.motivo || f.detalle.siguelo.motivo}` : Object.keys(f.detalle || {}).length ? JSON.stringify(f.detalle) : '')}</div></td></tr>`).join('') || '<tr><td colspan="4" class="rc-vacio">Sin registros</td></tr>'}
+      </tbody></table></div>
+      <div class="cf-paginas"><span class="muted">página ${pagina}</span><button class="btn peq" id="p-ant"${pagina <= 1 ? ' disabled' : ''}>← Anterior</button><button class="btn peq" id="p-sig"${b.filas.length < 50 ? ' disabled' : ''}>Siguiente →</button></div></div>`;
+  $('#solo-eq').onchange = (ev) => actividad(1, ev.target.checked);
+  $('#p-ant').onclick = () => actividad(pagina - 1, soloEquipo);
+  $('#p-sig').onclick = () => actividad(pagina + 1, soloEquipo);
+}
+
+cargar().catch((e) => { $('#panel').innerHTML = `<p class="aviso error">${esc(e.message)}</p>`; });
+</script>
+</body>
+</html>

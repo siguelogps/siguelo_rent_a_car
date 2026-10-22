@@ -194,8 +194,12 @@ test('conector del dashboard Síguelo (fetch simulado): tramos de 7 días, X-Api
   });
   try {
     assert.equal((await admin.post('/api/tag-multas/dashboard/sincronizar', {})).estado, 400); // sin configurar
-    assert.equal((await admin.put('/api/integraciones/dashboard_siguelo', { url: 'https://dash.prueba.cl/', cliente: 'andesrent', api_key: 'clave-secreta' })).estado, 200);
-    const prueba = await admin.post('/api/integraciones/dashboard_siguelo/probar', {});
+    // 22-oct (espec. Backoffice): Síguelo OS lo configura el equipo Síguelo desde la ficha del cliente.
+    const sop = await t.como('soporte@siguelogps.cl');
+    const EID = (await db.uno(`SELECT id FROM empresas WHERE slug = 'andes-rent'`)).id;
+    assert.equal((await admin.put('/api/integraciones/dashboard_siguelo', { url: 'https://dash.prueba.cl/' })).estado, 403);
+    assert.equal((await sop.put(`/api/backoffice/clientes/${EID}/integraciones/dashboard_siguelo`, { url: 'https://dash.prueba.cl/', cliente: 'andesrent', api_key: 'clave-secreta' })).estado, 200);
+    const prueba = await sop.post(`/api/backoffice/clientes/${EID}/integraciones/dashboard_siguelo/probar`, {});
     assert.equal(prueba.datos.ok, true);
     assert.match(prueba.datos.mensaje, /^Conectado: andesrent · 12 vehículos/);
     const r = await admin.post('/api/tag-multas/dashboard/sincronizar', {});

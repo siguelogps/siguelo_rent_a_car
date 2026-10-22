@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="es-CL">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Nuevo cliente</title><link rel="icon" href="/img/logo-pin.png">
+<link rel="manifest" href="/manifest.webmanifest"><link rel="apple-touch-icon" href="/img/app/apple-touch-icon.png"><meta name="theme-color" content="#FFFFFF">
+<script src="/tema.js"></script><link rel="stylesheet" href="/app.css"><link rel="stylesheet" href="/rentacar.css"><link rel="stylesheet" href="/css/config.css"><link rel="stylesheet" href="/css/backoffice.css">
+</head>
+<body>
+<main>
+  <div class="pagina-cab"><div><h1>Nuevo cliente</h1><p>Alta de un rentacar en Síguelo On Rent. Parte en marcha blanca: no sale ningún mensaje real hasta que Síguelo la apague.</p></div></div>
+  <div class="bo-pasos" id="pasos"></div>
+  <div class="columnas"><div id="cuerpo" style="display:flex;flex-direction:column;gap:16px;min-width:0"></div><aside class="tarjeta bloque bo-resumen" id="resumen"></aside></div>
+</main>
+<script type="module">
+// Backoffice Síguelo · alta de cliente en 4 pasos (22-oct, espec. aprobada por Pablo, mockup 02-alta).
+// Los pasos hechos quedan resumidos y se pueden editar. El primer administrador recibe una invitación: Síguelo no escribe
+// ni ve su clave. El borrador queda solo en este navegador (comodidad, no es un dato del sistema).
+import { iniciarPagina, api, esc, rut, validarRut, modal, toast, toastError, leerForm } from '/comun.js';
+const yo = await iniciarPagina({ activo: 'empresa-nueva', titulo: 'Nuevo cliente' });
+const CLAVE = 'rc_bo_borrador_alta';
+const PASOS = ['Datos de la empresa', 'Plan y módulos', 'Integraciones a activar', 'Primer administrador'];
+const { planes, modulos } = await api('backoffice/planes');
+let B = { paso: 0, datos: {}, plan: 'pro', modulos_extra: [], integ: { gps: true, cuenta: 'hosting', simpleapi: true, correo: true, whatsapp: false, dashboard_siguelo: true, remitente_nombre: '', responder_a: '' }, admin: {} };
+try { const g = JSON.parse(localStorage.getItem(CLAVE) || 'null'); if (g) B = { ...B, ...g, integ: { ...B.integ, ...g.integ } }; } catch { /* sin borrador */ }
+const $ = (s) => document.querySelector(s);
+const SIN = '—';
+const dato = (t, v) => `<div class="dato"><span>${t}</span><span class="v">${v || SIN}</span></div>`;
+const planDe = () => planes.find((p) => p.codigo === B.plan);
+if (!yo.puede_operar) { $('#cuerpo').innerHTML = '<p class="aviso error">Tu nivel en Síguelo On Board permite mirar, no dar de alta clientes.</p>'; throw new Error('sin permiso'); }
+
+function guardarBorrador() { try { localStorage.setItem(CLAVE, JSON.stringify(B)); } catch { /* sin almacenamiento */ } }
+function leerPaso() {
+  const f = $('#cuerpo form[data-paso]');
+  if (!f) return;
+  const d = leerForm(f);
+  if (B.paso === 0) B.datos = d;
+  if (B.paso === 1) B.modulos_extra = [...f.querySelectorAll('[data-mod]:checked:not(:disabled)')].map((x) => x.dataset.mod);
+  if (B.paso === 2) Object.assign(B.integ, { gps: d.gps, simpleapi: d.simpleapi, correo: d.correo, whatsapp: d.whatsapp, dashboard_siguelo: d.dashboard_siguelo, remitente_nombre: d.remitente_nombre, responder_a: d.responder_a });
+  if (B.paso === 3) B.admin = d;
+}
+function validar(paso) {
+  if (paso === 0) { if (!B.datos.nombre) return 'Escribe el nombre de fantasía'; if (B.datos.rut && !validarRut(B.datos.rut)) return 'El RUT no es válido'; }
+  if (paso === 3) { if (!B.admin.nombre) return 'Escribe el nombre del administrador'; if (!/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(B.admin.correo || '')) return 'El correo del administrador no es válido'; }
+  return null;
+}
+const INTEG = [
+  ['gps', 'Plataforma GPS', 'Después de crear, en la ficha: «Ingresar con usuario y clave» en nombre del cliente.', 'pendiente de conectar'],
+  ['simpleapi', 'Facturación electrónica · provista por Síguelo', 'Se le pide al cliente su certificado digital y los CAF del SII con un enlace de carga de un solo uso. Parte en ambiente de certificación.', 'enlace al administrador'],
+  ['correo', 'Correo de salida', 'Remitente visible y dirección de respuesta del cliente. Sale por el servidor de Síguelo.', 'listo'],
+  ['whatsapp', 'WhatsApp', 'Módulo con costo por mensaje. Se configura después con el número del cliente.', 'por configurar'],
+  ['dashboard_siguelo', 'Síguelo OS (TAG y multas)', 'Usa la conexión de la plataforma GPS: no pide nada más.', 'con la plataforma GPS']
+];
+
+function pintar() {
+  $('#pasos').innerHTML = PASOS.map((t, i) => `<button type="button" class="bo-paso${i < B.paso ? ' hecho' : i === B.paso ? ' actual' : ''}" data-ir="${i}"${i > B.paso ? ' disabled' : ''}><i>${i < B.paso ? '✓' : i + 1}</i>${t}</button>`).join('');
+  const resumen = [
+    () => `<div class="rejilla-3">${dato('Nombre de fantasía', esc(B.datos.nombre))}${dato('Razón social', esc(B.datos.razon_social))}${dato('RUT', B.datos.rut ? `<span class="mono">${rut(B.datos.rut)}</span>` : '')}${dato('Giro', esc(B.datos.giro))}${dato('Comuna', esc(B.datos.comuna))}${dato('Correo', esc(B.datos.correo))}</div>`,
+    () => `<div class="rejilla-3">${dato('Plan', esc(planDe()?.nombre))}${dato('Vehículos', `hasta ${planDe()?.max_vehiculos ?? '∞'}`)}${dato('Módulos extra', B.modulos_extra.map((m) => esc(modulos[m])).join(' · ') || 'ninguno')}</div>`,
+    () => `<p class="peq">${INTEG.filter(([k]) => B.integ[k]).map(([, n]) => esc(n.split(' ·')[0])).join(' · ') || 'Ninguna'}</p>`,
+    () => `<div class="rejilla-3">${dato('Nombre', esc(B.admin.nombre))}${dato('Correo', esc(B.admin.correo))}${dato('Teléfono', esc(B.admin.telefono))}</div>`
+  ];
+  const formularios = [
+    () => {
+      const c = (k, t, extra = '') => `<label class="etiqueta">${t}<input class="campo" name="${k}" value="${esc(B.datos[k] || '')}" ${extra}></label>`;
+      return `<div class="cf-form">${c('nombre', 'Nombre de fantasía', 'required placeholder="Patagonia Rent a Car"')}${c('razon_social', 'Razón social')}${c('rut', 'RUT', 'placeholder="76.123.456-7"')}${c('giro', 'Giro', 'placeholder="Arriendo de vehículos"')}${c('direccion', 'Dirección')}${c('comuna', 'Comuna')}${c('ciudad', 'Ciudad')}${c('telefono', 'Teléfono')}${c('correo', 'Correo de contacto', 'type="email"')}${c('sucursal', 'Primera sucursal', 'placeholder="Casa matriz"')}</div>`;
+    },
+    () => `<div class="bo-alta-planes" role="radiogroup">${planes.filter((p) => p.activo).map((p) => `<button type="button" class="bo-alta-plan" role="radio" data-plan="${esc(p.codigo)}" aria-checked="${p.codigo === B.plan}"><b>${esc(p.nombre)}</b><span class="mono">${p.precio_uf != null ? `${Number(p.precio_uf).toLocaleString('es-CL')} UF/mes` : 'precio por definir'}</span><small>hasta ${p.max_vehiculos ?? '∞'} vehículos · ${p.max_usuarios ?? '∞'} usuarios · ${p.max_sucursales ?? '∞'} sucursales</small></button>`).join('')}</div>
+      <h3 class="bo-h3">Módulos extra (fuera del plan)</h3>
+      <div class="bo-mods-edit">${Object.entries(modulos).map(([k, n]) => { const incl = planDe()?.modulos.includes(k); return `<label><input type="checkbox" data-mod="${k}"${incl || B.modulos_extra.includes(k) ? ' checked' : ''}${incl ? ' disabled' : ''}> ${esc(n)}${incl ? ' <span class="peq muted">· en el plan</span>' : ''}</label>`; }).join('')}</div>`,
+    () => `<p class="peq muted" style="text-align:right">las configura el equipo Síguelo; el cliente no ingresa claves</p>${INTEG.map(([k, n, d, chip]) => `<div class="bo-check"><input type="checkbox" name="${k}"${B.integ[k] ? ' checked' : ''} aria-label="${esc(n)}"><div><b>${esc(n)}</b><small>${esc(d)}</small></div><span class="chip ${chip === 'listo' ? 'ok' : ''}">${chip}</span>
+      ${k === 'gps' ? `<div class="sub"><div class="bo-seg" role="radiogroup" aria-label="Plataforma"><button type="button" role="radio" data-cta="hosting" aria-checked="${B.integ.cuenta !== 'lite'}">Síguelo Pro</button><button type="button" role="radio" data-cta="lite" aria-checked="${B.integ.cuenta === 'lite'}">Síguelo Lite</button></div></div>` : ''}
+      ${k === 'correo' ? `<div class="sub"><label class="etiqueta">Remitente visible<input class="campo" name="remitente_nombre" value="${esc(B.integ.remitente_nombre || B.datos.nombre || '')}"></label><label class="etiqueta">Responder a<input class="campo mono" type="email" name="responder_a" value="${esc(B.integ.responder_a || B.datos.correo || '')}"></label></div>` : ''}</div>`).join('')}
+      <p class="peq muted">Transbank y Mercado Pago no están aquí: los configura el propio cliente con los datos de su comercio.</p>`,
+    () => `<div class="cf-form"><label class="etiqueta">Nombre<input class="campo" name="nombre" value="${esc(B.admin.nombre || '')}"></label><label class="etiqueta">Correo<input class="campo" type="email" name="correo" value="${esc(B.admin.correo || '')}"></label><label class="etiqueta">Teléfono<input class="campo" name="telefono" value="${esc(B.admin.telefono || '')}"></label></div>
+      <p class="peq muted">Recibe una invitación para crear su clave (vence en 72 h). Síguelo no escribe ni ve su clave.</p>`
+  ];
+  $('#cuerpo').innerHTML = PASOS.map((t, i) => i < B.paso
+    ? `<div class="tarjeta bloque"><h2><span><span class="num">${i + 1}</span>${t}</span><button type="button" class="btn peq" data-ir="${i}">Editar</button></h2>${resumen[i]()}</div>`
+    : i === B.paso ? `<form class="tarjeta bloque" data-paso="${i}" onsubmit="return false"><h2><span><span class="num">${i + 1}</span>${t}</span></h2>${formularios[i]()}</form>`
+      : `<div class="tarjeta bloque bo-bloque-gris"><h2><span><span class="num">${i + 1}</span>${t}</span></h2>${i === 3 ? '<p class="peq muted">Nombre, correo y teléfono. Recibe una invitación para crear su clave (vence en 72 h): Síguelo no escribe ni ve su clave.</p>' : ''}</div>`).join('');
+  const integ = INTEG.filter(([k]) => B.integ[k]).length;
+  $('#resumen').innerHTML = `<h2>Al crear el cliente</h2>
+    ${dato('Estado inicial', '<span class="chip mb">Marcha blanca</span>')}
+    ${dato('Integraciones', `${integ} elegidas`)}
+    ${dato('Invitación', 'al primer administrador, por correo')}
+    ${dato('Bitácora', '«Alta del cliente» con tu nombre')}
+    <p class="peq muted">Puedes guardar el borrador y terminar después. Nada le llega al cliente hasta el paso 4.</p>
+    <div class="rc-fila" style="justify-content:flex-end"><button type="button" class="btn" id="borrador">Guardar borrador</button><button type="button" class="btn primario" id="sig">${B.paso === 3 ? 'Crear cliente' : 'Siguiente →'}</button></div>`;
+  $('#cuerpo').querySelectorAll('[data-plan]').forEach((b) => b.onclick = () => { B.plan = b.dataset.plan; leerPaso(); pintar(); });
+  $('#cuerpo').querySelectorAll('[data-cta]').forEach((b) => b.onclick = () => { B.integ.cuenta = b.dataset.cta; $('#cuerpo').querySelectorAll('[data-cta]').forEach((x) => x.setAttribute('aria-checked', String(x === b))); });
+}
+document.querySelector('main').addEventListener('click', async (ev) => {
+  const ir = ev.target.closest('[data-ir]');
+  if (ir) { leerPaso(); B.paso = Number(ir.dataset.ir); return pintar(); }
+  if (ev.target.closest('#borrador')) { leerPaso(); guardarBorrador(); return toast('Borrador guardado en este navegador', 'ok'); }
+  if (!ev.target.closest('#sig')) return;
+  leerPaso();
+  const err = validar(B.paso);
+  if (err) return toast(err, 'error');
+  if (B.paso < 3) { B.paso += 1; guardarBorrador(); return pintar(); }
+  const boton = ev.target.closest('#sig'); boton.disabled = true;
+  try {
+    const r = await api('backoffice/clientes', { body: { datos: B.datos, plan: B.plan, modulos_extra: B.modulos_extra, admin: B.admin, integraciones: {
+      gps: B.integ.gps ? { cuenta: B.integ.cuenta } : null, simpleapi: B.integ.simpleapi ? { pedir_archivos: true } : null,
+      correo: B.integ.correo ? { remitente_nombre: B.integ.remitente_nombre, responder_a: B.integ.responder_a } : null, whatsapp: !!B.integ.whatsapp, dashboard_siguelo: !!B.integ.dashboard_siguelo } } });
+    try { localStorage.removeItem(CLAVE); } catch { /* nada */ }
+    const pendientes = [r.invitacion?.enviado === false ? `<p><b>Invitación:</b> ${esc(r.invitacion.motivo)}. Entrégale este enlace al administrador (vence en 72 h):</p><div class="cf-clave mono" style="font-size:12px;word-break:break-all">${esc(r.invitacion.enlace)}</div>` : '',
+      r.enlace_carga?.enviado === false ? `<p><b>Enlace de carga del SII:</b> ${esc(r.enlace_carga.motivo)}.</p><div class="cf-clave mono" style="font-size:12px;word-break:break-all">${esc(r.enlace_carga.enlace)}</div>` : ''].join('');
+    await modal({ titulo: `${r.empresa.nombre} creado`, html: `<p>El cliente quedó en <b>marcha blanca</b>. ${r.invitacion?.enviado ? 'La invitación al administrador ya salió por correo.' : ''}</p>${pendientes}`, botones: [{ texto: 'Abrir la ficha', clase: 'primario', valor: true }] });
+    location.href = `/empresas/${r.empresa.id}#integraciones`;
+  } catch (e) {
+    boton.disabled = false; toastError(e);
+    if (e.estado === 409 || /administrador/.test(e.message)) { B.paso = 3; pintar(); }
+  }
+});
+pintar();
+</script>
+</body>
+</html>

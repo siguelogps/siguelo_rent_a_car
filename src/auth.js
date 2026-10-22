@@ -60,21 +60,59 @@ export function leerCookie(req, nombre) {
   return null;
 }
 
+// Nivel de Síguelo On Board de una persona del equipo: admin y usa pueden «Operar»; ve solo «Ver como».
+// Quien entró con usuario y clave (sin pasar por el panel) conserva lo que dice su rol: superadmin = admin, soporte = usa.
+export const nivelPanel = (u) => (['admin', 'usa', 've'].includes(u?.nivel_panel) ? u.nivel_panel : u?.rol === 'superadmin' ? 'admin' : 'usa');
+export const puedeOperar = (u) => esSiguelo(u?.rol) && nivelPanel(u) !== 've';
+
+const MENSAJE_BLOQUEO = {
+  suspendido: 'El servicio de tu empresa está suspendido. Escribe a soporte@siguelogps.cl o llama a Síguelo GPS.',
+  baja: 'La cuenta de tu empresa fue dada de baja y el plazo para exportar los datos terminó.'
+};
+
 // Middleware: deja req.usuario { id, nombre, correo, rol, empresa_id (activa), permisos } o nada.
+// 22-oct (espec. Backoffice): req.modoSiguelo = 'ver' | 'operar' cuando el equipo Síguelo está dentro de un cliente, y
+// req.soloLectura cuando el servidor debe rechazar cualquier cambio («Ver como», o un cliente dado de baja que exporta).
 export async function cargarSesion(req, _res, next) {
   const t = tokenDeSesion(req);
   if (!t) return next();
   const s = await uno(
-    `SELECT u.id, u.nombre, u.correo, u.rol, u.sucursal_id, u.activo, s.empresa_id, s.token_hash
-       FROM sesiones s JOIN usuarios u ON u.id = s.usuario_id
+    `SELECT u.id, u.nombre, u.correo, u.rol, u.sucursal_id, u.activo, u.nivel_panel, s.empresa_id, s.token_hash, s.modo, s.motivo, s.entrada_id, s.creado_en AS sesion_desde,
+            e.estado AS empresa_estado, (e.exportar_hasta IS NOT NULL AND e.exportar_hasta < (now() AT TIME ZONE 'America/Santiago')::date) AS exportar_vencido
+       FROM sesiones s JOIN usuarios u ON u.id = s.usuario_id LEFT JOIN empresas e ON e.id = s.empresa_id
       WHERE s.token_hash = $1 AND s.expira_en > now()`, [hashSha256(t)]);
   if (s && s.activo) {
-    req.usuario = { ...s, permisos: permisosDe(s.rol), siguelo: esSiguelo(s.rol) };
+    const siguelo = esSiguelo(s.rol);
+    // Cliente suspendido (o dado de baja con el plazo vencido): su gente no entra. Síguelo sí («Ver como»).
+    if (!siguelo && (s.empresa_estado === 'suspendido' || (s.empresa_estado === 'baja' && s.exportar_vencido))) {
+      req.bloqueo = MENSAJE_BLOQUEO[s.empresa_estado];
+      return next();
+    }
+    const { modo, motivo, entrada_id: entradaId, empresa_estado: estado, exportar_vencido: _v, ...u } = s;
+    req.usuario = { ...u, permisos: permisosDe(s.rol), siguelo, nivel: siguelo ? nivelPanel(s) : null };
     req.empresaId = s.empresa_id;
-    req.verComo = esSiguelo(s.rol) && !!s.empresa_id; // equipo Síguelo dentro de la cuenta de un cliente
+    req.empresaEstado = estado || null;
+    req.modoSiguelo = siguelo && s.empresa_id ? (modo === 'operar' ? 'operar' : 'ver') : null;
+    req.motivoSiguelo = req.modoSiguelo === 'operar' ? motivo : null;
+    req.entradaSiguelo = entradaId || null;
+    req.verComo = req.modoSiguelo === 'ver';
+    req.soloLectura = req.modoSiguelo === 'ver' || (!siguelo && estado === 'baja');
     req.tokenHash = s.token_hash;
   }
   next();
+}
+
+// Lo que se puede hacer aunque la sesión sea de solo lectura: salir, volver al backoffice o pasar a operar, «Mi clave»
+// y las vistas previas que no guardan nada.
+const PERMITIDO_SOLO_LECTURA = [/^\/api\/salir$/, /^\/api\/empresa-activa$/, /^\/api\/configuracion\/mi-clave$/, /^\/api\/configuracion\/plantillas\/vista-previa$/, /^\/api\/buscar/];
+export function soloLectura(req, _res, next) {
+  if (!req.soloLectura || ['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
+  const ruta = req.originalUrl.split('?')[0];
+  if (PERMITIDO_SOLO_LECTURA.some((r) => r.test(ruta))) return next();
+  if (req.usuario?.siguelo && ruta.startsWith('/api/backoffice/')) return next(); // acciones del backoffice (sobre un cliente explícito, con su propia bitácora)
+  throw new ErrorHttp(403, req.modoSiguelo === 'ver'
+    ? 'Estás en «Ver como» (solo lectura): no se puede cambiar nada. Para hacer cambios, vuelve al backoffice y usa «Operar» con un motivo.'
+    : 'La cuenta de tu empresa fue dada de baja: puedes revisar y exportar tus datos, pero no hacer cambios.', { soloLectura: true });
 }
 
 export class ErrorHttp extends Error {
@@ -83,6 +121,7 @@ export class ErrorHttp extends Error {
 
 // requiere('reservas', 'editar') → 401/403 si no corresponde; exige empresa activa salvo { sinEmpresa: true }.
 export const requiere = (modulo = null, accion = 'ver', { sinEmpresa = false } = {}) => async (req, _res, next) => {
+  if (!req.usuario && req.bloqueo) throw new ErrorHttp(403, req.bloqueo, { bloqueo: true });
   if (!req.usuario) throw new ErrorHttp(401, 'Tu sesión terminó. Vuelve a ingresar.');
   if (modulo && !puede(req.usuario.rol, modulo, accion)) throw new ErrorHttp(403, 'Tu rol no tiene permiso para esta acción.');
   if (!sinEmpresa && !req.empresaId) throw new ErrorHttp(400, req.usuario.siguelo ? 'Entra a la cuenta de un cliente con «Ver como» desde el backoffice.' : 'Elige una empresa para continuar.');
@@ -98,7 +137,7 @@ export const soloSiguelo = (req, _res, next) => {
   next();
 };
 
-export async function cambiarEmpresaSesion(req, empresaId) {
+export async function cambiarEmpresaSesion(req, empresaId, { modo = null, motivo = null, entradaId = null } = {}) {
   const t = tokenDeSesion(req);
-  await q('UPDATE sesiones SET empresa_id = $1 WHERE token_hash = $2', [empresaId, hashSha256(t)]);
+  await q('UPDATE sesiones SET empresa_id = $1, modo = $3, motivo = $4, entrada_id = $5 WHERE token_hash = $2', [empresaId, hashSha256(t), empresaId ? modo : null, empresaId ? motivo : null, empresaId ? entradaId : null]);
 }

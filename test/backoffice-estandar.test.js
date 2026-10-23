@@ -227,7 +227,9 @@ test('baja: desconecta y borra secretos, 90 días de solo lectura para exportar 
   const llamar = (m, u, b) => fetch(t.base + u, { method: m, headers: { Cookie: cookie, 'Content-Type': 'application/json' }, body: b ? JSON.stringify(b) : undefined }).then((x) => x.status);
   assert.equal(await llamar('GET', '/api/reservas'), 200, 'puede revisar y exportar');
   assert.equal(await llamar('POST', '/api/configuracion/sucursales', { nombre: 'X' }), 403, 'pero no cambiar');
-  await t.db.q(`UPDATE empresas SET exportar_hasta = current_date - 1 WHERE id = $1`, [NUEVA]);
+  // «Ayer» en hora de Chile, como lo compara bajas.js: con current_date (UTC) la prueba fallaba entre las 21:00 y las
+  // 24:00 de Santiago, cuando en UTC ya es el día siguiente y «ayer UTC» todavía es «hoy» en Chile.
+  await t.db.q(`UPDATE empresas SET exportar_hasta = (now() AT TIME ZONE 'America/Santiago')::date - 1 WHERE id = $1`, [NUEVA]);
   const { procesarBajasVencidas } = await import('../src/siguelo/bajas.js');
   assert.equal(await procesarBajasVencidas(), 1);
   const u = await t.db.uno(`SELECT nombre, activo FROM usuarios WHERE empresa_id = $1 AND rol = 'administrador'`, [NUEVA]);

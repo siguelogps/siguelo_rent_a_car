@@ -10,10 +10,10 @@
 <body>
 <div class="login">
   <form class="caja" id="f">
-    <img src="/img/logo-siguelo.png" alt="Síguelo GPS" id="logo" style="height:36px;max-width:220px;object-fit:contain;align-self:flex-start">
-    <script>/* app con marca: ocultar el logo Síguelo antes del primer pintado (el módulo pone el de la empresa) */
-      try { if (/[?&]app=/.test(location.search) || (window.Capacitor && localStorage.getItem('rc_app_empresa'))) document.getElementById('logo').style.visibility = 'hidden'; } catch (e) { /* sin almacenamiento */ }</script>
-    <div><h1 style="font-size:20px" id="titulo">On Rent</h1><p class="muted peq" id="bajada">Administración de arriendo de vehículos</p></div>
+    <img id="logo" class="logo-onrent logo-onrent-claro" src="/img/siguelo-onrent-b-claro.png" alt="Síguelo GPS · On Rent" width="400" height="124"><img id="logo-oscuro" class="logo-onrent logo-onrent-oscuro" src="/img/siguelo-onrent-b-oscuro.png" alt="Síguelo GPS · On Rent" width="400" height="124">
+    <script>/* app con marca: ocultar el logo Síguelo (sus dos versiones) antes del primer pintado (el módulo pone el de la empresa) */
+      try { if (/[?&]app=/.test(location.search) || (window.Capacitor && localStorage.getItem('rc_app_empresa'))) ['logo', 'logo-oscuro'].forEach(function (id) { document.getElementById(id).style.visibility = 'hidden'; }); } catch (e) { /* sin almacenamiento */ }</script>
+    <div><h1 style="font-size:20px" id="titulo">Ingresa a tu cuenta</h1><p class="muted peq" id="bajada">Administración de arriendo de vehículos</p></div>
     <label class="etiqueta">Correo<input class="campo" name="correo" type="email" autocomplete="username" required></label>
     <label class="etiqueta">Clave<input class="campo" name="clave" type="password" autocomplete="current-password" required></label>
     <div class="aviso error" id="err" hidden></div>
@@ -31,22 +31,31 @@ const appEmpresa = (() => {
   try { if (p && esNativa()) localStorage.setItem('rc_app_empresa', p); return p || (esNativa() ? localStorage.getItem('rc_app_empresa') : null); } catch { return p; }
 })();
 // La marca queda guardada en el teléfono: desde el segundo ingreso se pinta al instante (sin destello del logo Síguelo).
+// 26-oct: sin la app con marca va el logo «Síguelo GPS + On Rent» (versión apilada, en claro y en oscuro según el tema).
+// Con el logo del cliente queda una sola imagen, la suya: se quita la versión oscura y la otra deja de cambiar con el tema.
+const logoVisible = (v) => ['logo', 'logo-oscuro'].forEach((id) => { const i = document.getElementById(id); if (i) i.style.visibility = v; });
 function pintarMarca(m) {
-  if (m.logo) document.getElementById('logo').src = m.logo;
+  if (m.logo) {
+    document.getElementById('logo-oscuro')?.remove();
+    const logo = document.getElementById('logo');
+    logo.className = ''; logo.removeAttribute('width'); logo.removeAttribute('height');
+    Object.assign(logo.style, { height: '36px', maxWidth: '220px', objectFit: 'contain', alignSelf: 'flex-start' });
+    logo.src = m.logo; logo.alt = m.empresa;
+  }
   document.getElementById('titulo').textContent = m.nombres?.equipo || m.empresa;
   document.getElementById('bajada').textContent = `${m.empresa} · con tecnología Síguelo On Rent`;
   document.title = `Iniciar sesión · ${m.nombres?.equipo || m.empresa}`;
   if (m.color) document.querySelector('meta[name="theme-color"]')?.setAttribute('content', m.color);
-  document.getElementById('logo').style.visibility = '';
+  logoVisible('');
 }
 if (appEmpresa) {
   let guardada = null;
   try { guardada = JSON.parse(localStorage.getItem(`rc_app_marca:${appEmpresa}`) || 'null'); } catch { /* sin almacenamiento */ }
-  if (guardada) pintarMarca(guardada); else document.getElementById('logo').style.visibility = 'hidden';
+  if (guardada) pintarMarca(guardada); else logoVisible('hidden');
   api(`apps/marca/${encodeURIComponent(appEmpresa)}`).then((m) => {
     pintarMarca(m);
     try { localStorage.setItem(`rc_app_marca:${appEmpresa}`, JSON.stringify(m)); } catch { /* sin almacenamiento */ }
-  }).catch(() => { document.getElementById('logo').style.visibility = ''; });
+  }).catch(() => logoVisible(''));
 }
 if (new URLSearchParams(location.search).get('cuenta') === 'eliminada') document.getElementById('eliminada').hidden = false;
 f.onsubmit = async (e) => {

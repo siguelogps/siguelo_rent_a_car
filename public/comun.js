@@ -208,6 +208,12 @@ const BACKOFFICE_MENU = [
 const BACKOFFICE = BACKOFFICE_MENU.flatMap(([, items]) => items);
 const NIVEL = { admin: 'admin', usa: 'usa', ve: 've' };
 
+// 26-oct: logo «Síguelo GPS + On Rent» (versión apilada, aprobada por Pablo) en el menú lateral. Va en claro y en oscuro
+// y rentacar.css muestra el del tema; plegado queda solo el pin. En el backoffice (menú siempre oscuro) backoffice.css
+// muestra siempre la de letras blancas, sin la placa blanca que necesitaba el logo oficial de letras negras.
+const LOGO_MENU = '<img class="logo logo-onrent logo-onrent-claro" src="/img/siguelo-onrent-b-claro.png" alt="Síguelo GPS · On Rent" width="400" height="124">'
+  + '<img class="logo logo-onrent logo-onrent-oscuro" src="/img/siguelo-onrent-b-oscuro.png" alt="Síguelo GPS · On Rent" width="400" height="124">';
+
 export async function iniciarPagina({ activo, titulo = '' } = {}) {
   YO = await api('yo');
   // Franja «Abierto desde tu plataforma de rastreo» (solo si la sesión vino del menú Apps; ver franja-plataforma.js).
@@ -228,7 +234,7 @@ export async function iniciarPagina({ activo, titulo = '' } = {}) {
   const fr = franjaSiguelo(bo);
   app.innerHTML = `
   <nav class="menu" aria-label="Menú principal">
-    <div class="menu-marca"><img class="logo" src="/img/logo-siguelo.png" alt="Síguelo GPS"><img class="marca-pin" src="/img/logo-pin.png" alt=""><button type="button" class="btn-plegar" aria-label="Plegar menú">${ICONOS.plegar}</button></div>
+    <div class="menu-marca">${LOGO_MENU}<img class="marca-pin" src="/img/logo-pin.png" alt=""><button type="button" class="btn-plegar" aria-label="Plegar menú">${ICONOS.plegar}</button></div>
     ${bo ? '<span class="bo-sello">Backoffice Síguelo</span><div class="bo-herramienta"><span>Herramienta</span><b>Síguelo On Rent</b></div>' : ''}
     ${e ? `<div class="rc-empresa" title="${esc(e.nombre)}">${e.logo_clave ? `<img class="rc-empresa-logo" src="/api/logo/${esc(e.slug)}" alt="">` : `<span class="rc-empresa-logo" style="background:${esc(e.color || '#0F5F58')}">${esc(e.nombre.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase())}</span>`}<div><b>${esc(e.nombre)}</b><span>On Rent · Plan ${esc(YO.plan?.nombre || (e.plan || 'pro').replace(/^./, (c) => c.toUpperCase()))}</span></div></div>` : ''}
     ${bo ? BACKOFFICE_MENU.map(([g, items]) => `<div class="menu-grupo">${g}</div>${items.filter(([m]) => m !== 'equipo' || YO.usuario.rol === 'superadmin').map(([m, n, href, k]) => `<a class="item" href="${href}" title="${n}"${m === activo ? ' aria-current="page"' : ''}>${ICONOS[m]}<span>${n}</span>${k && cuenta?.[k] ? `<i class="n">${cuenta[k]}</i>` : ''}</a>`).join('')}`).join('')

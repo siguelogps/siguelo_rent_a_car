@@ -15,7 +15,7 @@ import { crearAccesoAdmin } from '../acceso-admin.js';
 const r = express.Router();
 let verificar = null;
 export const usarVerificador = (fn) => { verificar = fn; }; // pruebas
-const pagina = (titulo, texto) => `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${titulo}</title><link rel="stylesheet" href="/app.css"></head><body><main class="login"><div class="caja"><img src="/img/logo-siguelo.png" alt="Síguelo GPS" style="height:40px;width:auto;align-self:flex-start"><h1 style="font-size:20px">${titulo}</h1><p class="muted">${texto}</p><a class="btn primario" href="${config.panelAdmin}">Volver a Síguelo On Board</a></div></main></body></html>`;
+const pagina = (titulo, texto) => `<!doctype html><html lang="es"><head><meta charset="utf-8"><title>${titulo}</title><link rel="stylesheet" href="/app.css"></head><body><main class="login"><div class="caja"><img src="/img/siguelo-onrent-b-claro.png" alt="Síguelo GPS · On Rent" width="400" height="124" style="height:60px;width:auto;align-self:flex-start"><h1 style="font-size:20px">${titulo}</h1><p class="muted">${texto}</p><a class="btn primario" href="${config.panelAdmin}">Volver a Síguelo On Board</a></div></main></body></html>`;
 const limpio = (t) => String(t || '').replace(/[<>&"']/g, '');
 
 export async function entradaDesdeAdmin(req, res) {

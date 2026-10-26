@@ -23,6 +23,10 @@
 /* Menú del equipo Síguelo: oscuro fijo (también en claro), para que nunca se confunda con el menú del cliente. */
 .app.bo .menu { background: #15181D; border-right-color: #15181D; color: #E8EBEF; }
 .app.bo .menu-marca .logo { background: #fff; border-radius: 8px; padding: 4px 8px; height: 36px; }
+/* 26-oct: el logo «Síguelo GPS + On Rent» tiene versión de letras blancas: va directo sobre el menú oscuro, sin placa. */
+.app.bo .menu-marca .logo.logo-onrent { background: none; border-radius: 0; padding: 0; height: auto; }
+.app.bo .menu-marca .logo-onrent-claro { display: none !important; }
+.app.bo .menu-marca .logo-onrent-oscuro { display: block !important; }
 .app.bo .menu-marca .marca-pin { background: #fff; border-radius: 8px; padding: 3px; }
 .app.bo .menu-grupo { color: #8A93A0; }
 .app.bo .menu a.item { color: #C5CBD3; background: transparent; border: 0; box-shadow: none; }

@@ -14,9 +14,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -26,6 +24,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
@@ -34,12 +33,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cl.siguelogps.onrent.R
 
+/**
+ * Logo «Síguelo GPS + On Rent» aprobado por Pablo el 26-oct: apilado (B) en el ingreso y en «Actualiza la app»,
+ * horizontal (A) en la cabecera de las pestañas, donde la fila es ancha y baja. Va siempre la versión de letras blancas
+ * porque la cabecera (c.cabecera) es oscura en los dos temas; por eso no hace falta drawable-night. Son archivos nuevos:
+ * el logo oficial (logo_siguelo, pin_siguelo) no se toca.
+ */
 @Composable
-fun MarcaOnRent(modifier: Modifier = Modifier) {
+fun MarcaOnRent(modifier: Modifier = Modifier, apilado: Boolean = false) {
     Row(modifier, verticalAlignment = Alignment.CenterVertically) {
-        Image(painterResource(R.drawable.pin_siguelo), contentDescription = null, modifier = Modifier.size(30.dp))
-        Spacer(Modifier.width(10.dp))
-        Txt("SÍGUELO ON RENT", color = c.marca, size = 17.sp, peso = FontWeight.Bold)
+        if (apilado) Image(painterResource(R.drawable.logo_onrent_b_oscuro), contentDescription = "Síguelo GPS · On Rent", modifier = Modifier.height(56.dp), contentScale = ContentScale.Fit)
+        else Image(painterResource(R.drawable.logo_onrent_a_oscuro), contentDescription = "Síguelo GPS · On Rent", modifier = Modifier.height(24.dp), contentScale = ContentScale.Fit)
     }
 }
 
@@ -49,7 +53,7 @@ fun PantallaIngreso(correoInicial: String?, cargando: Boolean, error: String?, o
     var clave by rememberSaveable { mutableStateOf("") }
     Column(Modifier.fillMaxSize().background(c.fondo).verticalScroll(rememberScrollState()).imePadding()) {
         Column(Modifier.fillMaxWidth().background(c.cabecera).statusBarsPadding().padding(horizontal = 24.dp, vertical = 28.dp)) {
-            MarcaOnRent()
+            MarcaOnRent(apilado = true)
             Spacer(Modifier.height(18.dp))
             Txt("Entregas, devoluciones", color = c.sobreCabecera, size = 28.sp, peso = FontWeight.SemiBold, alto = 34.sp)
             Txt("y flota en el teléfono", color = c.marca, size = 28.sp, peso = FontWeight.Bold, alto = 34.sp)

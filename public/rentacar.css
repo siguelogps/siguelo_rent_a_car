@@ -398,6 +398,18 @@ html.nativa-ios .rc-movil-pie { padding-bottom: calc(18px + env(safe-area-inset-
 /* Logos oficiales: nunca se recolorean; en oscuro van sobre una placa blanca. */
 :root[data-theme="oscuro"] img[src*="logo-siguelo"] { background: #fff; border-radius: 8px; padding: 5px 8px; }
 :root[data-theme="oscuro"] .menu-marca .marca-pin { background: #fff; border-radius: 8px; padding: 3px; }
+/* 26-oct · logo «Síguelo GPS + On Rent» aprobado por Pablo (archivos nuevos siguelo-onrent-*.png; logo-siguelo.png y
+   logo-pin.png no se tocan). A = horizontal, B = apilado; cada uno en «claro» (letras negras) y «oscuro» (letras
+   blancas). Se muestra el del tema efectivo (data-theme de tema.js), así que en oscuro ya no hace falta la placa blanca. */
+.logo-onrent-oscuro { display: none !important; }
+:root[data-theme="oscuro"] .logo-onrent-claro { display: none !important; }
+:root[data-theme="oscuro"] .logo-onrent-oscuro { display: block !important; }
+.login .caja img.logo-onrent { height: 60px; width: auto; align-self: flex-start; }
+/* Menú lateral: la versión apilada (B) cabe en el ancho del menú junto al botón de plegar; plegado queda solo el pin. */
+.menu-marca img.logo-onrent { height: auto; width: 158px; max-width: 100%; }
+@media (min-width: 861px) { .app.plegada .menu-marca img.logo-onrent { display: none !important; } }
+/* Pies «con tecnología de» de las páginas públicas: el logo horizontal (A), chico. */
+.rs-pub-pie img.logo-onrent, .pt-pie img.logo-onrent, .pg-resultado .pie img.logo-onrent { height: 20px; width: auto; }
 /* Mapas: las teselas se oscurecen con un filtro suave (los marcadores y rutas quedan con su color). */
 :root[data-theme="oscuro"] .leaflet-tile-pane { filter: brightness(.62) contrast(1.15) saturate(.6); }
 :root[data-theme="oscuro"] .leaflet-container { background: #1A1F25; }

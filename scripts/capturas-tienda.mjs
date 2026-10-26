@@ -37,7 +37,8 @@ const srv = await new Promise((ok) => { const s = app.listen(0, () => ok(s)); })
 const base = `http://127.0.0.1:${srv.address().port}`;
 
 const nav = await chromium.launch(fs.existsSync('/opt/pw-browsers/chromium') && !process.env.PLAYWRIGHT_BROWSERS_PATH ? { executablePath: '/opt/pw-browsers/chromium' } : {});
-const logo = `data:image/png;base64,${fs.readFileSync(path.join(RAIZ, 'public/img/logo-pin.png')).toString('base64')}`;
+// 26-oct: logo «Síguelo GPS + On Rent» horizontal (A), de letras blancas, sobre el fondo tinta (aprobado por Pablo).
+const logo = `data:image/png;base64,${fs.readFileSync(path.join(RAIZ, 'public/img/siguelo-onrent-a-oscuro.png')).toString('base64')}`;
 const fuente = (p) => `url(data:font/woff2;base64,${fs.readFileSync(path.join(RAIZ, 'node_modules/@fontsource/ibm-plex-sans/files', p)).toString('base64')})`;
 const CSS_FUENTES = `@font-face{font-family:Plex;font-weight:400;src:${fuente('ibm-plex-sans-latin-400-normal.woff2')}}@font-face{font-family:Plex;font-weight:700;src:${fuente('ibm-plex-sans-latin-700-normal.woff2')}}`;
 
@@ -75,13 +76,13 @@ for (const [equipo, { lienzo, escala, vista }] of Object.entries(EQUIPOS)) {
       *{box-sizing:border-box;margin:0}html,body{width:100%;height:100%;background:#15181D;font-family:Plex,sans-serif;overflow:hidden}
       body{display:flex;flex-direction:column}
       .cab{padding:${W * 0.09}px ${W * 0.08}px ${W * 0.06}px;color:#fff;display:flex;flex-direction:column;gap:${W * 0.025}px}
-      .marca{display:flex;align-items:center;gap:10px;font-size:${W * 0.035}px;letter-spacing:.04em;text-transform:uppercase;color:#FFD500;font-weight:700}
-      .marca img{height:${W * 0.06}px}
+      .marca{display:flex;align-items:center}
+      .marca img{height:${W * (equipo === 'ipad' ? 0.05 : 0.075)}px;width:auto}
       h1{font-size:${W * (equipo === 'ipad' ? 0.06 : 0.082)}px;line-height:1.12;font-weight:400}h1 b{color:#FFD500;font-weight:700}
       p{font-size:${W * (equipo === 'ipad' ? 0.026 : 0.038)}px;color:#C9CDD3;line-height:1.35}
       .tel{flex:1;min-height:0;margin:0 auto;width:${equipo === 'ipad' ? 88 : 86}%;border-radius:${W * 0.05}px ${W * 0.05}px 0 0;overflow:hidden;border:${W * 0.012}px solid #2A2F37;border-bottom:0;background:#fff}
       .tel img{display:block;width:100%;height:100%;object-fit:cover;object-position:top}</style></head><body>
-      <div class="cab"><div class="marca"><img src="${logo}">Síguelo On Rent</div><h1>${titular}</h1><p>${bajada}</p></div>
+      <div class="cab"><div class="marca"><img src="${logo}" alt="Síguelo GPS · On Rent"></div><h1>${titular}</h1><p>${bajada}</p></div>
       <div class="tel"><img src="data:image/png;base64,${foto}"></div></body></html>`);
     await marco.evaluate(() => document.fonts.ready);
     const archivo = path.join(SALIDA, equipo, `${nombre}.png`);
@@ -93,9 +94,9 @@ for (const [equipo, { lienzo, escala, vista }] of Object.entries(EQUIPOS)) {
 
 // Gráfico destacado de Google Play (1024×500)
 const g = await nav.newPage({ viewport: { width: 1024, height: 500 } });
-await g.setContent(`<!doctype html><html><head><style>${CSS_FUENTES}*{margin:0;box-sizing:border-box}body{width:1024px;height:500px;background:#15181D;font-family:Plex,sans-serif;display:flex;align-items:center;gap:48px;padding:0 80px;color:#fff}
-  img{height:210px}h1{font-size:64px;font-weight:700;line-height:1}h1 span{color:#FFD500}p{font-size:26px;color:#C9CDD3;margin-top:16px;line-height:1.3}</style></head>
-  <body><img src="${logo}"><div><h1>Síguelo <span>On Rent</span></h1><p>Reservas, contratos con firma digital,<br>entregas y devoluciones con fotos.</p></div></body></html>`);
+await g.setContent(`<!doctype html><html><head><style>${CSS_FUENTES}*{margin:0;box-sizing:border-box}body{width:1024px;height:500px;background:#15181D;font-family:Plex,sans-serif;display:flex;flex-direction:column;justify-content:center;align-items:flex-start;gap:40px;padding:0 80px;color:#fff}
+  img{height:80px;width:auto}p{font-size:34px;color:#C9CDD3;line-height:1.3}p b{color:#fff;font-weight:700}</style></head>
+  <body><img src="${logo}" alt="Síguelo GPS · On Rent"><p><b>Reservas, contratos con firma digital,</b><br>entregas y devoluciones con fotos.</p></body></html>`);
 await g.evaluate(() => document.fonts.ready);
 await g.screenshot({ path: path.join(RAIZ, 'apps/movil/tienda/grafico-destacado-play.png') });
 fs.copyFileSync(path.join(RAIZ, 'apps/movil/assets/icon-only.png'), path.join(RAIZ, 'apps/movil/tienda/icono-1024.png'));

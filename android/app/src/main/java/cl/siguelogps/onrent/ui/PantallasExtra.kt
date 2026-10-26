@@ -237,7 +237,7 @@ fun PantallaEliminarCuenta(eliminando: Boolean, onVolver: () -> Unit, onEliminar
 @Composable
 fun PantallaActualizar(mensaje: String?, onActualizar: () -> Unit) {
     Column(Modifier.fillMaxSize().background(c.cabecera).statusBarsPadding().navigationBarsPadding().padding(24.dp), verticalArrangement = Arrangement.Center) {
-        MarcaOnRent()
+        MarcaOnRent(apilado = true)
         Spacer(Modifier.height(24.dp))
         Txt("Actualiza la app", color = c.sobreCabecera, size = 28.sp, peso = FontWeight.Bold)
         Spacer(Modifier.height(10.dp))

@@ -12,7 +12,7 @@ if (config.produccion && !config.baseDatos && process.env.PERMITIR_PGLITE !== '1
   app.get('/salud', (_req, res) => res.status(503).json({ ok: false, servicio: 'siguelo-rentacar', error: 'Falta DATABASE_URL' }));
   app.use((_req, res) => res.status(503).type('html').send(`<!doctype html><meta charset="utf-8"><title>Síguelo On Rent</title>
     <body style="font-family:system-ui;max-width:560px;margin:80px auto;padding:0 16px;color:#15181D">
-    <img src="/img/logo-siguelo.png" alt="Síguelo GPS" style="height:34px"><h1 style="font-size:22px">Falta conectar la base de datos</h1>
+    <img src="/img/siguelo-onrent-b-claro.png" alt="Síguelo GPS · On Rent" width="400" height="124" style="height:60px;width:auto"><h1 style="font-size:22px">Falta conectar la base de datos</h1>
     <p>Agrega la variable <b>DATABASE_URL</b> con la «Internal Database URL» de PostgreSQL en Render (servicio › Environment) y el sistema arrancará solo.</p></body>`));
   app.use('/img', express.static(new URL('../public/img', import.meta.url).pathname));
   app.listen(config.puerto, () => console.error('Falta DATABASE_URL: se sirve solo la página de aviso. Configúrala en el servicio.'));

@@ -20,7 +20,7 @@ const ICONO = {
 };
 const caja = document.getElementById('caja');
 const p = new URLSearchParams(location.search);
-const pie = '<div class="pie">Pago seguro gestionado con <img src="/img/logo-siguelo.png" alt="Síguelo GPS"></div>';
+const pie = '<div class="pie">Pago seguro gestionado con <img class="logo-onrent logo-onrent-claro" src="/img/siguelo-onrent-a-claro.png" alt="Síguelo GPS · On Rent" width="639" height="80"><img class="logo-onrent logo-onrent-oscuro" src="/img/siguelo-onrent-a-oscuro.png" alt="Síguelo GPS · On Rent" width="639" height="80"></div>';
 
 if (p.get('error')) {
   caja.innerHTML = `<div class="icono mal">${ICONO.mal}</div><h1>No pudimos confirmar el pago</h1><p class="muted">${esc(p.get('error'))}</p><p class="peq muted">Si se descontó dinero de tu tarjeta, contacta al rentacar con este mensaje.</p>${pie}`;

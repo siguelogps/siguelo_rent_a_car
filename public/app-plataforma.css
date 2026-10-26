@@ -9,7 +9,7 @@
 html, body { margin: 0; min-height: 100%; }
 body.ap { background: var(--ap-fondo); color: var(--ap-tinta); font: 14px/1.45 "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; display: flex; align-items: center; justify-content: center; padding: 16px; min-height: 100dvh; }
 .ap-tarjeta { background: var(--ap-tarjeta); border-radius: 12px; padding: 28px 30px; width: 100%; max-width: 420px; text-align: center; box-shadow: 0 4px 6px rgba(0,0,0,.05); }
-.ap-logo { height: 28px; margin-bottom: 6px; }
+.ap-logo { height: 52px; width: auto; margin-bottom: 6px; } /* 26-oct: logo «Síguelo GPS + On Rent» (versión apilada), más alto que el oficial solo */
 .ap-tarjeta h1 { font-size: 17px; margin: 10px 0 4px; }
 .ap-como { color: var(--ap-tenue); margin: 0; overflow-wrap: anywhere; }
 .ap-como b { color: var(--ap-tinta); }

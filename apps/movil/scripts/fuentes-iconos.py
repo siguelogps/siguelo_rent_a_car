@@ -23,17 +23,14 @@ centrado(1024, TINTA, pin_alto(600), 8).convert('RGB').save('assets/icon-only.pn
 centrado(1024, (0, 0, 0, 0), pin_alto(470), 6).save('assets/icon-foreground.png')
 Image.new('RGB', (1024, 1024), TINTA[:3]).save('assets/icon-background.png')
 
-# Pantalla de inicio: logo horizontal (pin + «IGUELO · GPS» en blanco), con las proporciones de logo-siguelo.png.
-H = 180
-p = pin_alto(H)
-th = round(H * 50 / 96)
-t = txt.resize((round(txt.width * th / txt.height), th), Image.LANCZOS)
-sep = round(H * 4 / 96)
-ancho = p.width + sep + t.width
+# Pantalla de inicio: logo «Síguelo GPS + On Rent» apilado, de letras blancas (aprobado por Pablo el 26-oct), centrado
+# sobre el fondo tinta. Antes iba el logo horizontal oficial solo (pin + «IGUELO · GPS»). El dibujo no se toca: solo se
+# escala. Las apps con la marca del cliente cambian esta pantalla por la suya (scripts/app-propia.mjs).
+lk = Image.open('recursos/siguelo-onrent-b-oscuro.png').convert('RGBA')
+ANCHO = 860
+lk = lk.resize((ANCHO, round(lk.height * ANCHO / lk.width)), Image.LANCZOS)
 for nombre in ('splash.png', 'splash-dark.png'):
     s = Image.new('RGBA', (2732, 2732), TINTA)
-    x0, y0 = (2732 - ancho) // 2, (2732 - H) // 2
-    s.alpha_composite(p, (x0, y0))
-    s.alpha_composite(t, (x0 + p.width + sep, y0 + round(H * 10 / 96)))
+    s.alpha_composite(lk, ((2732 - lk.width) // 2, (2732 - lk.height) // 2))
     s.convert('RGB').save(f'assets/{nombre}')
-print(f'Listo (logo de inicio: {ancho} px de ancho)')
+print(f'Listo (logo de inicio: {ANCHO} px de ancho)')

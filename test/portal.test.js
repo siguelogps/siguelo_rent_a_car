@@ -167,12 +167,20 @@ test('documentos del cliente con el token y contrato PDF protegido por token', a
 
 // res.sendFile (src/app.js) no sirve archivos bajo carpetas que empiezan con punto (p. ej. .claude/worktrees)
 const rutaConPunto = /[\\/]\.[^\\/]/.test(new URL('..', import.meta.url).pathname);
-test('páginas públicas: /reservar, /embed y /portal se pueden incrustar', { skip: rutaConPunto && 'el repositorio está bajo una carpeta oculta' }, async () => {
-  for (const ruta of ['/reservar/andes-rent', '/embed/andes-rent', '/portal/abc123']) {
+// 31-oct (pendientes de seguridad): antes esta prueba exigía que /portal también fuera incrustable. Se cambió a propósito:
+// /portal/:token es la sesión del cliente (reserva, documentos, pagos) y no debe cargarse dentro de un iframe ajeno
+// (clickjacking). Solo /reservar y /embed, que el rentacar pone en su propio sitio, siguen sin restricción.
+test('páginas públicas: /reservar y /embed se pueden incrustar; /portal nunca', { skip: rutaConPunto && 'el repositorio está bajo una carpeta oculta' }, async () => {
+  for (const ruta of ['/reservar/andes-rent', '/embed/andes-rent']) {
     const r = await fetch(t.base + ruta);
     assert.equal(r.status, 200);
-    assert.equal(r.headers.get('x-frame-options'), null);
+    assert.equal(r.headers.get('x-frame-options'), null, ruta);
+    assert.equal(r.headers.get('content-security-policy'), null, ruta);
   }
+  const portal = await fetch(`${t.base}/portal/abc123`);
+  assert.equal(portal.status, 200);
+  assert.equal(portal.headers.get('x-frame-options'), 'DENY');
+  assert.equal(portal.headers.get('content-security-policy'), "frame-ancestors 'none'");
   const js = await fetch(`${t.base}/embed.js`);
   assert.equal(js.status, 200);
   assert.match(await js.text(), /data-rentacar/);

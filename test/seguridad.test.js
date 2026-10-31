@@ -18,9 +18,10 @@ test('cabeceras: la API no se guarda en caché, nosniff y referrer en todo, X-Fr
   // Las rutas con caché propia (logo público) mandan la suya en vez del no-store
   const logo = await fetch(`${t.base}/api/logo/no-existe`);
   assert.equal(logo.status, 404);
-  // El portal que los clientes incrustan en su sitio sigue sin X-Frame-Options
+  // El motor de reservas que los clientes incrustan en su sitio sigue sin X-Frame-Options
   const embed = await fetch(`${t.base}/embed/andes`);
   assert.equal(embed.headers.get('x-frame-options'), null);
+  assert.equal(embed.headers.get('content-security-policy'), null);
   // HSTS solo en producción: aquí (pruebas) no debe salir, para no «pegar» https en localhost
   assert.equal(api.headers.get('strict-transport-security'), null);
 });
@@ -106,4 +107,69 @@ test('multiempresa: una empresa nueva no ve ni alcanza por id los datos de la de
   // «Ver como» es solo del equipo Síguelo: un administrador de cliente no puede cambiar de empresa
   assert.equal((await otra.post('/api/empresa-activa', { empresa_id: 1 })).estado, 403);
   assert.equal((await otra.get('/api/empresas')).estado, 403);
+});
+
+// 31-oct (pendientes de seguridad): CSP en modo informe, su endpoint y los límites del cuerpo JSON.
+test('CSP en modo informe en las páginas (no en la API), sin bloquear nada', async () => {
+  const pagina = await fetch(`${t.base}/ingresar`);
+  const csp = pagina.headers.get('content-security-policy-report-only');
+  assert.ok(csp, 'las páginas llevan la política en modo informe');
+  assert.match(csp, /script-src 'self'/);
+  assert.match(csp, /style-src 'self' 'unsafe-inline'/);
+  assert.match(csp, /img-src [^;]*tile\.openstreetmap\.org/);
+  assert.match(csp, /report-uri \/api\/csp-informe/);
+  assert.equal(pagina.headers.get('content-security-policy'), null, 'nada se bloquea todavía');
+  assert.equal((await fetch(`${t.base}/api/yo`)).headers.get('content-security-policy-report-only'), null);
+});
+
+test('POST /api/csp-informe: sin sesión, acepta el formato del navegador, responde 204 y se acota por IP', async () => {
+  const avisos = [];
+  const original = console.warn;
+  console.warn = (m) => avisos.push(String(m));
+  try {
+    const informe = { 'csp-report': { 'document-uri': `${t.base}/ingresar`, 'violated-directive': 'script-src-elem', 'blocked-uri': 'inline', 'source-file': `${t.base}/ingresar`, 'line-number': 14 } };
+    const r = await fetch(`${t.base}/api/csp-informe`, { method: 'POST', headers: { 'Content-Type': 'application/csp-report' }, body: JSON.stringify(informe) });
+    assert.equal(r.status, 204);
+    assert.equal(avisos.length, 1);
+    assert.match(avisos[0], /^\[CSP\] script-src-elem · bloqueado: inline · en .*\/ingresar \(.*\/ingresar:14\)$/);
+    // Lo que llega es texto ajeno: se recorta y se le quitan los saltos de línea para que no falsee el registro
+    const sucio = { 'csp-report': { 'violated-directive': 'img-src', 'blocked-uri': 'x'.repeat(1000) + '\n[CSP] falso' } };
+    await fetch(`${t.base}/api/csp-informe`, { method: 'POST', headers: { 'Content-Type': 'application/csp-report' }, body: JSON.stringify(sucio) });
+    assert.equal(avisos.length, 2);
+    assert.ok(avisos[1].length < 400 && !avisos[1].includes('\n'));
+    // También la Reporting API (lista de informes) y un cuerpo sin forma conocida (204, sin anotar nada)
+    const lista = [{ type: 'csp-violation', body: { documentURL: `${t.base}/inicio`, effectiveDirective: 'font-src', blockedURL: 'https://ajeno.example' } }];
+    assert.equal((await fetch(`${t.base}/api/csp-informe`, { method: 'POST', headers: { 'Content-Type': 'application/reports+json' }, body: JSON.stringify(lista) })).status, 204);
+    assert.match(avisos[2], /font-src · bloqueado: https:\/\/ajeno\.example/);
+    assert.equal((await fetch(`${t.base}/api/csp-informe`, { method: 'POST', headers: { 'Content-Type': 'application/csp-report' }, body: '"hola"' })).status, 204);
+    assert.equal(avisos.length, 3);
+    // Tope por IP: 20 por minuto, después 429
+    let ultimo = 0;
+    for (let i = 0; i < 20; i++) ultimo = (await fetch(`${t.base}/api/csp-informe`, { method: 'POST', headers: { 'Content-Type': 'application/csp-report' }, body: JSON.stringify(informe) })).status;
+    assert.equal(ultimo, 429);
+    assert.ok(avisos.length <= 20, 'después del tope no se anota más');
+  } finally { console.warn = original; }
+});
+
+test('cuerpo JSON: 2 MB en las rutas comunes (413 en español) y 25 MB solo donde llegan fotos o documentos', async () => {
+  const admin = await t.como('demo@siguelogps.cl');
+  const grande = 'a'.repeat(3 * 1024 * 1024);
+  const comun = await admin.post('/api/reservas', { notas: grande });
+  assert.equal(comun.estado, 413);
+  assert.match(comun.datos.error, /demasiado grande/);
+  assert.equal((await admin.put('/api/vehiculos/1', { notas: grande })).estado, 413);
+  // Una foto de 3 MB sí entra por la subida de archivos
+  const png = Buffer.concat([Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex'), Buffer.alloc(3 * 1024 * 1024, 7)]).toString('base64');
+  const foto = await admin.post('/api/archivos', { entidad: 'prueba', nombre: 'grande.png', dataUrl: `data:image/png;base64,${png}` });
+  assert.equal(foto.estado, 200, JSON.stringify(foto.datos));
+  // Cada ruta que recibe archivos como data URL está en la lista (si se agrega una y se olvida, cae con 413)
+  const { recibeArchivos } = await import('../src/cabeceras.js');
+  for (const [method, path] of [['POST', '/api/archivos'], ['PATCH', '/api/empresa'], ['POST', '/api/clientes/3/documentos'], ['POST', '/api/patio/inspecciones/7/fotos'],
+    ['POST', '/api/patio/7/fotos'], ['POST', '/api/patio/inspecciones/7/danos'], ['PATCH', '/api/patio/danos/9'], ['POST', '/api/patio/inspecciones/7/completar'],
+    ['POST', '/api/incidentes'], ['POST', '/api/incidentes/4/nota'], ['POST', '/api/portal/r/tok-abc_123/documentos'], ['POST', '/api/firmar/tok-abc_123'], ['POST', '/api/apps/solicitud/firmar']]) {
+    assert.ok(recibeArchivos({ method, path }), `${method} ${path}`);
+  }
+  for (const [method, path] of [['GET', '/api/archivos'], ['POST', '/api/reservas'], ['POST', '/api/clientes'], ['PUT', '/api/vehiculos/1'], ['POST', '/api/incidentes/4/estado'], ['POST', '/api/ingresar']]) {
+    assert.equal(recibeArchivos({ method, path }), false, `${method} ${path}`);
+  }
 });

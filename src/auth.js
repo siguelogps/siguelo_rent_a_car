@@ -104,7 +104,7 @@ export async function cargarSesion(req, _res, next) {
 
 // Lo que se puede hacer aunque la sesión sea de solo lectura: salir, volver al backoffice o pasar a operar, «Mi clave»
 // y las vistas previas que no guardan nada.
-const PERMITIDO_SOLO_LECTURA = [/^\/api\/salir$/, /^\/api\/empresa-activa$/, /^\/api\/configuracion\/mi-clave$/, /^\/api\/configuracion\/plantillas\/vista-previa$/, /^\/api\/buscar/];
+const PERMITIDO_SOLO_LECTURA = [/^\/api\/csp-informe$/, /^\/api\/salir$/, /^\/api\/empresa-activa$/, /^\/api\/configuracion\/mi-clave$/, /^\/api\/configuracion\/plantillas\/vista-previa$/, /^\/api\/buscar/];
 export function soloLectura(req, _res, next) {
   if (!req.soloLectura || ['GET', 'HEAD', 'OPTIONS'].includes(req.method)) return next();
   const ruta = req.originalUrl.split('?')[0];

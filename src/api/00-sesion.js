@@ -6,22 +6,24 @@ import { registrar } from '../bitacora.js';
 import { ROLES, esSiguelo } from '../permisos.js';
 import { planDeEmpresa, MODULOS_BASE } from '../planes.js';
 import { vincularTrasIngreso } from './15-app-plataforma.js';
+import { intentosFallidos } from '../limite.js';
 
 const r = express.Router();
-const intentos = new Map(); // límite simple de intentos fallidos por correo+IP
+// Fuerza bruta (31-oct, revisión de seguridad): 8 fallos seguidos para un correo desde una IP bloquean 10 min, y cada
+// bloqueo siguiente dura el doble. Aparte, 40 fallos desde una misma IP (probando correos distintos) también la frenan.
+const intentos = intentosFallidos({ nombre: 'ingreso', max: 8, ventanaMs: 15 * 60e3, bloqueoMs: 10 * 60e3 });
+const intentosIp = intentosFallidos({ nombre: 'ingreso-ip', max: 40, ventanaMs: 15 * 60e3, bloqueoMs: 10 * 60e3 });
 
 r.post('/ingresar', async (req, res) => {
   const correo = String(req.body.correo || '').trim().toLowerCase();
   const k = `${correo}|${req.ip}`;
-  const i = intentos.get(k) || { n: 0, hasta: 0 };
-  if (i.hasta > Date.now()) throw new ErrorHttp(429, 'Demasiados intentos. Espera unos minutos.');
+  intentos.revisar(k); intentosIp.revisar(req.ip);
   const u = await uno('SELECT * FROM usuarios WHERE lower(correo) = $1', [correo]);
   if (!u || !u.activo || !verificarClave(req.body.clave || '', u.clave_hash)) {
-    i.n += 1; if (i.n >= 8) { i.hasta = Date.now() + 10 * 60e3; i.n = 0; }
-    intentos.set(k, i);
+    intentos.fallo(k); intentosIp.fallo(req.ip);
     throw new ErrorHttp(401, 'Correo o clave incorrectos.');
   }
-  intentos.delete(k);
+  intentos.exito(k);
   // Cliente suspendido o dado de baja con el plazo de exportación vencido: su gente no entra (22-oct, espec. Backoffice).
   if (!esSiguelo(u.rol) && u.empresa_id) {
     const e = await uno(`SELECT estado, (exportar_hasta IS NOT NULL AND exportar_hasta < (now() AT TIME ZONE 'America/Santiago')::date) AS vencido FROM empresas WHERE id = $1`, [u.empresa_id]);

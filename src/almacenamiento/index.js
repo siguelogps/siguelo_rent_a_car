@@ -118,6 +118,32 @@ export async function borrarArchivo(empresaId, id) {
 }
 
 // data URL (lo que manda el navegador desde la cámara o el canvas de firma) → { mime, datos }
+// 31-oct (revisión de seguridad): un archivo subido por una persona de la empresa se servía con el Content-Type que ella
+// misma declaró en la data URL. Un HTML o un SVG con script, abierto desde /api/archivos/:id, corría en el mismo origen que
+// el sistema con la sesión de quien lo abría (XSS almacenado: un counter contra el administrador). Ahora solo las fotos y
+// los PDF se muestran en el navegador; cualquier otro tipo baja como adjunto binario, sin ejecutar nada.
+export const MIME_IMAGEN = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
+export const MIME_EN_PANTALLA = [...MIME_IMAGEN, 'application/pdf'];
+export const MIME_SUBIDA = [...MIME_EN_PANTALLA];
+
+// Lanza 400 (ErrorHttp-compatible) si el tipo no está en la lista permitida.
+export function exigirMime(mime, permitidos, mensaje = 'Sube una foto (JPG, PNG o WebP) o un PDF.') {
+  if (!permitidos.includes(String(mime || '').toLowerCase())) { const e = new Error(mensaje); e.estado = 400; e.campo = 'archivo'; throw e; }
+  return mime;
+}
+
+// Manda un archivo leído con leerArchivo(). Solo fotos y PDF van «inline» con su tipo real; el resto, como descarga binaria.
+export function entregarArchivo(res, { fila, datos }, { nombre = null, cache = 'private, no-cache', descarga = false } = {}) {
+  const mime = String(fila.mime || '').toLowerCase();
+  const seguro = MIME_EN_PANTALLA.includes(mime);
+  const archivo = encodeURIComponent(nombre || fila.nombre || 'archivo');
+  res.setHeader('Content-Type', seguro ? mime : 'application/octet-stream');
+  res.setHeader('X-Content-Type-Options', 'nosniff');
+  res.setHeader('Cache-Control', cache);
+  res.setHeader('Content-Disposition', `${descarga || !seguro ? 'attachment' : 'inline'}; filename*=UTF-8''${archivo}`);
+  res.end(datos);
+}
+
 export function desdeDataUrl(dataUrl) {
   const m = String(dataUrl || '').match(/^data:([\w/+.-]+);base64,(.+)$/);
   if (!m) throw new Error('Imagen inválida');

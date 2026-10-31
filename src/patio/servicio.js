@@ -163,7 +163,7 @@ export async function completarInspeccion(req, insp, b) {
   const nombre = String(b.firmante_nombre || insp.firmante_nombre || reserva.cliente_nombre || '').trim();
   if (!b.firma) throw new ErrorHttp(400, 'Falta la firma del cliente.', { campo: 'firma' });
   const { mime, datos } = desdeDataUrl(b.firma);
-  if (!mime.startsWith('image/')) throw new ErrorHttp(400, 'Firma inválida');
+  if (!/^image\/(png|jpeg|webp)$/.test(mime)) throw new ErrorHttp(400, 'Firma inválida'); // image/svg+xml también empieza con image/ y puede traer script (31-oct)
   const firma = await guardarArchivo({ empresaId: E, entidad: 'inspeccion', entidadId: insp.id, tipo: 'firma', nombre: `firma-${insp.tipo}-${reserva.folio}.png`, mime, datos, meta: { firmante: nombre }, usuarioId: req.usuario.id });
   const lat = b.lat != null && b.lat !== '' ? Number(b.lat) : null, lng = b.lng != null && b.lng !== '' ? Number(b.lng) : null;
   const mantencion = !!(b.mantencion ?? insp.checklist?.mantencion);

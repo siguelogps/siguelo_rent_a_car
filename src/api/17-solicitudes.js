@@ -9,6 +9,7 @@ import { registrar } from '../bitacora.js';
 import { crearSolicitud, TIPOS_SOLICITUD } from '../siguelo/solicitudes.js';
 import { leerInvitacion, aceptarInvitacion } from '../siguelo/invitaciones.js';
 import { leerEnlace, recibirCarga } from '../siguelo/carga.js';
+import { limitar } from '../limite.js';
 
 const r = express.Router();
 
@@ -25,6 +26,8 @@ r.post('/solicitudes', requiere('configuracion', 'ver'), async (req, res) => {
 });
 
 // ── Invitación ──
+// Enlaces públicos (el token es la credencial): límite por IP para que nadie los pruebe a ciegas (31-oct).
+r.use(['/invitacion', '/carga'], limitar({ nombre: 'enlaces', max: 60, ventanaMs: 10 * 60e3 }), (_req, res, next) => { res.setHeader('Cache-Control', 'no-store'); next(); });
 r.get('/invitacion/:token', async (req, res) => {
   const u = await leerInvitacion(req.params.token);
   if (!u) throw new ErrorHttp(410, 'Esta invitación ya se usó o venció. Pide una nueva a Síguelo GPS.');

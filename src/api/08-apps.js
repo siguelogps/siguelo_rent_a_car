@@ -8,7 +8,7 @@ import { requiere, soloSiguelo, soloSuperadmin, ErrorHttp } from '../auth.js';
 import { registrar } from '../bitacora.js';
 import { incluye, limpiarCachePlanes } from '../planes.js';
 import { config } from '../config.js';
-import { guardarArchivo, leerArchivo, borrarArchivo } from '../almacenamiento/index.js';
+import { guardarArchivo, leerArchivo, borrarArchivo, entregarArchivo } from '../almacenamiento/index.js';
 import * as P from '../apps-propias.js';
 
 const r = express.Router();
@@ -149,10 +149,7 @@ r.post('/apps/solicitud/firmar', requiere('configuracion', 'editar'), async (req
 async function enviarArchivo(res, empresaId, id, { nombre = null, cache = 'private, no-cache', descarga = false } = {}) {
   const a = id ? await leerArchivo(empresaId, Number(id)) : null;
   if (!a) throw new ErrorHttp(404, 'Archivo no encontrado');
-  res.setHeader('Content-Type', a.fila.mime || 'application/octet-stream');
-  res.setHeader('Cache-Control', cache);
-  res.setHeader('Content-Disposition', `${descarga ? 'attachment' : 'inline'}; filename*=UTF-8''${encodeURIComponent(nombre || a.fila.nombre || 'archivo')}`);
-  res.end(a.datos);
+  entregarArchivo(res, a, { nombre, cache, descarga }); // solo fotos y PDF en pantalla; APK/AAB y lo demás, como descarga (31-oct)
 }
 
 r.get('/apps/solicitud/pdf', requiere('configuracion', 'ver'), async (req, res) => {

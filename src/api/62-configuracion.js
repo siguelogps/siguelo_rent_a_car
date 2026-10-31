@@ -8,6 +8,7 @@ import { q, uno } from '../db.js';
 import { requiere, soloSiguelo, ErrorHttp, hashClave, verificarClave, tokenDeSesion } from '../auth.js';
 import { hashSha256 } from '../cifrado.js';
 import { registrar } from '../bitacora.js';
+import { intentosFallidos } from '../limite.js';
 import { ROLES, MODULOS, nivel } from '../permisos.js';
 import { plantillasPorDefecto } from '../plantillas-defecto.js';
 import { renderizar } from '../salidas.js';
@@ -32,11 +33,17 @@ r.get('/configuracion/permisos', requiere(null, 'ver', { sinEmpresa: true }), (_
   res.json({ roles, modulos: MODULOS, matriz: Object.fromEntries(Object.keys(roles).map((rol) => [rol, Object.fromEntries(Object.keys(MODULOS).map((m) => [m, nivel(rol, m)]))])) });
 });
 
+// 31-oct (revisión de seguridad): quien tenga una sesión abierta (un teléfono prestado, una pestaña sin cerrar) no puede
+// adivinar la clave probando sin parar: 6 fallos bloquean estas dos acciones 15 min para ese usuario.
+const intentosClave = intentosFallidos({ nombre: 'clave-sesion', max: 6, ventanaMs: 15 * 60e3, bloqueoMs: 15 * 60e3 });
+
 // ── Mi clave ──
 r.post('/configuracion/mi-clave', requiere(null, 'ver', { sinEmpresa: true }), async (req, res) => {
   const { actual, nueva } = req.body || {};
+  intentosClave.revisar(req.usuario.id);
   const u = await uno('SELECT id, clave_hash FROM usuarios WHERE id = $1', [req.usuario.id]);
-  if (!verificarClave(actual || '', u.clave_hash)) throw new ErrorHttp(400, 'La clave actual no es correcta.', { campo: 'actual' });
+  if (!verificarClave(actual || '', u.clave_hash)) { intentosClave.fallo(req.usuario.id); throw new ErrorHttp(400, 'La clave actual no es correcta.', { campo: 'actual' }); }
+  intentosClave.exito(req.usuario.id);
   if (String(nueva || '').length < 10) throw new ErrorHttp(400, 'La nueva clave debe tener al menos 10 caracteres.', { campo: 'nueva' });
   if (nueva === actual) throw new ErrorHttp(400, 'La nueva clave debe ser distinta de la actual.', { campo: 'nueva' });
   await q('UPDATE usuarios SET clave_hash = $2 WHERE id = $1', [u.id, hashClave(nueva)]);
@@ -50,8 +57,10 @@ r.post('/configuracion/mi-clave', requiere(null, 'ver', { sinEmpresa: true }), a
 // La persona elimina su propio acceso: se borran sus datos personales (nombre, correo, teléfono, clave) y sus sesiones.
 // La fila queda anonimizada para no romper la trazabilidad de contratos, inspecciones y bitácora de la empresa.
 r.post('/configuracion/eliminar-mi-cuenta', requiere(null, 'ver', { sinEmpresa: true }), async (req, res) => {
+  intentosClave.revisar(req.usuario.id);
   const u = await uno('SELECT id, empresa_id, rol, clave_hash FROM usuarios WHERE id = $1', [req.usuario.id]);
-  if (!verificarClave(String(req.body?.clave || ''), u.clave_hash)) throw new ErrorHttp(400, 'La clave no es correcta.', { campo: 'clave' });
+  if (!verificarClave(String(req.body?.clave || ''), u.clave_hash)) { intentosClave.fallo(req.usuario.id); throw new ErrorHttp(400, 'La clave no es correcta.', { campo: 'clave' }); }
+  intentosClave.exito(req.usuario.id);
   if (u.rol === 'superadmin') throw new ErrorHttp(400, 'La cuenta de superadministrador no se elimina desde aquí: escribe a soporte@siguelogps.cl.');
   if (u.rol === 'administrador') {
     const otros = await uno("SELECT count(*)::int AS n FROM usuarios WHERE empresa_id = $1 AND rol = 'administrador' AND activo AND id <> $2", [u.empresa_id, u.id]);

@@ -4,6 +4,7 @@ import express from 'express';
 import QRCode from 'qrcode';
 import { q, uno } from '../db.js';
 import { requiere, ErrorHttp } from '../auth.js';
+import { limitar } from '../limite.js';
 import { registrar } from '../bitacora.js';
 import { leerArchivo } from '../almacenamiento/index.js';
 import { encolar } from '../salidas.js';
@@ -126,6 +127,9 @@ async function porToken(token) {
   if (!c) throw new ErrorHttp(404, 'El enlace de firma no es válido o el contrato fue anulado');
   return c;
 }
+
+// Rutas públicas de firma y verificación: el token/código es la credencial; límite por IP contra pruebas a ciegas (31-oct).
+r.use(['/firmar', '/verificar'], limitar({ nombre: 'firma', max: 120, ventanaMs: 60e3 }));
 
 r.get('/firmar/:token', async (req, res) => {
   const c = await porToken(req.params.token);

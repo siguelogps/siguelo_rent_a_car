@@ -4,7 +4,7 @@ import express from 'express';
 import { ErrorHttp } from '../auth.js';
 import { q } from '../db.js';
 import { guardarArchivo, leerArchivo, desdeDataUrl } from '../almacenamiento/index.js';
-import { limitar } from '../portal/limite.js';
+import { limitar } from '../limite.js';
 import {
   empresaPorSlug, infoPublica, leerBusqueda, buscar, cotizarPortal, crearReservaPortal,
   reservaPorToken, resumenParaCliente, pagarPendiente, TIPOS_DOCUMENTO

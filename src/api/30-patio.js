@@ -133,7 +133,7 @@ r.delete('/patio/inspecciones/:id/fotos/:posicion', requiere('patio', 'editar'),
 // ── Daños marcados en el esquema ──
 async function guardarFotoDano(req, danoId, dataUrl) {
   const { mime, datos } = desdeDataUrl(dataUrl);
-  if (!mime.startsWith('image/')) throw new ErrorHttp(400, 'La foto debe ser una imagen');
+  if (!/^image\/(jpeg|png|webp)$/.test(mime)) throw new ErrorHttp(400, 'La foto debe ser una imagen JPEG, PNG o WebP'); // no SVG: puede traer script (31-oct)
   const a = await guardarArchivo({ empresaId: req.empresaId, entidad: 'dano', entidadId: danoId, tipo: 'foto_dano', nombre: `dano-${danoId}.jpg`, mime, datos, meta: { sello: true }, usuarioId: req.usuario.id });
   await q('UPDATE danos SET archivo_id = $1 WHERE id = $2 AND empresa_id = $3', [a.id, danoId, req.empresaId]);
 }

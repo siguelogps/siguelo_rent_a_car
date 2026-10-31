@@ -3,7 +3,7 @@ import express from 'express';
 import { q, uno, transaccion, siguienteFolio } from '../db.js';
 import { requiere, ErrorHttp } from '../auth.js';
 import { registrar } from '../bitacora.js';
-import { guardarArchivo, desdeDataUrl } from '../almacenamiento/index.js';
+import { guardarArchivo, desdeDataUrl, exigirMime, MIME_SUBIDA, MIME_IMAGEN } from '../almacenamiento/index.js';
 import { crearIncidente, evento } from '../patio/incidentes.js';
 import { inspeccionDe, fotosDe, numerar } from '../patio/servicio.js';
 import { ESTADOS_INCIDENTE, ORDEN_INCIDENTE, TIPOS_INCIDENTE, FOTO_DE_VISTA, nombrePosicion } from '../../public/js/patio-comun.js';
@@ -108,7 +108,7 @@ r.post('/incidentes', requiere('incidentes', 'editar'), async (req, res) => {
   const fotos = [...(b.dataUrl ? [b.dataUrl] : []), ...(Array.isArray(b.fotos) ? b.fotos : [])].slice(0, 8).map((f) => {
     let x;
     try { x = desdeDataUrl(f); } catch { throw new ErrorHttp(400, 'Una de las fotos no se pudo leer', { campo: 'fotos' }); }
-    if (!x.mime.startsWith('image/')) throw new ErrorHttp(400, 'Las fotos deben ser imágenes', { campo: 'fotos' });
+    if (!MIME_IMAGEN.includes(x.mime)) throw new ErrorHttp(400, 'Las fotos deben ser imágenes (JPG, PNG o WebP)', { campo: 'fotos' }); // no SVG: puede traer script (31-oct)
     return x;
   });
   const inc = await transaccion((tx) => crearIncidente(tx, { empresaId: E, tipo: b.tipo, reservaId, vehiculoId, descripcion, deducible: monto(b.deducible, 'deducible'), usuarioId: req.usuario.id,
@@ -220,6 +220,7 @@ r.post('/incidentes/:id/nota', requiere('incidentes', 'editar'), async (req, res
   if (!det && !req.body?.dataUrl) throw new ErrorHttp(400, 'Escribe la nota', { campo: 'detalle' });
   if (req.body?.dataUrl) {
     const { mime, datos } = desdeDataUrl(req.body.dataUrl);
+    exigirMime(mime, MIME_SUBIDA, 'El adjunto debe ser una foto (JPG, PNG o WebP) o un PDF.'); // nada ejecutable (31-oct)
     await guardarArchivo({ empresaId: E, entidad: 'incidente', entidadId: i.id, tipo: 'adjunto', nombre: String(req.body.nombre || 'adjunto').slice(0, 120), mime, datos, usuarioId: req.usuario.id });
   }
   await evento({ query: q }, { empresaId: E, incidenteId: i.id, tipo: 'nota', detalle: det || 'Adjunto agregado', usuarioId: req.usuario.id });

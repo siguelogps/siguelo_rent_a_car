@@ -5,7 +5,7 @@ import { requiere, soloSiguelo, hashClave, ErrorHttp } from '../auth.js';
 import { esSiguelo } from '../permisos.js';
 import { registrar } from '../bitacora.js';
 import { normalizarRut, validarRut } from '../util/rut.js';
-import { guardarArchivo, desdeDataUrl } from '../almacenamiento/index.js';
+import { guardarArchivo, desdeDataUrl, exigirMime, MIME_IMAGEN } from '../almacenamiento/index.js';
 import { plantillasPorDefecto } from '../plantillas-defecto.js';
 
 const r = express.Router();
@@ -62,6 +62,7 @@ r.patch('/empresa', requiere('configuracion', 'editar'), async (req, res) => {
   }
   if (b.logo) {
     const { mime, datos } = desdeDataUrl(b.logo);
+    exigirMime(mime, MIME_IMAGEN, 'El logo debe ser una imagen PNG, JPG o WebP.'); // el logo es público (/api/logo/:slug): nunca un SVG con script (31-oct)
     const a = await guardarArchivo({ empresaId: req.empresaId, entidad: 'empresa', entidadId: req.empresaId, tipo: 'logo', nombre: 'logo', mime, datos, usuarioId: req.usuario.id });
     vals.push(String(a.id)); sets.push(`logo_clave = $${vals.length}`);
   }

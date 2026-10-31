@@ -3,6 +3,7 @@
 import express from 'express';
 import { q, uno } from '../db.js';
 import { requiere, ErrorHttp } from '../auth.js';
+import { limitar } from '../limite.js';
 import { registrar } from '../bitacora.js';
 import { encolar } from '../salidas.js';
 import { clp, fechaHora } from '../util/formato.js';
@@ -146,6 +147,8 @@ r.post('/pagos/webhook/mercadopago', async (req, res) => {
   try { res.json(await webhookMercadoPago(Number(req.query.empresa) || null, req.body || {}, req.query)); }
   catch (e) { console.error('[webhook mercadopago]', e.message); res.status(200).json({ ok: false }); } // 200 para que MP no reintente sin fin
 });
+// Enlaces públicos de pago (31-oct): límite por IP para que nadie recorra tokens o ids a ciegas.
+r.use(['/pagos/link', '/pagos/publico'], limitar({ nombre: 'pagos-publico', max: 120, ventanaMs: 60e3 }));
 r.get('/pagos/link/:token', async (req, res) => {
   try {
     const x = await abrirLink(req.params.token);

@@ -4,8 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { cargarSesion, soloLectura, ErrorHttp } from './auth.js';
-import { config } from './config.js';
 import { idempotencia } from './app-nativa/idempotencia.js';
+import { cabecerasSeguridad, recibeArchivos } from './cabeceras.js';
 
 const RAIZ = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const PUBLICO = path.join(RAIZ, 'public');
@@ -14,20 +14,11 @@ export async function crearApp() {
   const app = express();
   app.disable('x-powered-by');
   app.set('trust proxy', 1);
-  // Cabeceras de seguridad (31-oct, revisión de seguridad):
-  //   · HSTS solo en producción (en desarrollo se entra por http://localhost y el navegador recordaría el «solo https»).
-  //   · La API responde con «Cache-Control: no-store» por defecto, para que un navegador compartido no guarde listas de
-  //     clientes, pagos o contratos; las rutas que sí se cachean (logo, archivos) ponen la suya después y mandan.
-  //   · X-Frame-Options fuera del portal público (/portal, /reservar, /embed), que los clientes incrustan en su sitio.
-  app.use((req, res, next) => {
-    res.setHeader('X-Content-Type-Options', 'nosniff');
-    res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
-    if (config.produccion) res.setHeader('Strict-Transport-Security', 'max-age=15552000; includeSubDomains');
-    if (req.path.startsWith('/api/')) res.setHeader('Cache-Control', 'no-store');
-    if (!req.path.startsWith('/portal') && !req.path.startsWith('/reservar') && !req.path.startsWith('/embed')) res.setHeader('X-Frame-Options', 'SAMEORIGIN');
-    next();
-  });
-  app.use(express.json({ limit: '25mb' }));            // fotos y firmas llegan como data URL
+  // Cabeceras de seguridad y tamaño del cuerpo JSON: ver src/cabeceras.js (31-oct, revisión de seguridad).
+  app.use(cabecerasSeguridad);
+  const jsonComun = express.json({ limit: '2mb' });
+  const jsonConArchivos = express.json({ limit: '25mb' }); // fotos, firmas y documentos llegan como data URL
+  app.use((req, res, next) => (recibeArchivos(req) ? jsonConArchivos : jsonComun)(req, res, next));
   app.use(express.urlencoded({ extended: false, limit: '2mb' }));
   app.use(cargarSesion);
   app.use('/api', idempotencia); // reintentos de la cola de la app nativa (cabecera Idempotency-Key)
@@ -83,7 +74,9 @@ export async function crearApp() {
     if (estado >= 500) console.error(`[${req.method} ${req.path}]`, err);
     const { estado: _e, status: _s, message: _m, stack: _st, retryAfter, ...extra } = err;
     if (estado === 429 && retryAfter) res.setHeader('Retry-After', String(retryAfter));
-    res.status(estado).json({ ...(estado < 500 ? extra : {}), error: estado >= 500 && process.env.NODE_ENV === 'production' ? 'Ocurrió un error inesperado. Inténtalo de nuevo.' : err.message });
+    // El límite del cuerpo lo rechaza el analizador de JSON con un mensaje en inglés: se traduce para quien lo ve en pantalla.
+    const mensaje = err.type === 'entity.too.large' ? 'Lo que enviaste es demasiado grande. Si es una foto o un documento, reduce su tamaño e inténtalo de nuevo.' : err.message;
+    res.status(estado).json({ ...(estado < 500 ? extra : {}), error: estado >= 500 && process.env.NODE_ENV === 'production' ? 'Ocurrió un error inesperado. Inténtalo de nuevo.' : mensaje });
   });
   return app;
 }

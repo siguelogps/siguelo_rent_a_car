@@ -37,6 +37,10 @@ export async function entradaDesdeAdmin(req, res) {
     u = { ...u, rol, nivel_panel: nivel };
   }
   await crearSesion(res, { ...u, empresa_id: null }, req.headers['user-agent']);
+  // Fase 2 del estándar (1-nov): la franja negra del backoffice dice «Entraste desde Síguelo On Board · Volver a On Board»
+  // solo cuando de verdad se entró desde allá. La marca es una cookie legible por la pantalla (no es secreta: vale «1»);
+  // el ingreso con clave la borra (src/api/00-sesion.js).
+  res.cookie('desde_onboard', '1', { sameSite: 'lax', secure: config.produccion, path: '/', maxAge: 12 * 3600 * 1000 });
   await registrar({ usuario: u, empresaId: null, ip: req.ip }, 'ingreso', 'usuario', u.id, { via: 'Síguelo On Board', nivel: p.nivel });
   res.redirect(303, '/empresas');
 }

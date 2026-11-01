@@ -272,7 +272,6 @@ a.rc-marcha { text-decoration: none; }
 .rc-clave .campo { width: 100%; padding-right: 44px; }
 .rc-ojo { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); width: 32px; height: 32px; border: 0; background: transparent; color: var(--ink-2); cursor: pointer; display: flex; align-items: center; justify-content: center; border-radius: 6px; }
 .rc-ojo:hover { background: var(--soft); }
-.modal-pie.rc-pie-cuenta { justify-content: space-between; }
 /* Franja del equipo Síguelo (22-oct, espec. Backoffice). Negra con amarillo en el backoffice; azul en «Ver como» (solo
    lectura); amarilla al «Operar». No se invierte en oscuro: el color dice de un vistazo si lo que hagas tiene efecto. */
 :root { --bo-franja-alto: 44px; }
@@ -283,13 +282,17 @@ a.rc-marcha { text-decoration: none; }
 .bo-franja .bo-pase i { font-style: normal; font: 600 11px/1 var(--mono); background: #2B323C; color: #F3F4F6; padding: 4px 7px; border-radius: 6px; }
 .bo-franja a { color: #F3F4F6; text-decoration-color: #FFD500; }
 .bo-franja .btn { min-height: 30px; font-size: 13px; padding: 0 12px; }
-.bo-franja.operar { background: #FFD500; color: #15181D; }
-.bo-franja.operar b, .bo-franja.operar .bo-pase { color: #15181D; }
-.bo-franja.operar .btn { background: #15181D; color: #FFD500; border-color: #15181D; }
+/* Fase 2 del estándar (1-nov): «Operar» también va en negro (como en Síguelo OS); el amarillo queda para la marcha blanca.
+   Se distingue del backoffice por el texto («Operando como…») y por el botón amarillo «← Volver al backoffice». */
+.bo-franja.operar { background: #15181D; color: #F3F4F6; border-bottom: 3px solid #FFD500; }
+.bo-franja.operar b { color: #FFD500; }
+.bo-franja.operar .bo-pase { color: #AEB4BE; }
+.bo-franja.operar .btn { background: #FFD500; color: #15181D; border-color: #FFD500; }
 .bo-franja.ver { background: #1E3A8A; color: #fff; }
 .bo-franja.ver b { color: #FFE680; }
 .bo-franja.ver .btn { background: #fff; color: #1E3A8A; border-color: #fff; margin-left: auto; }
 :root[data-theme="oscuro"] .bo-franja:not(.operar):not(.ver) { background: #0B0D10; border-bottom: 1px solid #2B323C; }
+:root[data-theme="oscuro"] .bo-franja.operar { background: #0B0D10; }
 @media (max-width: 860px) { .bo-franja { position: static; } .bo-franja + .barra { top: 0 !important; } .bo-franja .bo-pase { margin-left: 0; } }
 /* Menú contraído: solo el logo del cliente, sin deformarse */
 .plegada .rc-empresa { justify-content: center; padding: 6px 0; margin: 0 0 6px; border: 0; }
@@ -473,3 +476,30 @@ html.nativa-ios .rc-movil-pie { padding-bottom: calc(18px + env(safe-area-inset-
 .sb.sb-flujo { flex-wrap: wrap; }
 .sb.sb-flujo .sb-lista { position: static; flex: 1 1 100%; margin: 0 -10px 6px; box-shadow: none; border-radius: 8px; max-height: 260px; }
 :root[data-theme="oscuro"] .sb:not(.campo), :root[data-theme="oscuro"] .sb.campo { border-color: var(--line); }
+
+/* ── Fase 2 del estándar Síguelo (1-nov-2026, maqueta estandar-siguelo.html aprobada por Pablo) ──
+   Barra: botón «?» (solo cuando la pantalla tiene manual) y avatar que abre «Mi cuenta». Mi cuenta: quién soy, «Cambiar mi
+   clave» plegado, Tema (Claro · Automático · Oscuro) y «Cerrar sesión» al pie. Ingreso: ojo para ver la clave y pie con
+   los caminos alternativos. */
+.btn-ayuda { width: 26px; height: 26px; border-radius: 50%; border: 1.5px solid var(--ink); color: var(--ink); display: inline-grid; place-items: center; font: 700 13px/1 var(--sans); text-decoration: none; flex-shrink: 0; }
+.btn-ayuda:hover { background: var(--marca); border-color: var(--marca); color: #15181D; }
+.rc-avatar { border: 0; background: transparent; padding: 0; cursor: pointer; display: inline-flex; flex-shrink: 0; border-radius: 50%; }
+.rc-avatar .avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--ink); color: var(--marca); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 12px; }
+.rc-avatar:hover .avatar { box-shadow: 0 0 0 3px var(--marca-suave); }
+:root[data-theme="oscuro"] .rc-avatar .avatar { background: var(--marca); color: #15181D; }
+.rc-cuenta-quien { display: flex; gap: 12px; align-items: center; }
+.rc-cuenta-quien .avatar { width: 40px; height: 40px; border-radius: 50%; background: var(--ink); color: var(--marca); display: flex; align-items: center; justify-content: center; font-weight: 600; font-size: 13px; flex-shrink: 0; }
+:root[data-theme="oscuro"] .rc-cuenta-quien .avatar { background: var(--marca); color: #15181D; }
+.rc-cuenta-quien div { display: flex; flex-direction: column; line-height: 1.3; min-width: 0; }
+.rc-cuenta-clave summary { list-style: none; display: inline-flex; width: fit-content; }
+.rc-cuenta-clave summary::-webkit-details-marker { display: none; }
+.rc-cuenta-clave[open] summary { background: var(--soft); }
+.rc-cuenta-form { margin-top: 12px; display: flex; flex-direction: column; gap: 12px; padding: 14px; border: 1px solid var(--line); border-radius: 10px; }
+.rc-cuenta-tema { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-weight: 500; }
+.rc-login-pie { text-align: center; line-height: 1.6; }
+.rc-login-pie #equipo { display: inline-block; margin-top: 4px; }
+.bo-riesgo-titulo { padding: 16px 20px 0; font-size: 16px; font-weight: 600; color: var(--red); }
+/* Pie del menú: «rol · Mi cuenta» en una sola línea (si no cabe, se corta con «…», nunca pasa a dos líneas). */
+.menu-usuario span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.bo-franja.operar > span:first-of-type { min-width: 0; }
+@media (max-width: 860px) { .btn-ayuda { display: none; } }

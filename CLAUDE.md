@@ -42,3 +42,12 @@ Node.js ≥ 22 (ESM), Express 5, PostgreSQL (PGlite embebido si no hay `DATABASE
 - **Los modales se cierran solo con sus botones** (✕, «Cancelar», la acción) o con Esc; un clic fuera nunca los cierra.
 - **Obligatorios con « *»:** lo pone `comun.js` solo, en todo control con `required` o `data-obligatorio` dentro de un `<label>`. No se escribe el asterisco a mano.
 - **Vocabulario:** «Conexiones» (no «Integraciones»), «Cerrar sesión» (no «Salir»), «plataforma GPS».
+
+## Reglas de pantalla (estandarización Síguelo, fase 2 · 1-nov-2026, maqueta `estandar-siguelo.html` aprobada)
+- **Lo común vive en `public/estandar.js`** (módulo puro, probado en Node): menú del cliente por grupos (`MENU`, «Configuración» al final), menú del backoffice (`BACKOFFICE_MENU`), manuales por pantalla (`MANUALES`), pestañas base de Configuración (`PESTANAS_BASE`, `ordenarPestanas()`) y las franjas (`htmlFranja()`). `comun.js` solo lo pinta.
+- **Botón «?» en la barra solo cuando la pantalla tiene manual:** se registra en `MANUALES` (clave = `activo`) o se pasa `iniciarPagina({ manual })`. Sin manual, no se muestra. On Rent aún no tiene manuales escritos.
+- **«Mi cuenta»** (desde el avatar de la barra o la tarjeta del pie, `abrirMiCuenta()` de `comun.js`): nombre, correo y rol · «Cambiar mi clave» · Tema (Claro · Automático · Oscuro) · «Eliminar mi cuenta» · «Cerrar sesión». Ya no existe la pestaña «Mi clave» de Configuración (`#mi-clave` abre Mi cuenta).
+- **Configuración:** primero Empresa · Usuarios · Conexiones · Bandeja de salida · Bitácora, después las propias (Sucursales, Plantillas, Portal de reservas). Solo pestañas con contenido real.
+- **Ingreso:** «Ingresa a Síguelo On Rent», Correo y Clave con «ojo», botón «Entrar», y debajo solo los caminos que existen (equipo Síguelo desde On Board). Sin «Recordarme» ni recuperación de clave, porque no existen.
+- **Franjas del equipo Síguelo:** negra en el backoffice (con «Entraste desde Síguelo On Board · Volver a On Board» solo si se entró desde allá: cookie `desde_onboard`), azul en «Ver como», negra también al «Operar». El amarillo queda para la marcha blanca (hoy, el chip de la barra).
+- **Backoffice:** rutas de siempre (`/empresas`, `/empresas/:id`…); la ficha lleva pestañas Datos · Plan y módulos · Conexiones · Usuarios · Apps · Actividad y bitácora y la «Zona de riesgo» con título. Las conexiones de la lista se leen como letra + signo (✓ · … · ! · –).

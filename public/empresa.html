@@ -15,7 +15,7 @@
 </main>
 <script type="module">
 // Backoffice Síguelo · ficha del cliente (22-oct, espec. aprobada por Pablo; mockups 03, 04, 05 en On Bus, aquí con el
-// estilo de On Rent). Pestañas: Datos, Plan y módulos, Conexiones (antes «Integraciones»; fase 1, 1-nov), Usuarios, Apps con marca, Actividad y bitácora.
+// estilo de On Rent). Pestañas: Datos, Plan y módulos, Conexiones (antes «Integraciones»; fase 1, 1-nov), Usuarios, Apps (fase 2), Actividad y bitácora.
 // Nunca llega un secreto: los campos secretos vienen como «••••••••» y solo se reemplazan si se escribe uno nuevo.
 import { iniciarPagina, api, esc, fecha, fechaHora, hora, rut, validarRut, modal, confirmar, toast, toastError, leerForm, ICONOS } from '/comun.js';
 const yo = await iniciarPagina({ activo: 'empresas', titulo: 'Clientes' });
@@ -25,7 +25,7 @@ let D = null;
 const ed = () => D?.puede_operar;
 const SIN = '—';
 
-const TABS = [['datos', 'Datos'], ['plan', 'Plan y módulos'], ['integraciones', 'Conexiones'], ['usuarios', 'Usuarios'], ['apps', 'Apps con marca'], ['actividad', 'Actividad y bitácora']];
+const TABS = [['datos', 'Datos'], ['plan', 'Plan y módulos'], ['integraciones', 'Conexiones'], ['usuarios', 'Usuarios'], ['apps', 'Apps'], ['actividad', 'Actividad y bitácora']];
 const tab = () => (TABS.some(([k]) => k === location.hash.slice(1)) ? location.hash.slice(1) : 'datos');
 addEventListener('hashchange', () => pintar());
 
@@ -57,7 +57,7 @@ document.querySelector('main').addEventListener('click', async (ev) => {
   const modo = b.dataset.entrar;
   const motivoEnLinea = document.getElementById('motivo-operar');
   if (modo === 'operar' && !(motivoEnLinea && b.closest('.bo-entrar'))) {
-    return modal({ titulo: `Operar en ${D.empresa.nombre}`, html: `<p class="peq muted">Actúas como administrador del cliente. La franja amarilla queda arriba todo el rato y cada cambio va a la bitácora del cliente con tu nombre y este motivo.</p>
+    return modal({ titulo: `Operar en ${D.empresa.nombre}`, html: `<p class="peq muted">Actúas como administrador del cliente. La franja negra queda arriba todo el rato y cada cambio va a la bitácora del cliente con tu nombre y este motivo.</p>
       <label class="etiqueta">Motivo<input class="campo" name="motivo" placeholder="Soporte, ticket 1187" maxlength="300" data-obligatorio></label>`,
     botones: [{ texto: 'Cancelar' }, { texto: 'Operar', clase: 'contorno', accion: async (c) => entrar('operar', c.querySelector('[name=motivo]').value) }] });
   }
@@ -111,7 +111,7 @@ function plan() {
     <div style="display:flex;flex-direction:column;gap:18px;min-width:0">
       <div class="tarjeta bloque"><div class="bo-mb"><div><h2 style="margin-bottom:6px">Marcha blanca</h2><p class="peq muted">${e.marcha_blanca ? `Encendida${e.marcha_blanca_en ? ` desde el ${fecha(e.marcha_blanca_en)}` : ''}. Correos, WhatsApp, cobros, boletas y bloqueos se registran pero no salen.` : `Apagada${e.marcha_blanca_en ? ` desde el ${fecha(e.marcha_blanca_en)}` : ''}: los mensajes y cobros salen de verdad.`} Solo el equipo Síguelo la cambia.</p></div>
         <label class="switch"><input type="checkbox" id="mb"${e.marcha_blanca ? ' checked' : ''}${ed() && e.estado !== 'baja' ? '' : ' disabled'} aria-label="Marcha blanca"><span></span></label></div></div>
-      <div class="tarjeta bo-riesgo">
+      <div class="tarjeta bo-riesgo"><h2 class="bo-riesgo-titulo">Zona de riesgo</h2>
         ${e.estado === 'suspendido' ? `<div class="sec"><div><b>Reactivar</b><small>Suspendido por «${esc(e.estado_motivo || SIN)}» el ${fecha(e.estado_en)}. Al reactivar, sus usuarios vuelven a entrar.</small></div><button class="btn" id="reactivar"${ed() ? '' : ' disabled'}>Reactivar</button></div>`
     : activo ? `<div class="sec"><div><b>Suspender</b><small>El cliente no puede entrar ni recibir mensajes. Sus datos y conexiones se conservan. Se reactiva en un clic.</small></div><button class="btn peligro" id="suspender"${ed() ? '' : ' disabled'}>Suspender</button></div>` : ''}
         ${e.estado !== 'baja' ? `<div class="sec"><div><b>Dar de baja</b><small>Fin del contrato: se desconectan las conexiones, se borran los secretos y los datos se guardan ${D.dias_exportar} días para exportarlos. Después se eliminan o anonimizan.</small></div><button class="btn peligro" id="baja"${ed() ? '' : ' disabled'}>Dar de baja</button></div>`
@@ -303,7 +303,7 @@ function usuarios() {
   $('#panel').innerHTML = `<div class="tarjeta bloque"><h2>Entrar a la cuenta del cliente</h2>
       <div class="bo-entrar">
         <div class="op"><h3>${ICONOS.ojo} Ver como</h3><p>Ves la herramienta tal como la ve su administrador, en <b>solo lectura</b>: el servidor rechaza cualquier cambio. Para revisar una consulta sin riesgo.</p><button class="btn" data-entrar="ver">Ver como ${esc(e.nombre)}</button></div>
-        <div class="op"><h3>${ICONOS.configuracion} Operar</h3><p>Actúas como administrador del cliente. Pide un <b>motivo</b>; la franja amarilla queda arriba todo el rato y cada cambio va a la bitácora del cliente con tu nombre.</p>
+        <div class="op"><h3>${ICONOS.configuracion} Operar</h3><p>Actúas como administrador del cliente. Pide un <b>motivo</b>; la franja negra queda arriba todo el rato y cada cambio va a la bitácora del cliente con tu nombre.</p>
           <div class="rc-fila"><input class="campo" id="motivo-operar" placeholder="Soporte, ticket 1187" maxlength="300"${e.estado !== 'activo' || !ed() ? ' disabled' : ''}><button class="btn contorno" data-entrar="operar"${e.estado !== 'activo' || !ed() ? ' disabled' : ''}>Operar</button></div></div></div>
       <p class="peq muted">Disponible para todos los clientes activos. A un cliente suspendido o dado de baja solo se puede «Ver como». Tu nivel en Síguelo On Board decide si puedes operar.</p></div>
     <div class="tarjeta"><div class="bloque" style="padding-bottom:8px"><h2>Usuarios del cliente ${ed() ? '<span class="rc-fila"><button class="btn primario peq" id="nuevo-u">+ Nuevo usuario</button></span>' : ''}</h2>

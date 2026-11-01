@@ -6,6 +6,8 @@
 // Quién puede qué: todo el equipo ve; cambiar algo exige nivel admin o usa de On Board (el nivel ve solo mira y «Ver como»);
 // las conexiones generales, solo superadmin. Nunca vuelve un secreto al navegador.
 import express from 'express';
+import { porPalabras } from '../busqueda.js';
+import { tramo } from '../paginacion.js';
 import { q, uno } from '../db.js';
 import { requiere, soloSiguelo, soloSuperadmin, puedeOperar, ErrorHttp } from '../auth.js';
 import { registrar } from '../bitacora.js';
@@ -52,14 +54,17 @@ r.get('/backoffice/resumen', ...base, async (req, res) => {
 });
 
 // ── Lista de clientes ──
-r.get('/backoffice/clientes', ...base, async (_req, res) => {
+r.get('/backoffice/clientes', ...base, async (req, res) => {
+  // Fase 1 (1-nov): por partes (?limite=&desde=, máximo 1000) y ?q= por palabras sin tildes (nombre, razón social, RUT, portal).
+  const params = [];
+  const porQ = porPalabras(['e.nombre', 'e.razon_social', { col: 'e.rut', limpiar: true }, 'e.slug'], req.query.q, params);
   const filas = await q(`SELECT e.id, e.nombre, e.razon_social, e.rut, e.slug, e.color, e.logo_clave, e.estado, e.estado_motivo, e.estado_en, e.marcha_blanca, e.plan, e.creado_en, e.exportar_hasta, e.distribuidor,
       p.nombre AS plan_nombre, e.modulos_extra,
       (SELECT count(*)::int FROM vehiculos v WHERE v.empresa_id = e.id AND v.activo) AS vehiculos,
       (SELECT count(*)::int FROM usuarios u WHERE u.empresa_id = e.id AND u.activo) AS usuarios,
       (SELECT max(b.creado_en) FROM bitacora b WHERE b.empresa_id = e.id) AS ultima_actividad,
       (SELECT count(*)::int FROM solicitudes_siguelo s WHERE s.empresa_id = e.id AND s.estado IN ('pendiente','en_curso')) AS solicitudes
-    FROM empresas e LEFT JOIN planes p ON p.codigo = e.plan ORDER BY e.nombre`);
+    FROM empresas e LEFT JOIN planes p ON p.codigo = e.plan ${porQ ? `WHERE ${porQ}` : ''} ORDER BY e.nombre, e.id ${tramo(req).sql}`, params);
   const saludes = await saludDeTodos();
   const tipos = tiposDe('siguelo');
   res.json({ clientes: filas.map((e) => ({ ...e, salud: Object.fromEntries(tipos.map((t) => [t, saludes.get(e.id)?.[t] || 'no'])) })), tipos: tipos.map((t) => ({ tipo: t, nombre: TIPOS[t].nombreCliente || TIPOS[t].nombre })) });
@@ -375,9 +380,12 @@ r.get('/backoffice/clientes/:id/bitacora', ...base, async (req, res) => {
   const e = await empresaDe(req.params.id);
   const pagina = Math.max(1, Number(req.query.pagina) || 1);
   const soloSiguelo_ = req.query.siguelo === '1';
+  const donde = `b.empresa_id = $1 ${soloSiguelo_ ? `AND u.rol IN ('superadmin','soporte')` : ''}`;
+  const [{ n }] = await q(`SELECT count(*)::int AS n FROM bitacora b LEFT JOIN usuarios u ON u.id = b.usuario_id WHERE ${donde}`, [e.id]);
   const filas = await q(`SELECT b.id, b.accion, b.entidad, b.entidad_id, b.detalle, b.creado_en, u.nombre AS usuario, u.rol FROM bitacora b LEFT JOIN usuarios u ON u.id = b.usuario_id
-    WHERE b.empresa_id = $1 ${soloSiguelo_ ? `AND u.rol IN ('superadmin','soporte')` : ''} ORDER BY b.id DESC LIMIT 50 OFFSET ${(pagina - 1) * 50}`, [e.id]);
-  res.json({ filas, pagina });
+    WHERE ${donde} ORDER BY b.id DESC LIMIT 50 OFFSET ${(pagina - 1) * 50}`, [e.id]);
+  // Fase 1 (1-nov): total y páginas para «Página X de Y», como en las demás bitácoras.
+  res.json({ filas, pagina, total: n, paginas: Math.max(1, Math.ceil(n / 50)) });
 });
 
 // ── Solicitudes ──
@@ -455,11 +463,14 @@ r.get('/backoffice/bitacora', ...base, async (req, res) => {
   const pagina = Math.max(1, Number(req.query.pagina) || 1);
   const empresaId = req.query.empresa_id ? Number(req.query.empresa_id) : null;
   const soloEquipo = req.query.equipo === '1';
+  // Fase 1 (1-nov): de a 50 como todas las listas, con el total para «Página X de Y».
+  const donde = `($1::bigint IS NULL OR b.empresa_id = $1) AND (NOT $2 OR u.rol IN ('superadmin','soporte'))`;
+  const [{ n }] = await q(`SELECT count(*)::int AS n FROM bitacora b LEFT JOIN usuarios u ON u.id = b.usuario_id WHERE ${donde}`, [empresaId, soloEquipo]);
   const filas = await q(`SELECT b.id, b.accion, b.entidad, b.entidad_id, b.detalle, b.creado_en, b.empresa_id, e.nombre AS empresa, u.nombre AS usuario, u.rol
     FROM bitacora b LEFT JOIN usuarios u ON u.id = b.usuario_id LEFT JOIN empresas e ON e.id = b.empresa_id
-    WHERE ($1::bigint IS NULL OR b.empresa_id = $1) AND (NOT $2 OR u.rol IN ('superadmin','soporte'))
-    ORDER BY b.id DESC LIMIT 100 OFFSET ${(pagina - 1) * 100}`, [empresaId, soloEquipo]);
-  res.json({ filas, pagina });
+    WHERE ${donde}
+    ORDER BY b.id DESC LIMIT 50 OFFSET ${(pagina - 1) * 50}`, [empresaId, soloEquipo]);
+  res.json({ filas, pagina, total: n, paginas: Math.max(1, Math.ceil(n / 50)) });
 });
 
 // Tareas: reintento de tickets al CRM y anonimización de bajas vencidas.

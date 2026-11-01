@@ -22,7 +22,7 @@
   </div>
   <section id="p-tarifas" class="tarjeta">
     <div class="bloque"><h2>Tarifas por categoría y temporada</h2><p class="ayuda">Semana = 7 días y mes = 30 días; el cotizador aplica la combinación más barata para el cliente. Si una temporada no tiene tarifa propia para una categoría, se usa la base.</p></div>
-    <div class="tabla-env"><table class="tabla fl-grid-tar" id="grid"></table></div>
+    <div class="tabla-env"><table class="tabla fl-grid-tar" id="grid" data-sin-paginar></table></div>
   </section>
   <section id="p-temporadas" class="tarjeta" hidden>
     <div class="bloque"><h2>Temporadas</h2><p class="ayuda">Si dos temporadas se cruzan, manda la de mayor prioridad. La temporada se determina por la fecha de retiro.</p></div>
@@ -129,9 +129,9 @@ function pintarTemporadas() {
 }
 const FORM = {};
 FORM.temporadas = (t = null) => crudModal('temporadas', t, t ? `Editar ${t.nombre}` : 'Nueva temporada', (x) => `<div class="fl-form">
-  <label class="etiqueta todo">Nombre *<input class="campo" name="nombre" value="${esc(x.nombre || '')}" placeholder="Temporada alta (verano)"></label>
-  <label class="etiqueta doble">Desde *<input class="campo" type="date" name="desde" value="${x.desde || ''}"></label>
-  <label class="etiqueta doble">Hasta *<input class="campo" type="date" name="hasta" value="${x.hasta || ''}"></label>
+  <label class="etiqueta todo">Nombre<input class="campo" data-obligatorio name="nombre" value="${esc(x.nombre || '')}" placeholder="Temporada alta (verano)"></label>
+  <label class="etiqueta doble">Desde<input class="campo" data-obligatorio type="date" name="desde" value="${x.desde || ''}"></label>
+  <label class="etiqueta doble">Hasta<input class="campo" data-obligatorio type="date" name="hasta" value="${x.hasta || ''}"></label>
   <label class="etiqueta doble">Prioridad<input class="campo" type="number" name="prioridad" value="${x.prioridad ?? 0}"></label></div>
   ${t ? '' : '<p class="peq muted">Después define los precios de la temporada en la pestaña Tarifas (por defecto se usa la base).</p>'}`, { prioridad: 10 });
 
@@ -140,7 +140,7 @@ function pintarExtras() {
   $('#t-ext').innerHTML = D.extras.map((x) => `<tr><td><b style="font-weight:500">${esc(x.nombre)}</b><div class="peq muted">${esc(x.descripcion || '')}</div></td><td class="mono peq">${esc(x.codigo)}</td><td>${x.cobro === 'dia' ? 'Por día' : 'Cargo único'}</td><td class="monto fl-num">${clp(x.precio)}</td><td class="mono fl-num">${x.tope ? clp(x.tope) : '—'}</td><td>${x.requiere_documento ? '<span class="chip info">Requiere</span>' : ''}</td><td>${sw('extras', x)}</td><td>${btnEd('extras', x.id)}</td></tr>`).join('') || '<tr><td colspan="8" class="rc-vacio">Sin extras</td></tr>';
 }
 FORM.extras = (x0 = null) => crudModal('extras', x0, x0 ? `Editar ${x0.nombre}` : 'Nuevo extra', (x) => `<div class="fl-form">
-  <label class="etiqueta doble">Nombre *<input class="campo" name="nombre" value="${esc(x.nombre || '')}" placeholder="Silla de niño"></label>
+  <label class="etiqueta doble">Nombre<input class="campo" data-obligatorio name="nombre" value="${esc(x.nombre || '')}" placeholder="Silla de niño"></label>
   <label class="etiqueta doble">Código<input class="campo mono" name="codigo" value="${esc(x.codigo || '')}" placeholder="se genera solo"></label>
   <label class="etiqueta todo">Descripción<input class="campo" name="descripcion" value="${esc(x.descripcion || '')}"></label>
   <label class="etiqueta">Cobro<select class="campo" name="cobro"><option value="dia"${x.cobro !== 'fijo' ? ' selected' : ''}>Por día</option><option value="fijo"${x.cobro === 'fijo' ? ' selected' : ''}>Cargo único</option></select></label>
@@ -161,7 +161,7 @@ FORM.recargos = (x0 = null) => crudModal('recargos', x0, x0 ? `Editar ${x0.nombr
   const suc = (n, sel, vacio) => `<select class="campo" name="${n}"><option value="">${vacio}</option>${D.sucursales.map((s) => `<option value="${s.id}"${s.id === sel ? ' selected' : ''}>${esc(s.nombre)}</option>`).join('')}</select>`;
   return `<div class="fl-form">
   <label class="etiqueta doble">Tipo<select class="campo" name="tipo">${Object.entries(TIPO_REC).map(([k, t]) => `<option value="${k}"${k === x.tipo ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
-  <label class="etiqueta doble">Nombre *<input class="campo" name="nombre" value="${esc(x.nombre || '')}" placeholder="Devolución en otra sucursal"></label>
+  <label class="etiqueta doble">Nombre<input class="campo" data-obligatorio name="nombre" value="${esc(x.nombre || '')}" placeholder="Devolución en otra sucursal"></label>
   <label class="etiqueta doble" data-t="otra_sucursal">Sucursal de retiro${suc('sucursal_origen_id', x.sucursal_origen_id, 'Cualquiera')}</label>
   <label class="etiqueta doble" data-t="otra_sucursal">Sucursal de devolución${suc('sucursal_destino_id', x.sucursal_destino_id, 'Cualquier otra')}</label>
   <label class="etiqueta doble" data-t="conductor_joven">Conductor menor de (años)<input class="campo" type="number" min="16" max="40" name="edad_max" value="${x.edad_max ?? 25}"></label>
@@ -184,9 +184,9 @@ function pintarDescuentos() {
   }).join('') || '<tr><td colspan="6" class="rc-vacio">Sin códigos de descuento</td></tr>';
 }
 FORM.descuentos = (x0 = null) => crudModal('descuentos', x0, x0 ? `Editar ${x0.codigo}` : 'Nuevo código de descuento', (x) => `<div class="fl-form">
-  <label class="etiqueta doble">Código *<input class="campo mono" name="codigo" value="${esc(x.codigo || '')}" placeholder="VERANO20" style="text-transform:uppercase"></label>
+  <label class="etiqueta doble">Código<input class="campo mono" data-obligatorio name="codigo" value="${esc(x.codigo || '')}" placeholder="VERANO20" style="text-transform:uppercase"></label>
   <label class="etiqueta">Tipo<select class="campo" name="tipo"><option value="porcentaje"${x.tipo !== 'monto' ? ' selected' : ''}>Porcentaje</option><option value="monto"${x.tipo === 'monto' ? ' selected' : ''}>Monto fijo</option></select></label>
-  <label class="etiqueta">Valor *<input class="campo" type="number" min="1" name="valor" value="${x.valor ?? ''}"></label>
+  <label class="etiqueta">Valor<input class="campo" data-obligatorio type="number" min="1" name="valor" value="${x.valor ?? ''}"></label>
   <label class="etiqueta">Desde<input class="campo" type="date" name="desde" value="${x.desde || ''}"></label>
   <label class="etiqueta">Hasta<input class="campo" type="date" name="hasta" value="${x.hasta || ''}"></label>
   <label class="etiqueta">Usos máximos<input class="campo" type="number" min="1" name="usos_max" value="${x.usos_max ?? ''}" placeholder="sin límite"></label>

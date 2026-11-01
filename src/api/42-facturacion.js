@@ -1,5 +1,6 @@
 // Módulo 8 · Facturación electrónica: documentos tributarios (boleta 39, factura 33, nota de crédito 61) vía SimpleAPI.
 import express from 'express';
+import { porPalabras } from '../busqueda.js';
 import { q, uno } from '../db.js';
 import { requiere, ErrorHttp } from '../auth.js';
 import { emitirDocumento, procesarDocumento, consultarEstado, notaCredito, receptorDeCliente, resumenFolios } from '../facturacion/index.js';
@@ -17,7 +18,9 @@ r.get('/facturacion', requiere('facturacion', 'ver'), async (req, res) => {
   if (f.estado) add('d.estado = ?', f.estado);
   if (f.desde) add(`d.creado_en >= (?::date)::timestamp AT TIME ZONE 'America/Santiago'`, f.desde);
   if (f.hasta) add(`d.creado_en < ((?::date + 1)::timestamp AT TIME ZONE 'America/Santiago')`, f.hasta);
-  if (f.q) add(`(d.receptor->>'razonSocial' ILIKE ? OR d.receptor->>'rut' ILIKE ? OR r.folio ILIKE ? OR d.folio::text ILIKE ?)`, `%${String(f.q).trim()}%`);
+  // Fase 1 (1-nov): por palabras, sin tildes ni mayúsculas; el RUT sin puntos ni guión.
+  const porQ = porPalabras([`(d.receptor->>'razonSocial')`, { col: `(d.receptor->>'rut')`, limpiar: true }, 'r.folio', 'd.folio::text'], f.q, vals);
+  if (porQ) cond.push(porQ);
   const docs = await q(`SELECT d.*, r.folio AS reserva_folio, l.folio AS liquidacion_folio, ref.folio AS ref_folio, ref.tipo AS ref_tipo, nc.folio AS nc_folio, nc.estado AS nc_estado
                           FROM documentos_tributarios d LEFT JOIN reservas r ON r.id = d.reserva_id LEFT JOIN liquidaciones l ON l.id = d.liquidacion_id
                           LEFT JOIN documentos_tributarios ref ON ref.id = d.dte_ref_id LEFT JOIN documentos_tributarios nc ON nc.id = d.anulado_por
@@ -34,13 +37,14 @@ r.get('/facturacion', requiere('facturacion', 'ver'), async (req, res) => {
 
 // Buscador de reservas para emitir (folio, cliente, RUT, patente)
 r.get('/facturacion/reservas', requiere('facturacion', 'ver'), async (req, res) => {
-  const t = `%${String(req.query.q || '').trim().replace(/[-\s]/g, '%')}%`;
+  const vals = [req.empresaId];
+  const porQ = porPalabras([{ col: 'r.folio', limpiar: true }, `(c.nombre || ' ' || coalesce(c.apellidos,''))`, { col: 'v.patente', limpiar: true }, { col: 'c.documento', limpiar: true }], req.query.q, vals) || 'TRUE';
   res.json(await q(`SELECT r.id, r.folio, r.estado, r.total, r.inicio, r.fin, v.patente, trim(coalesce(c.nombre,'') || ' ' || coalesce(c.apellidos,'')) AS cliente,
         coalesce((SELECT sum(d.total) FROM documentos_tributarios d WHERE d.reserva_id = r.id AND d.tipo IN (33,39) AND d.anulado_por IS NULL AND d.estado NOT IN ('rechazado')), 0) AS pagado
       FROM reservas r LEFT JOIN clientes c ON c.id = r.cliente_id LEFT JOIN vehiculos v ON v.id = r.vehiculo_id
      WHERE r.empresa_id = $1 AND r.estado IN ('confirmada','en_curso','devuelta','cerrada')
-       AND ($2 = '%%' OR r.folio ILIKE $2 OR (c.nombre || ' ' || coalesce(c.apellidos,'')) ILIKE $2 OR v.patente ILIKE $2 OR c.documento ILIKE $2)
-     ORDER BY r.inicio DESC LIMIT 20`, [req.empresaId, t]));
+       AND ${porQ}
+     ORDER BY r.inicio DESC LIMIT 20`, vals));
 });
 
 r.get('/facturacion/folios',requiere('facturacion', 'ver'), async (req, res) => res.json(await resumenFolios(req.empresaId)));

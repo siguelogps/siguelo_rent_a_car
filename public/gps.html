@@ -291,7 +291,7 @@ async function pintarBitacora() {
 function pintarEstado() {
   const i = estado.integracion, s = estado.sincronizacion;
   const partes = [];
-  partes.push(i.activa && i.configurada ? '<span class="chip ok">● Conectada</span>' : i.configurada ? '<span class="chip aviso">Integración apagada</span>' : '<span class="chip sin">Sin conexión configurada · se muestra la última posición guardada</span>');
+  partes.push(i.activa && i.configurada ? '<span class="chip ok">● Conectada</span>' : i.configurada ? '<span class="chip aviso">Conexión apagada</span>' : '<span class="chip sin">Sin conexión configurada · se muestra la última posición guardada</span>');
   if (i.marcha_blanca) partes.push('<span class="chip rc-marcha">Marcha blanca: inmovilización simulada</span>');
   if (s) partes.push(s.ok ? `<span class="peq">Sincronizado ${hace(s.en)}</span>` : `<span class="peq" style="color:var(--red)">Error al sincronizar: ${esc(s.error)}</span>`);
   partes.push(`<span class="peq muted">Velocidad máxima ${i.velocidad_maxima} km/h · horario ${esc(i.horario)}${i.geocerca ? ` · zona «${esc(i.geocerca)}»` : ''}</span>`);

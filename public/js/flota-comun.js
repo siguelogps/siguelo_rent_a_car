@@ -70,7 +70,7 @@ export async function formVehiculo(v = null, { foco = null } = {}) {
   const html = `
     <h3 class="fl-form-tit">Identificación</h3>
     <div class="fl-form">
-      ${campo('patente', 'Patente *', x.patente ? patente(x.patente) : '', { clase: 'fl-pat', extra: 'placeholder="SXLR-27" autocomplete="off" required' })}
+      ${campo('patente', 'Patente', x.patente ? patente(x.patente) : '', { clase: 'fl-pat', extra: 'placeholder="SXLR-27" autocomplete="off" required' })}
       ${campo('marca', 'Marca', x.marca, { extra: 'placeholder="Kia"' })}
       ${campo('modelo', 'Modelo', x.modelo, { extra: 'placeholder="Morning"' })}
       ${campo('anio', 'Año', x.anio, { tipo: 'number', extra: 'min="1980" max="2100"' })}

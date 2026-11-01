@@ -103,9 +103,9 @@ async function formOt(o = null, pre = {}) {
   const r = await modal({
     titulo: o ? `Orden ${o.folio} · ${patente(o.patente)}` : 'Nueva orden de trabajo',
     html: `<div class="fl-form">
-      <label class="etiqueta doble">Vehículo *<select class="campo" name="vehiculo_id"${o ? ' disabled' : ''}><option value="">Elige un vehículo</option>${VEH.map((v) => `<option value="${v.id}"${v.id === x.vehiculo_id ? ' selected' : ''}>${esc(patente(v.patente))} · ${esc(v.marca || '')} ${esc(v.modelo || '')} · ${miles(v.gps_km ?? v.km)} km</option>`).join('')}</select></label>
+      <label class="etiqueta doble">Vehículo<select class="campo" data-obligatorio name="vehiculo_id"${o ? ' disabled' : ''}><option value="">Elige un vehículo</option>${VEH.map((v) => `<option value="${v.id}"${v.id === x.vehiculo_id ? ' selected' : ''}>${esc(patente(v.patente))} · ${esc(v.marca || '')} ${esc(v.modelo || '')} · ${miles(v.gps_km ?? v.km)} km</option>`).join('')}</select></label>
       <label class="etiqueta doble">Tipo<select class="campo" name="tipo"${soloCosto ? ' disabled' : ''}>${Object.entries(TIPOS_OT).map(([k, t]) => `<option value="${k}"${k === x.tipo ? ' selected' : ''}>${t}</option>`).join('')}</select></label>
-      <label class="etiqueta todo">Trabajo a realizar *<input class="campo" name="motivo" value="${esc(x.motivo || '')}" placeholder="Mantención 40.000 km: aceite, filtros y frenos"${soloCosto ? ' disabled' : ''}></label>
+      <label class="etiqueta todo">Trabajo a realizar<input class="campo" data-obligatorio name="motivo" value="${esc(x.motivo || '')}" placeholder="Mantención 40.000 km: aceite, filtros y frenos"${soloCosto ? ' disabled' : ''}></label>
       <label class="etiqueta">Programada a los (km)<input class="campo" type="number" min="0" step="1000" name="km_programado" value="${x.km_programado ?? ''}"${soloCosto ? ' disabled' : ''}></label>
       <label class="etiqueta">Fecha programada<input class="campo" type="date" name="fecha_programada" value="${x.fecha_programada || ''}"${soloCosto ? ' disabled' : ''}></label>
       <label class="etiqueta">Taller<input class="campo" name="taller" value="${esc(x.taller || '')}" list="talleres"></label>

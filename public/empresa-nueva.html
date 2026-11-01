@@ -19,7 +19,7 @@
 import { iniciarPagina, api, esc, rut, validarRut, modal, toast, toastError, leerForm } from '/comun.js';
 const yo = await iniciarPagina({ activo: 'empresa-nueva', titulo: 'Nuevo cliente' });
 const CLAVE = 'rc_bo_borrador_alta';
-const PASOS = ['Datos de la empresa', 'Plan y módulos', 'Integraciones a activar', 'Primer administrador'];
+const PASOS = ['Datos de la empresa', 'Plan y módulos', 'Conexiones a activar', 'Primer administrador'];
 const { planes, modulos } = await api('backoffice/planes');
 let B = { paso: 0, datos: {}, plan: 'pro', modulos_extra: [], integ: { gps: true, cuenta: 'hosting', simpleapi: true, correo: true, whatsapp: false, dashboard_siguelo: true, remitente_nombre: '', responder_a: '' }, admin: {} };
 try { const g = JSON.parse(localStorage.getItem(CLAVE) || 'null'); if (g) B = { ...B, ...g, integ: { ...B.integ, ...g.integ } }; } catch { /* sin borrador */ }
@@ -72,7 +72,7 @@ function pintar() {
       ${k === 'gps' ? `<div class="sub"><div class="bo-seg" role="radiogroup" aria-label="Plataforma"><button type="button" role="radio" data-cta="hosting" aria-checked="${B.integ.cuenta !== 'lite'}">Síguelo Pro</button><button type="button" role="radio" data-cta="lite" aria-checked="${B.integ.cuenta === 'lite'}">Síguelo Lite</button></div></div>` : ''}
       ${k === 'correo' ? `<div class="sub"><label class="etiqueta">Remitente visible<input class="campo" name="remitente_nombre" value="${esc(B.integ.remitente_nombre || B.datos.nombre || '')}"></label><label class="etiqueta">Responder a<input class="campo mono" type="email" name="responder_a" value="${esc(B.integ.responder_a || B.datos.correo || '')}"></label></div>` : ''}</div>`).join('')}
       <p class="peq muted">Transbank y Mercado Pago no están aquí: los configura el propio cliente con los datos de su comercio.</p>`,
-    () => `<div class="cf-form"><label class="etiqueta">Nombre<input class="campo" name="nombre" value="${esc(B.admin.nombre || '')}"></label><label class="etiqueta">Correo<input class="campo" type="email" name="correo" value="${esc(B.admin.correo || '')}"></label><label class="etiqueta">Teléfono<input class="campo" name="telefono" value="${esc(B.admin.telefono || '')}"></label></div>
+    () => `<div class="cf-form"><label class="etiqueta">Nombre<input class="campo" name="nombre" value="${esc(B.admin.nombre || '')}" data-obligatorio></label><label class="etiqueta">Correo<input class="campo" type="email" name="correo" value="${esc(B.admin.correo || '')}" data-obligatorio></label><label class="etiqueta">Teléfono<input class="campo" name="telefono" value="${esc(B.admin.telefono || '')}"></label></div>
       <p class="peq muted">Recibe una invitación para crear su clave (vence en 72 h). Síguelo no escribe ni ve su clave.</p>`
   ];
   $('#cuerpo').innerHTML = PASOS.map((t, i) => i < B.paso
@@ -82,7 +82,7 @@ function pintar() {
   const integ = INTEG.filter(([k]) => B.integ[k]).length;
   $('#resumen').innerHTML = `<h2>Al crear el cliente</h2>
     ${dato('Estado inicial', '<span class="chip mb">Marcha blanca</span>')}
-    ${dato('Integraciones', `${integ} elegidas`)}
+    ${dato('Conexiones', `${integ} elegidas`)}
     ${dato('Invitación', 'al primer administrador, por correo')}
     ${dato('Bitácora', '«Alta del cliente» con tu nombre')}
     <p class="peq muted">Puedes guardar el borrador y terminar después. Nada le llega al cliente hasta el paso 4.</p>

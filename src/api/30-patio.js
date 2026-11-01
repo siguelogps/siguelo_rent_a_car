@@ -1,5 +1,6 @@
 // Entrega y devolución (patio): tareas del día, asistente de inspección (km, checklist, fotos, daños, firma) y comparación.
 import express from 'express';
+import { porPalabras } from '../busqueda.js';
 import { q, uno } from '../db.js';
 import { requiere, ErrorHttp } from '../auth.js';
 import { puede } from '../permisos.js';
@@ -34,10 +35,9 @@ r.get('/patio/tareas', requiere('patio'), async (req, res) => {
   const local = (c) => `(${c} AT TIME ZONE 'America/Santiago')::date`;
   const params = [E, OBLIGATORIAS];
   let filtroQ = '';
-  if (txt) {
-    params.push(`%${txt.toUpperCase().replace(/[^A-Z0-9]/g, '')}%`, `%${txt}%`);
-    filtroQ = ` AND (v.patente ILIKE $${params.length - 1} OR replace(r.folio, '-', '') ILIKE $${params.length - 1} OR (c.nombre || ' ' || COALESCE(c.apellidos, '')) ILIKE $${params.length})`;
-  }
+  // Fase 1 (1-nov): por palabras, sin tildes ni mayúsculas; patente y folio sin guión.
+  const porQ = porPalabras([{ col: 'v.patente', limpiar: true }, { col: 'r.folio', limpiar: true }, `(c.nombre || ' ' || COALESCE(c.apellidos, ''))`], txt, params);
+  if (porQ) filtroQ = ` AND ${porQ}`;
   let fsucE = '', fsucD = '';
   if (suc) { params.push(suc); fsucE = ` AND r.sucursal_retiro_id = $${params.length}`; fsucD = ` AND r.sucursal_devolucion_id = $${params.length}`; }
   const base = (tipo) => `SELECT r.id, r.folio, r.estado, r.inicio, r.fin, r.retiro_real, r.devolucion_real, c.nombre || ' ' || COALESCE(c.apellidos, '') AS cliente, c.telefono,

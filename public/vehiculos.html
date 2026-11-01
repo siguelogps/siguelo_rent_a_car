@@ -189,7 +189,7 @@ async function formCategoria(c = null) {
   const r = await modal({
     titulo: c ? `Editar categoría ${c.nombre}` : 'Nueva categoría',
     html: `<div class="fl-form">
-      <label class="etiqueta doble">Nombre *<input class="campo" name="nombre" value="${esc(x.nombre || '')}" placeholder="SUV"></label>
+      <label class="etiqueta doble">Nombre<input class="campo" data-obligatorio name="nombre" value="${esc(x.nombre || '')}" placeholder="SUV"></label>
       <label class="etiqueta doble">Ejemplo<input class="campo" name="ejemplo" value="${esc(x.ejemplo || '')}" placeholder="Toyota RAV4 o similar"></label>
       <label class="etiqueta todo">Descripción<input class="campo" name="descripcion" value="${esc(x.descripcion || '')}"></label>
       <label class="etiqueta">Pasajeros<input class="campo" type="number" min="1" name="pasajeros" value="${x.pasajeros ?? ''}"></label>
@@ -227,7 +227,7 @@ async function formPropietario(p = null) {
   const r = await modal({
     titulo: p ? `Editar ${p.nombre}` : 'Nuevo propietario',
     html: `<div class="fl-form">
-      <label class="etiqueta doble">Nombre o razón social *<input class="campo" name="nombre" value="${esc(x.nombre || '')}"></label>
+      <label class="etiqueta doble">Nombre o razón social<input class="campo" data-obligatorio name="nombre" value="${esc(x.nombre || '')}"></label>
       <label class="etiqueta">RUT<input class="campo" name="rut" value="${esc(x.rut ? rut(x.rut) : '')}" placeholder="77.123.456-9"></label>
       <label class="etiqueta">% del ingreso<input class="campo" name="porcentaje" type="number" min="0" max="100" step="0.5" value="${x.porcentaje ?? ''}"></label>
       <label class="etiqueta doble">Correo<input class="campo" name="correo" type="email" value="${esc(x.correo || '')}"></label>

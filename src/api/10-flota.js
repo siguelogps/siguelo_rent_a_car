@@ -2,6 +2,8 @@
 // categorías y propietarios (inversionistas) con su liquidación mensual.
 import { verificarLimite } from '../planes.js';
 import express from 'express';
+import { porPalabras } from '../busqueda.js';
+import { tramo } from '../paginacion.js';
 import { q, uno } from '../db.js';
 import { requiere, ErrorHttp } from '../auth.js';
 import { registrar } from '../bitacora.js';
@@ -48,12 +50,14 @@ const SELECT_LISTA = `
 // ── Vehículos ──
 r.get('/vehiculos', ver, async (req, res) => {
   const { estado, categoria_id, sucursal_id, propietario_id, inactivos } = req.query;
+  // Fase 1 (1-nov): la lista se pide por partes (?limite=&desde=, máximo 1000) y ?q= busca por palabras sin tildes.
+  const params = [req.empresaId, inactivos === '1', estado || null, Number(categoria_id) || null, Number(sucursal_id) || null, Number(propietario_id) || null];
+  const porQ = porPalabras([{ col: 'v.patente', limpiar: true }, 'v.marca', 'v.modelo', 'v.color', 'c.nombre'], req.query.q, params);
   const filas = await q(`${SELECT_LISTA}
     WHERE v.empresa_id = $1 AND (v.activo OR $2::boolean)
       AND ($3::text IS NULL OR v.estado = $3) AND ($4::bigint IS NULL OR v.categoria_id = $4)
-      AND ($5::bigint IS NULL OR v.sucursal_id = $5) AND ($6::bigint IS NULL OR v.propietario_id = $6)
-    ORDER BY c.orden NULLS LAST, c.nombre, v.patente`,
-  [req.empresaId, inactivos === '1', estado || null, Number(categoria_id) || null, Number(sucursal_id) || null, Number(propietario_id) || null]);
+      AND ($5::bigint IS NULL OR v.sucursal_id = $5) AND ($6::bigint IS NULL OR v.propietario_id = $6)${porQ ? ` AND ${porQ}` : ''}
+    ORDER BY c.orden NULLS LAST, c.nombre, v.patente ${tramo(req).sql}`, params);
   const hoy = hoyIso();
   res.json(filas.map((v) => decorar(v, hoy)));
 });

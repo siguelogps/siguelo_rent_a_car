@@ -1,11 +1,13 @@
 // Módulo 4 · Clientes: lista con búsqueda y filtros, alta/edición (persona o empresa; RUT con DV o pasaporte/DNI),
 // documentos (cédula, licencia, pasaporte) en el almacenamiento externo, conductores adicionales, historial y lista negra.
 import express from 'express';
+import { porPalabras } from '../busqueda.js';
+import { tramo } from '../paginacion.js';
 import { q, uno } from '../db.js';
 import { requiere, ErrorHttp } from '../auth.js';
 import { registrar } from '../bitacora.js';
 import { guardarArchivo, borrarArchivo, desdeDataUrl } from '../almacenamiento/index.js';
-import { validarRut, normalizarRut, limpiarRut } from '../util/rut.js';
+import { validarRut, normalizarRut } from '../util/rut.js';
 import { aIsoFecha } from '../util/formato.js';
 
 const r = express.Router();
@@ -55,23 +57,18 @@ function camposCliente(b, parcial = false) {
 // ── Lista ──
 r.get('/clientes', ver, async (req, res) => {
   const E = req.empresaId, w = ['c.empresa_id = $1'], p = [E];
-  const t = String(req.query.q || '').trim();
-  if (t) {
-    p.push(`%${t}%`); const i = p.length;
-    const doc = limpiarRut(t);
-    let porDoc = `c.documento ILIKE $${i}`;
-    if (doc.length >= 3) { p.push(`%${doc}%`); porDoc += ` OR replace(c.documento, '-', '') ILIKE $${p.length}`; }
-    w.push(`((c.nombre || ' ' || coalesce(c.apellidos,'')) ILIKE $${i} OR c.correo ILIKE $${i} OR c.telefono ILIKE $${i} OR c.razon_social ILIKE $${i} OR ${porDoc})`);
-  }
+  // Fase 1 (1-nov): por palabras, sin tildes ni mayúsculas; el documento se compara sin puntos ni guión.
+  const porQ = porPalabras([`(c.nombre || ' ' || coalesce(c.apellidos,''))`, 'c.correo', 'c.telefono', 'c.razon_social', { col: 'c.documento', limpiar: true }], req.query.q, p);
+  if (porQ) w.push(porQ);
   if (req.query.lista_negra === '1') w.push('c.lista_negra');
   if (req.query.licencia_vencida === '1') w.push(`c.tipo = 'persona' AND (c.licencia_vence IS NULL OR c.licencia_vence < (now() AT TIME ZONE 'America/Santiago')::date)`);
   if (req.query.tipo === 'empresa' || req.query.tipo === 'persona') { p.push(req.query.tipo); w.push(`c.tipo = $${p.length}`); }
-  const limite = Math.min(Number(req.query.limite) || 200, 1000);
+  const { sql: parte } = tramo(req);
   const filas = await q(`SELECT c.id, c.tipo, c.nombre, c.apellidos, c.documento_tipo, c.documento, c.correo, c.telefono, c.ciudad, c.nacionalidad, c.fecha_nacimiento,
       c.licencia_clase, c.licencia_vence, c.lista_negra, c.lista_negra_motivo, c.creado_en,
       (SELECT count(*)::int FROM reservas r WHERE r.empresa_id = c.empresa_id AND r.cliente_id = c.id AND r.estado IN ('en_curso','devuelta','cerrada')) AS arriendos,
       (SELECT max(r.inicio) FROM reservas r WHERE r.empresa_id = c.empresa_id AND r.cliente_id = c.id AND r.estado NOT IN ('cancelada','cotizacion')) AS ultimo_arriendo
-    FROM clientes c WHERE ${w.join(' AND ')} ORDER BY c.lista_negra DESC, c.creado_en DESC LIMIT ${limite}`, p);
+    FROM clientes c WHERE ${w.join(' AND ')} ORDER BY c.lista_negra DESC, c.creado_en DESC, c.id DESC ${parte}`, p);
   const totales = await uno(`SELECT count(*)::int AS total, count(*) FILTER (WHERE lista_negra)::int AS lista_negra,
       count(*) FILTER (WHERE tipo = 'persona' AND (licencia_vence IS NULL OR licencia_vence < (now() AT TIME ZONE 'America/Santiago')::date))::int AS licencia_vencida
     FROM clientes WHERE empresa_id = $1`, [E]);

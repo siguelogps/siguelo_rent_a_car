@@ -3,6 +3,7 @@
 // marca TAG/multas/incidentes como cobrados, cierra la reserva, emite el DTE y avisa al cliente con el PDF.
 import { cambiarEstado } from '../reservas/estados.js';
 import { q, uno, transaccion, siguienteFolio } from '../db.js';
+import { porPalabras } from '../busqueda.js';
 import { ErrorHttp } from '../auth.js';
 import { registrar } from '../bitacora.js';
 import { avisar } from '../salidas.js';
@@ -251,7 +252,9 @@ export async function aprobar(empresaId, reservaId, opciones = {}, usuarioId = n
 
 // Listado: pendientes (reservas devueltas sin liquidación aprobada) e historial
 export async function listar(empresaId, { vista = 'pendientes', q: buscar = '' } = {}) {
-  const t = `%${String(buscar).trim().replace(/[-\s]/g, '%')}%`;
+  // Fase 1 (1-nov): por palabras, sin tildes ni mayúsculas; folios y patente sin guión.
+  const params = [empresaId];
+  const porQ = porPalabras([{ col: 'r.folio', limpiar: true }, { col: 'l.folio', limpiar: true }, { col: 'v.patente', limpiar: true }, `(c.nombre || ' ' || coalesce(c.apellidos,''))`], buscar, params) || 'TRUE';
   const base = `SELECT r.id AS reserva_id, r.folio AS reserva_folio, r.estado AS reserva_estado, r.fin, r.devolucion_real, r.garantia,
       v.patente, v.marca, v.modelo, trim(coalesce(c.nombre,'') || ' ' || coalesce(c.apellidos,'')) AS cliente,
       l.id, l.folio, l.estado, l.total_cargos, l.garantia_retenida, l.garantia_capturada, l.garantia_liberada, l.saldo_por_cobrar, l.aprobado_en, l.pdf_archivo_id,
@@ -261,9 +264,9 @@ export async function listar(empresaId, { vista = 'pendientes', q: buscar = '' }
       (SELECT p.vence_retencion FROM pagos p WHERE p.reserva_id = r.id AND p.concepto = 'garantia' ORDER BY p.id DESC LIMIT 1) AS garantia_vence
     FROM reservas r LEFT JOIN liquidaciones l ON l.reserva_id = r.id LEFT JOIN vehiculos v ON v.id = r.vehiculo_id
     LEFT JOIN clientes c ON c.id = r.cliente_id LEFT JOIN usuarios u ON u.id = l.aprobado_por
-   WHERE r.empresa_id = $1 AND ($2 = '%%' OR r.folio ILIKE $2 OR l.folio ILIKE $2 OR v.patente ILIKE $2 OR (c.nombre || ' ' || coalesce(c.apellidos,'')) ILIKE $2)`;
-  if (vista === 'historial') return q(`${base} AND l.estado IN ('aprobada','cobrada','anulada') ORDER BY l.aprobado_en DESC NULLS LAST LIMIT 300`, [empresaId, t]);
-  return q(`${base} AND r.estado = 'devuelta' AND (l.id IS NULL OR l.estado = 'borrador') ORDER BY coalesce(r.devolucion_real, r.fin) LIMIT 300`, [empresaId, t]);
+   WHERE r.empresa_id = $1 AND ${porQ}`;
+  if (vista === 'historial') return q(`${base} AND l.estado IN ('aprobada','cobrada','anulada') ORDER BY l.aprobado_en DESC NULLS LAST LIMIT 300`, params);
+  return q(`${base} AND r.estado = 'devuelta' AND (l.id IS NULL OR l.estado = 'borrador') ORDER BY coalesce(r.devolucion_real, r.fin) LIMIT 300`, params);
 }
 
 export async function pdfDe(empresaId, reservaId) {

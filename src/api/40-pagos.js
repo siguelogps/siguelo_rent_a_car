@@ -1,6 +1,8 @@
 // Módulo 7 · Pagos y garantías: listado, pagos presenciales, cobro en línea (Webpay Plus / Mercado Pago), enlaces de pago,
 // garantías (retener → capturar parcial o liberar), reembolsos y retornos públicos desde los proveedores.
 import express from 'express';
+import { porPalabras } from '../busqueda.js';
+import { tramo } from '../paginacion.js';
 import { q, uno } from '../db.js';
 import { requiere, ErrorHttp } from '../auth.js';
 import { limitar } from '../limite.js';
@@ -33,8 +35,10 @@ r.get('/pagos', requiere('pagos', 'ver'), async (req, res) => {
   else if (f.estado) add('p.estado = ?', f.estado);
   if (f.desde) add(`p.creado_en >= (?::date)::timestamp AT TIME ZONE 'America/Santiago'`, f.desde);
   if (f.hasta) add(`p.creado_en < ((?::date + 1)::timestamp AT TIME ZONE 'America/Santiago')`, f.hasta);
-  if (f.q) add(`(r.folio ILIKE ? OR c.nombre || ' ' || coalesce(c.apellidos,'') ILIKE $${vals.length} OR p.referencia ILIKE $${vals.length} OR v.patente ILIKE $${vals.length})`, `%${String(f.q).replace(/[-\s]/g, '%')}%`);
-  const filas = (await q(`${SELECT_PAGO} WHERE ${cond.join(' AND ')} ORDER BY p.creado_en DESC, p.id DESC LIMIT 500`, vals)).map(decorar);
+  // Fase 1 (1-nov): por palabras, sin tildes ni mayúsculas; folio, referencia y patente sin guiones.
+  const porQ = porPalabras([{ col: 'r.folio', limpiar: true }, `(c.nombre || ' ' || coalesce(c.apellidos,''))`, { col: 'p.referencia', limpiar: true }, { col: 'v.patente', limpiar: true }], f.q, vals);
+  if (porQ) cond.push(porQ);
+  const filas = (await q(`${SELECT_PAGO} WHERE ${cond.join(' AND ')} ORDER BY p.creado_en DESC, p.id DESC ${tramo(req).sql}`, vals)).map(decorar);
   const totales = { cobrado: 0, pendiente: 0, reembolsado: 0, garantias_retenidas: 0, garantias_n: 0, simulados: 0, cantidad: filas.length };
   for (const p of filas) {
     if (p.concepto === 'reembolso') { if (['pagado', 'simulado'].includes(p.estado)) totales.reembolsado += p.monto; continue; }
@@ -63,15 +67,16 @@ r.get('/pagos/resumen/:reservaId', requiere('pagos', 'ver'), async (req, res) =>
 
 // Buscador de reservas para los formularios (folio, cliente, patente) con lo pagado y la garantía
 r.get('/pagos/reservas', requiere('pagos', 'ver'), async (req, res) => {
-  const t = `%${String(req.query.q || '').trim().replace(/[-\s]/g, '%')}%`;
+  const vals = [req.empresaId];
+  const porQ = porPalabras([{ col: 'r.folio', limpiar: true }, `(c.nombre || ' ' || coalesce(c.apellidos,''))`, { col: 'v.patente', limpiar: true }, { col: 'c.documento', limpiar: true }], req.query.q, vals) || 'TRUE';
   const filas = await q(`SELECT r.id, r.folio, r.estado, r.total, r.garantia, r.inicio, r.fin, v.patente,
         trim(coalesce(c.nombre,'') || ' ' || coalesce(c.apellidos,'')) AS cliente, c.correo, c.telefono,
         coalesce((SELECT sum(CASE WHEN p.estado IN ('pagado','simulado') THEN p.monto ELSE 0 END) FROM pagos p WHERE p.reserva_id = r.id AND p.concepto = 'arriendo'), 0) AS pagado,
         (SELECT p.estado FROM pagos p WHERE p.reserva_id = r.id AND p.concepto = 'garantia' ORDER BY p.id DESC LIMIT 1) AS garantia_estado
       FROM reservas r LEFT JOIN clientes c ON c.id = r.cliente_id LEFT JOIN vehiculos v ON v.id = r.vehiculo_id
      WHERE r.empresa_id = $1 AND r.estado NOT IN ('cancelada','no_show')
-       AND ($2 = '%%' OR r.folio ILIKE $2 OR (c.nombre || ' ' || coalesce(c.apellidos,'')) ILIKE $2 OR v.patente ILIKE $2 OR c.documento ILIKE $2)
-     ORDER BY (r.estado IN ('confirmada','en_curso','devuelta'))::int DESC, r.inicio DESC LIMIT 20`, [req.empresaId, t]);
+       AND ${porQ}
+     ORDER BY (r.estado IN ('confirmada','en_curso','devuelta'))::int DESC, r.inicio DESC LIMIT 20`, vals);
   res.json(filas.map((x) => ({ ...x, saldo: Math.max(0, x.total - x.pagado) })));
 });
 

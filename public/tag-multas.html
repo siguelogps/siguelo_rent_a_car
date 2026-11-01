@@ -103,7 +103,7 @@ async function verMultas() {
           <p class="peq muted">${u.pasadas} pasadas TAG y ${u.multas} multas recibidas · ${u.nuevas_tag + u.nuevas_multas} nuevas${u.utm ? ` · UTM ${clp(u.utm)}` : ''}</p>
           ${u.errores?.length ? `<ul class="tm-errores">${u.errores.slice(0, 6).map((e) => `<li>${esc(e)}</li>`).join('')}${u.errores.length > 6 ? `<li>… y ${u.errores.length - 6} más (ver Importaciones)</li>` : ''}</ul>` : ''}`
         : '<p class="peq muted">Aún no se ha sincronizado con el dashboard Síguelo.</p>'}
-        <p class="peq muted">${d.configurada ? (d.activa ? `Sincroniza solo cada ${d.cada_horas} h.` : 'La integración está configurada pero apagada.') : 'Configúralo en Configuración › Integraciones › TAG y multas · Dashboard Síguelo.'} Las multas del registro MTT traen solo la fecha: si ese día lo comparten dos contratos, quedan «por revisar».</p>
+        <p class="peq muted">${d.configurada ? (d.activa ? `Sincroniza solo cada ${d.cada_horas} h.` : 'La conexión está configurada pero apagada.') : 'Configúralo en Configuración › Conexiones › TAG y multas · Dashboard Síguelo.'} Las multas del registro MTT traen solo la fecha: si ese día lo comparten dos contratos, quedan «por revisar».</p>
       </div>
       <div><h3 class="b">Cobertura de la revisión de patentes</h3>
         ${totalCob ? `<div class="tm-cobertura" role="img" aria-label="${c.revisadas} revisadas, ${c.fallidas} fallidas, ${c.nunca} nunca revisadas"><i class="rev" style="width:${c.revisadas * 100 / totalCob}%"></i><i class="fal" style="width:${c.fallidas * 100 / totalCob}%"></i><i class="nun" style="width:${c.nunca * 100 / totalCob}%"></i></div>

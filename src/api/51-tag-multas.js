@@ -1,6 +1,7 @@
 // TAG y multas: importación (archivo o dashboard Síguelo), asignación al contrato, aviso al cliente y cobros posteriores.
 // Toda consulta filtra por req.empresaId.
 import express from 'express';
+import { porPalabras } from '../busqueda.js';
 import { q, uno } from '../db.js';
 import { requiere, ErrorHttp } from '../auth.js';
 import { registrar } from '../bitacora.js';
@@ -46,21 +47,24 @@ r.get('/tag-multas/resumen', requiere('tag_multas'), async (req, res) => {
 
 r.get('/tag-multas/tag', requiere('tag_multas'), async (req, res) => {
   const estado = req.query.estado || null;
-  const pat = req.query.q ? `%${normalizarPatente(req.query.q)}%` : null;
+  // Fase 1 (1-nov): por palabras (patente sin guión, pórtico, cliente, folio), sin tildes ni mayúsculas.
+  const params = [req.empresaId, estado, req.query.desde || null, req.query.hasta || null];
+  const porQ = porPalabras([{ col: 't.patente', limpiar: true }, 't.portico', CLIENTE, { col: 'r.folio', limpiar: true }], req.query.q, params) || 'TRUE';
   res.json(await q(`SELECT t.*, r.folio, r.estado AS reserva_estado, ${CLIENTE} AS cliente, c.id AS cliente_id, v.marca, v.modelo
       FROM tag_transitos t LEFT JOIN reservas r ON r.id = t.reserva_id LEFT JOIN clientes c ON c.id = r.cliente_id LEFT JOIN vehiculos v ON v.id = t.vehiculo_id
-     WHERE t.empresa_id = $1 AND ($2::text IS NULL OR t.estado = $2) AND ($3::text IS NULL OR t.patente LIKE $3)
-       AND ($4::date IS NULL OR t.fecha_hora >= $4::date) AND ($5::date IS NULL OR t.fecha_hora < $5::date + 1)
-     ORDER BY t.fecha_hora DESC LIMIT 1000`, [req.empresaId, estado, pat, req.query.desde || null, req.query.hasta || null]));
+     WHERE t.empresa_id = $1 AND ($2::text IS NULL OR t.estado = $2) AND ${porQ}
+       AND ($3::date IS NULL OR t.fecha_hora >= $3::date) AND ($4::date IS NULL OR t.fecha_hora < $4::date + 1)
+     ORDER BY t.fecha_hora DESC LIMIT 1000`, params));
 });
 
 r.get('/tag-multas/multas', requiere('tag_multas'), async (req, res) => {
   const estado = req.query.estado || null;
-  const pat = req.query.q ? `%${normalizarPatente(req.query.q)}%` : null;
+  const params = [req.empresaId, estado];
+  const porQ = porPalabras([{ col: 'm.patente', limpiar: true }, CLIENTE, { col: 'r.folio', limpiar: true }], req.query.q, params) || 'TRUE';
   res.json(await q(`SELECT m.*, r.folio, r.estado AS reserva_estado, ${CLIENTE} AS cliente, v.marca, v.modelo
       FROM multas m LEFT JOIN reservas r ON r.id = m.reserva_id LEFT JOIN clientes c ON c.id = m.cliente_id LEFT JOIN vehiculos v ON v.id = m.vehiculo_id
-     WHERE m.empresa_id = $1 AND ($2::text IS NULL OR m.estado = $2) AND ($3::text IS NULL OR m.patente LIKE $3)
-     ORDER BY m.fecha_infraccion DESC LIMIT 1000`, [req.empresaId, estado, pat]));
+     WHERE m.empresa_id = $1 AND ($2::text IS NULL OR m.estado = $2) AND ${porQ}
+     ORDER BY m.fecha_infraccion DESC LIMIT 1000`, params));
 });
 
 // Reservas con TAG o multas aún sin avisar al cliente
@@ -182,7 +186,7 @@ r.get('/tag-multas/dashboard', requiere('tag_multas'), async (req, res) => {
 
 r.post('/tag-multas/dashboard/sincronizar', requiere('tag_multas', 'editar'), async (req, res) => {
   const { config } = await leer(req.empresaId, 'dashboard_siguelo');
-  if (!config.api_key || !config.url) throw new ErrorHttp(400, 'Primero configura el dashboard Síguelo en Configuración › Integraciones');
+  if (!config.api_key || !config.url) throw new ErrorHttp(400, 'Primero configura el dashboard Síguelo en Configuración › Conexiones');
   const out = await sincronizarDashboard(req.empresaId, { usuarioId: req.usuario.id, config });
   await registrar(req, 'dashboard_tag_multas_sincronizado', 'dashboard', out.id, { desde: out.desde, hasta: out.hasta, pasadas: out.pasadas, multas: out.multas, estado: out.estado });
   res.json(out);

@@ -207,7 +207,7 @@ async function usuarios() {
       <td class="mono peq">${u.ultimo_acceso ? fechaHora(u.ultimo_acceso) : 'nunca'}</td><td>${u.activo ? '<span class="chip ok">Activo</span>' : '<span class="chip">Inactivo</span>'}</td>
       <td style="text-align:right;white-space:nowrap">${ed ? `<button class="btn peq" data-ed="${u.id}">Editar</button> <button class="btn peq" data-clave="${u.id}">Restablecer clave</button>` : ''}</td></tr>`).join('')}</tbody></table></div></div>
     <div class="tarjeta"><div class="bloque" style="padding-bottom:8px"><h2>Permisos por rol <span class="peq muted" style="font-weight:400">solo lectura</span></h2><p class="ayuda">Lo que puede hacer cada rol en cada módulo. «Editar» incluye ver.</p></div>
-    <div class="tabla-env"><table class="tabla cf-matriz"><thead><tr><th>Módulo</th>${Object.values(perm.roles).map((r) => `<th>${esc(r)}</th>`).join('')}</tr></thead><tbody>
+    <div class="tabla-env"><table class="tabla cf-matriz" data-sin-paginar><thead><tr><th>Módulo</th>${Object.values(perm.roles).map((r) => `<th>${esc(r)}</th>`).join('')}</tr></thead><tbody>
     ${Object.entries(perm.modulos).map(([m, n]) => `<tr><td>${esc(n)}</td>${Object.keys(perm.roles).map((r) => { const v = perm.matriz[r][m]; return `<td><span class="cf-nivel ${v || 'no'}">${v === 'editar' ? 'Editar' : v === 'ver' ? 'Ver' : '—'}</span></td>`; }).join('')}</tr>`).join('')}</tbody></table></div></div>`;
   const ROL_OPS = (sel) => Object.entries(perm.roles).map(([k, v]) => `<option value="${k}"${k === sel ? ' selected' : ''}>${esc(v)}</option>`).join('');
   const SUC_OPS = (sel) => `<option value="">Todas / sin sucursal</option>${sucs.map((s) => `<option value="${s.id}"${s.id === sel ? ' selected' : ''}>${esc(s.nombre)}</option>`).join('')}`;
@@ -572,11 +572,11 @@ async function bitacora() {
       <select class="campo" name="entidad"><option value="">Todas las entidades</option>${op(r.opciones.entidades, BF.entidad)}</select>
       <input class="campo" type="date" name="desde" value="${esc(BF.desde || '')}" aria-label="Desde"><input class="campo" type="date" name="hasta" value="${esc(BF.hasta || '')}" aria-label="Hasta">
       <button class="btn" type="button" id="bf-limpiar">Limpiar</button></form>
-    <div class="tarjeta"><div class="tabla-env"><table class="tabla"><thead><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Entidad</th><th>Detalle</th><th>IP</th></tr></thead><tbody>
+    <div class="tarjeta"><div class="tabla-env"><table class="tabla" data-sin-paginar><thead><tr><th>Fecha</th><th>Usuario</th><th>Acción</th><th>Entidad</th><th>Detalle</th><th>IP</th></tr></thead><tbody>
     ${r.filas.map((b) => `<tr><td class="mono peq" style="white-space:nowrap">${fechaHora(b.creado_en)}</td><td>${b.usuario ? esc(b.usuario) : '<span class="muted">Sistema / portal</span>'}</td><td>${esc(ACCION(b.accion))}</td>
       <td class="peq">${esc(b.entidad || '')}${b.entidad_id ? ` <span class="mono">#${b.entidad_id}</span>` : ''}</td><td><div class="cf-detalle-json" title="${esc(JSON.stringify(b.detalle))}">${Object.keys(b.detalle || {}).length ? esc(JSON.stringify(b.detalle)) : ''}</div></td><td class="mono peq">${esc(b.ip || '')}</td></tr>`).join('') || '<tr><td colspan="6" class="rc-vacio">Sin registros con estos filtros</td></tr>'}
     </tbody></table></div>
-    <div class="cf-paginas"><span class="muted">${r.total.toLocaleString('es-CL')} registros · página ${r.pagina} de ${r.paginas}</span><button class="btn peq" id="bp-ant"${r.pagina <= 1 ? ' disabled' : ''}>← Anterior</button><button class="btn peq" id="bp-sig"${r.pagina >= r.paginas ? ' disabled' : ''}>Siguiente →</button></div></div>`;
+    <nav class="cf-paginas pg-nav" aria-label="Páginas de la bitácora"><button class="btn peq" id="bp-ant"${r.pagina <= 1 ? ' disabled' : ''}>Anterior</button><span>Página ${r.pagina} de ${r.paginas} · ${r.total.toLocaleString('es-CL')} registros</span><button class="btn peq" id="bp-sig"${r.pagina >= r.paginas ? ' disabled' : ''}>Siguiente</button></nav></div>`;
   const f = panel.querySelector('#bf');
   f.onchange = () => { Object.assign(BF, leerForm(f), { pagina: 1 }); bitacora(); };
   panel.querySelector('#bf-limpiar').onclick = () => { for (const k of Object.keys(BF)) delete BF[k]; BF.pagina = 1; bitacora(); };

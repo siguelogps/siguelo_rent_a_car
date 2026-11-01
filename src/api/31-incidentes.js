@@ -1,5 +1,7 @@
 // Incidentes y daños: trazabilidad completa desde el reporte hasta el pago (presupuesto, cobro al cliente, seguro, cierre).
 import express from 'express';
+import { porPalabras } from '../busqueda.js';
+import { tramo } from '../paginacion.js';
 import { q, uno, transaccion, siguienteFolio } from '../db.js';
 import { requiere, ErrorHttp } from '../auth.js';
 import { registrar } from '../bitacora.js';
@@ -42,12 +44,10 @@ r.get('/incidentes', requiere('incidentes'), async (req, res) => {
   if (TIPOS_INCIDENTE[req.query.tipo]) { params.push(req.query.tipo); filtro += ` AND i.tipo = $${params.length}`; }
   if (req.query.vehiculo_id) { params.push(Number(req.query.vehiculo_id)); filtro += ` AND i.vehiculo_id = $${params.length}`; }
   if (req.query.reserva_id) { params.push(Number(req.query.reserva_id)); filtro += ` AND i.reserva_id = $${params.length}`; }
-  const txt = String(req.query.q || '').trim();
-  if (txt) {
-    params.push(`%${txt}%`, `%${txt.toUpperCase().replace(/[^A-Z0-9]/g, '')}%`);
-    filtro += ` AND (i.folio ILIKE $${params.length - 1} OR v.patente ILIKE $${params.length} OR (c.nombre || ' ' || COALESCE(c.apellidos, '')) ILIKE $${params.length - 1} OR r.folio ILIKE $${params.length - 1} OR i.descripcion ILIKE $${params.length - 1})`;
-  }
-  const filas = await q(`${SELECT} WHERE i.empresa_id = $1${filtro} ORDER BY i.creado_en DESC, i.id DESC LIMIT 300`, params);
+  // Fase 1 (1-nov): por palabras, sin tildes ni mayúsculas; la patente sin guión.
+  const porQ = porPalabras(['i.folio', { col: 'v.patente', limpiar: true }, `(c.nombre || ' ' || COALESCE(c.apellidos, ''))`, 'r.folio', 'i.descripcion'], req.query.q, params);
+  if (porQ) filtro += ` AND ${porQ}`;
+  const filas = await q(`${SELECT} WHERE i.empresa_id = $1${filtro} ORDER BY i.creado_en DESC, i.id DESC ${tramo(req).sql}`, params);
   for (const f of filas) f.cliente_nombre = f.cliente_nombre?.trim() || null;
   const conteo = await q('SELECT estado, count(*)::int AS n FROM incidentes WHERE empresa_id = $1 GROUP BY estado', [E]);
   const totales = await uno(`SELECT COALESCE(sum(presupuesto) FILTER (WHERE estado NOT IN ('anulado')), 0)::bigint AS presupuestado,

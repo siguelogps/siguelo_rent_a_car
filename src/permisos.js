@@ -14,7 +14,7 @@ export const MODULOS = {
   flota: 'Vehículos', mantencion: 'Mantención', gps: 'Plataforma GPS', inmovilizar: 'Inmovilización remota',
   pagos: 'Pagos y garantías', liquidaciones: 'Liquidaciones', facturacion: 'Facturación', incidentes: 'Incidentes y daños',
   tag_multas: 'TAG y multas', reportes: 'Reportes', tarifas: 'Tarifas', configuracion: 'Configuración',
-  integraciones: 'Integraciones', usuarios: 'Usuarios y permisos'
+  integraciones: 'Conexiones', usuarios: 'Usuarios y permisos'
 };
 
 const E = 'editar', V = 'ver';

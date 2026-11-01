@@ -95,7 +95,7 @@ export async function sembrar(E) {
     const t = desglosar(emp2.total);
     const neto = t.neto;
     await q(`INSERT INTO documentos_tributarios (empresa_id, reserva_id, tipo, estado, receptor, lineas, neto, iva, exento, total, mensaje, creado_por, creado_en)
-             VALUES ($1,$2,33,'retenido',$3,$4,$5,$6,0,$7,'Retenido por marcha blanca: se emitirá al desactivarla (Configuración › Integraciones).',$8, now() - interval '2 days')`,
+             VALUES ($1,$2,33,'retenido',$3,$4,$5,$6,0,$7,'Retenido por marcha blanca: se emitirá al desactivarla (Configuración › Conexiones).',$8, now() - interval '2 days')`,
       [E, emp2.id, json({ rut: c.documento, razonSocial: c.razon_social || c.nombre, giro: c.giro || 'Construcción', direccion: c.direccion || 'Av. Granaderos 2550', comuna: c.comuna || 'Calama', ciudad: c.ciudad || 'Calama', correo: c.correo }),
         json([{ nombre: `Arriendo ${emp2.folio}`, descripcion: (emp2.cotizacion?.lineas || [])[0]?.detalle || '', cantidad: 1, precio: neto, monto: neto }]), neto, t.iva, t.total, admin?.id || null]);
   }

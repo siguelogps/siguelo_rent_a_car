@@ -10,7 +10,9 @@
 <main class="pt-cuerpo" id="app"><p class="rc-cargando">Cargando…</p></main>
 <footer class="pt-pie"><a href="https://www.siguelogps.cl" target="_blank" rel="noopener">con tecnología <img class="logo-onrent logo-onrent-claro" src="/img/siguelo-onrent-a-claro.png" alt="Síguelo GPS · On Rent" width="639" height="80"><img class="logo-onrent logo-onrent-oscuro" src="/img/siguelo-onrent-a-oscuro.png" alt="Síguelo GPS · On Rent" width="639" height="80"></a></footer>
 <script type="module">
-import { esc, clp, fecha, hora, validarRut, rut as fmtRut } from '/comun.js';
+import { esc, clp, fecha, hora, validarRut, rut as fmtRut, instalarSelectorBuscable } from '/comun.js';
+// Página pública: no pasa por iniciarPagina(), así que el buscador de los <select> largos (horas, clase de licencia) se instala aquí.
+instalarSelectorBuscable();
 
 const partes = location.pathname.split('/').filter(Boolean);
 const EMBED = partes[0] === 'embed';

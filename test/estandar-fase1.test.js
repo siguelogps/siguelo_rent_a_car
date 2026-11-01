@@ -101,7 +101,9 @@ test('pantalla: los modales no se cierran con un clic fuera, el paginador está 
   assert.ok(!/ev\.target === fondo/.test(leer('public/reservar.html')), 'reservar.html tampoco');
   assert.ok(comun.includes('instalarPaginador()') && comun.includes('instalarObligatorios()'));
   assert.ok(comun.includes('Cerrar sesión</button>') && !comun.includes('} Salir</button>'));
-  assert.ok(comun.includes('export const calzaPalabras'));
+  // 1-nov (selector buscable): la definición de calzaPalabras se movió a public/selector-buscable.js (que no puede importar
+  // comun.js para probarse en Node) y comun.js la reexporta; lo que importa es que las pantallas sigan importándola de comun.js.
+  assert.ok(comun.includes('export { sinTildes, calzaPalabras };'));
 });
 
 test('vocabulario en pantalla: «Conexiones», nunca «Integraciones»', () => {

@@ -98,7 +98,10 @@ function abrirMisDocumentos() {
     </div>
     <div class="modal-pie"><button type="button" class="btn" data-cerrar>Cancelar</button><button class="btn pt-primario" type="submit">Continuar</button></div></form>`;
   const cerrar = () => fondo.remove();
-  fondo.addEventListener('click', (ev) => { if (ev.target === fondo || ev.target.closest('[data-cerrar]')) cerrar(); });
+  // Fase 1 (1-nov, regla de Pablo): un clic fuera no cierra la ventana (se perdería lo escrito); solo ✕, «Cancelar» o Esc.
+  const tecla = (ev) => { if (ev.key === 'Escape') { cerrar(); document.removeEventListener('keydown', tecla); } };
+  document.addEventListener('keydown', tecla);
+  fondo.addEventListener('click', (ev) => { if (ev.target.closest('[data-cerrar]')) { cerrar(); document.removeEventListener('keydown', tecla); } });
   document.body.appendChild(fondo);
   const fm = fondo.querySelector('#md-f'), err = fondo.querySelector('#md-err');
   fm.folio.focus();

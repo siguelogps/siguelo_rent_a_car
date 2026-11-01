@@ -10,8 +10,8 @@
 <main>
   <div class="pagina-cab"><div><h1>Bitácora global</h1><p>Todo lo que pasa en todos los clientes y en el backoffice, lo más reciente primero.</p></div></div>
   <div class="filtros-fila"><label class="cf-check-linea"><input type="checkbox" id="equipo"> Solo el equipo Síguelo</label></div>
-  <div class="tarjeta"><div class="tabla-env"><table class="tabla"><thead><tr><th>Fecha</th><th>Cliente</th><th>Quién</th><th>Acción</th><th>Detalle</th></tr></thead><tbody id="lista"></tbody></table></div>
-    <div class="cf-paginas"><span class="muted" id="pag"></span><button class="btn peq" id="ant">← Anterior</button><button class="btn peq" id="sig">Siguiente →</button></div></div>
+  <div class="tarjeta"><div class="tabla-env"><table class="tabla" data-sin-paginar><thead><tr><th>Fecha</th><th>Cliente</th><th>Quién</th><th>Acción</th><th>Detalle</th></tr></thead><tbody id="lista"></tbody></table></div>
+    <nav class="cf-paginas pg-nav" aria-label="Páginas de la bitácora"><button class="btn peq" id="ant">Anterior</button><span id="pag"></span><button class="btn peq" id="sig">Siguiente</button></nav></div>
 </main>
 <script type="module">
 import { iniciarPagina, api, esc, fechaHora, toastError } from '/comun.js';
@@ -23,9 +23,10 @@ async function cargar() {
   document.getElementById('lista').innerHTML = r.filas.map((f) => `<tr><td class="mono peq" style="white-space:nowrap">${fechaHora(f.creado_en)}</td><td>${f.empresa_id ? `<a href="/empresas/${f.empresa_id}">${esc(f.empresa)}</a>` : '<span class="muted">Backoffice</span>'}</td>
     <td>${esc(f.usuario || 'Sistema')}${['superadmin', 'soporte'].includes(f.rol) ? ' <span class="chip marca">Síguelo</span>' : ''}</td><td>${esc(ACCION(f.accion))}</td>
     <td class="peq"><div class="cf-detalle-json">${esc(f.detalle?.motivo ? `motivo: ${f.detalle.motivo}` : Object.keys(f.detalle || {}).length ? JSON.stringify(f.detalle) : '')}</div></td></tr>`).join('') || '<tr><td colspan="5" class="rc-vacio">Sin registros</td></tr>';
-  document.getElementById('pag').textContent = `página ${pagina}`;
+  // Fase 1 (1-nov): de a 50 y «Página X de Y», como todas las listas.
+  document.getElementById('pag').textContent = `Página ${r.pagina} de ${r.paginas} · ${r.total.toLocaleString('es-CL')} registros`;
   document.getElementById('ant').disabled = pagina <= 1;
-  document.getElementById('sig').disabled = r.filas.length < 100;
+  document.getElementById('sig').disabled = r.pagina >= r.paginas;
 }
 document.getElementById('equipo').onchange = () => { pagina = 1; cargar().catch(toastError); };
 document.getElementById('ant').onclick = () => { pagina -= 1; cargar().catch(toastError); };

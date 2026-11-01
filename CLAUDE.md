@@ -34,3 +34,10 @@ Node.js ≥ 22 (ESM), Express 5, PostgreSQL (PGlite embebido si no hay `DATABASE
 
 ## Comandos
 `npm start` · `npm run dev` · `npm test` · `npm run capturas` (maquetas a PNG) · `npm run capturas-tienda` (capturas de las fichas de las apps)
+
+## Reglas de pantalla (estandarización Síguelo, fase 1 · 1-nov-2026)
+- **Toda lista va paginada de a 50.** En pantalla, `public/paginador.js` (lo instala `iniciarPagina()`) pagina solo toda `table.tabla` y todo contenedor con `data-paginar`; una lista que ya pagina en el servidor (las bitácoras) o que no es una lista (una matriz) lleva `data-sin-paginar`. En el servidor, una lista que puede crecer se pide por partes con `tramo(req)` de `src/paginacion.js` (`?limite=&desde=`, máximo 1000) y un `ORDER BY` total (con el id al final). No se agregan botones «Ver más».
+- **Las búsquedas son por palabras:** cada palabra tiene que aparecer, en cualquier orden, sin mayúsculas ni tildes. En SQL, `porPalabras(columnas, q, params)` de `src/busqueda.js` (usa la función `sin_tildes()` de la migración 180; patentes y documentos con `{ col, limpiar: true }`); en pantalla, `calzaPalabras(texto, q)` de `comun.js`.
+- **Los modales se cierran solo con sus botones** (✕, «Cancelar», la acción) o con Esc; un clic fuera nunca los cierra.
+- **Obligatorios con « *»:** lo pone `comun.js` solo, en todo control con `required` o `data-obligatorio` dentro de un `<label>`. No se escribe el asterisco a mano.
+- **Vocabulario:** «Conexiones» (no «Integraciones»), «Cerrar sesión» (no «Salir»), «plataforma GPS».

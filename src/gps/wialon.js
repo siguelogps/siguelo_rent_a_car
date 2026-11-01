@@ -69,7 +69,7 @@ export class ClienteGps {
   }
 
   async _login() {
-    if (!this.token) throw new Error('Falta el token de la plataforma GPS (Configuración › Integraciones)');
+    if (!this.token) throw new Error('Falta el token de la plataforma GPS (Configuración › Conexiones)');
     this.sid = null;
     const r = await this._llamar('token/login', { token: this.token }, false);
     if (!r?.eid) throw new Error('La plataforma GPS no devolvió una sesión (revisa el token)');
@@ -272,7 +272,7 @@ registrarLectorEnVivo(async (empresaId, v) => {
   return { km: u.km ?? v.gps_km ?? v.km, combustible: u.combustible ?? v.gps_combustible ?? v.combustible_nivel, lat: u.lat, lng: u.lng, velocidad: u.velocidad, motor: u.motor, actualizado_en: u.en };
 });
 
-// Prueba de conexión (Configuración › Integraciones › Probar)
+// Prueba de conexión (Configuración › Conexiones › Probar)
 registrarProbador('gps', async (config, empresaId) => {
   if (!config.token) throw new Error('Falta conectar con el usuario y la clave de la plataforma GPS');
   const c = new ClienteGps(config);

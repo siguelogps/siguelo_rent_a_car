@@ -3,6 +3,7 @@
 // Uso en cada página:  import { iniciarPagina, api, clp } from '/comun.js';
 //                      const yo = await iniciarPagina({ activo: 'reservas', titulo: 'Reservas' });
 import { esNativa, guardarYCompartir, abrirArchivo } from '/nativa.js';
+import { instalarPaginador } from '/paginador.js';
 
 export { esNativa, abrirArchivo };
 
@@ -105,6 +106,40 @@ export function patente(p) {
 export const pat = (p, grande = false) => `<span class="pat${grande ? ' grande' : ''}">${esc(patente(p))}</span>`;
 export const documento = (tipo, doc) => (tipo === 'rut' ? rut(doc) : `${tipo === 'pasaporte' ? 'Pasaporte' : 'DNI'} ${esc(doc)}`);
 
+// ── Búsqueda por palabras (fase 1 de estandarización, 1-nov-2026) ──
+// Cada palabra escrita tiene que aparecer, en cualquier orden, sin importar mayúsculas ni tildes: «juan perez» encuentra
+// a «Juan Carlos Pérez González». Es lo mismo que hace el servidor con sin_tildes() (src/busqueda.js).
+export const sinTildes = (s) => String(s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
+export const calzaPalabras = (texto, q) => { const t = sinTildes(texto); return sinTildes(q).split(' ').filter(Boolean).every((p) => t.includes(p)); };
+
+// ── Campos obligatorios (fase 1) ──
+// La marca « *» va al final de la etiqueta y la pone un solo lugar, no cada pantalla a mano: cualquier control con
+// `required`, `aria-required="true"` o `data-obligatorio` dentro de un <label> la recibe solo (instalarObligatorios).
+// Para armar una etiqueta en una plantilla sin control marcado: obligatorio('Nombre') → «Nombre *».
+export const obligatorio = (texto) => `${esc(texto)}<span class="oblig" aria-hidden="true"> *</span>`;
+const SEL_OBLIG = 'label [required], label [aria-required="true"], label [data-obligatorio]';
+export function marcarObligatorios(raiz = document.body) {
+  for (const c of raiz.querySelectorAll(SEL_OBLIG)) {
+    const et = c.closest('label');
+    if (!et || et.querySelector('.oblig') || et.hasAttribute('data-sin-asterisco') || /^(checkbox|radio)$/.test(c.type)) continue;
+    // Dónde va: tras el primer texto de la etiqueta; si el texto está en un <span> (como el nombre del cliente), dentro de él.
+    let texto = [...et.childNodes].find((n) => n.nodeType === 3 && n.textContent.trim());
+    if (!texto) { const s = [...et.children].find((h) => !h.matches('input, select, textarea, button, .campo, .rc-clave')); if (!s) continue; texto = s.lastChild && s.lastChild.nodeType === 3 ? s.lastChild : s; }
+    const marca = document.createElement('span'); marca.className = 'oblig'; marca.setAttribute('aria-hidden', 'true'); marca.textContent = ' *';
+    if (texto.nodeType === 3) { texto.textContent = texto.textContent.replace(/\s*\*\s*$/, ''); texto.after(marca); } else texto.append(marca);
+    if (!c.required && !c.hasAttribute('aria-required')) c.setAttribute('aria-required', 'true');
+  }
+}
+let obligInstalado = false;
+function instalarObligatorios() {
+  if (obligInstalado || typeof MutationObserver === 'undefined') return;
+  obligInstalado = true;
+  let pendiente = false;
+  const programar = () => { if (!pendiente) { pendiente = true; requestAnimationFrame(() => { pendiente = false; marcarObligatorios(); }); } };
+  new MutationObserver((cambios) => { if (cambios.some((m) => m.type === 'childList')) programar(); }).observe(document.body, { childList: true, subtree: true });
+  programar();
+}
+
 // ── Estados (chips) ──
 export const ESTADOS_RESERVA = { cotizacion: 'Cotización', confirmada: 'Confirmada', en_curso: 'En curso', devuelta: 'Devuelta', cerrada: 'Cerrada', cancelada: 'Cancelada', no_show: 'No se presentó' };
 export const ESTADOS_VEHICULO = { disponible: 'Disponible', arrendado: 'Arrendado', reservado: 'Reservado', mantencion: 'En mantención', fuera_servicio: 'Fuera de servicio' };
@@ -135,8 +170,10 @@ export function modal({ titulo, html = '', botones = [{ texto: 'Cerrar' }], anch
     const cerrar = (v) => { fondo.remove(); document.removeEventListener('keydown', tecla); resolve(v); };
     const tecla = (e) => { if (e.key === 'Escape') cerrar(null); };
     document.addEventListener('keydown', tecla);
+    // Fase 1 (1-nov, regla de Pablo): un clic fuera de la ventana NO la cierra, porque se pierde lo escrito. Solo ✕,
+    // «Cancelar», el botón de acción o Esc.
     fondo.addEventListener('click', async (e) => {
-      if (e.target === fondo || e.target.closest('[data-cerrar]')) return cerrar(null);
+      if (e.target.closest('[data-cerrar]')) return cerrar(null);
       const b = e.target.closest('[data-i]');
       if (!b) return;
       const def = botones[Number(b.dataset.i)];
@@ -272,6 +309,9 @@ export async function iniciarPagina({ activo, titulo = '' } = {}) {
   else app.querySelector('#rc-tema').remove();
   app.querySelector('#bo-volver')?.addEventListener('click', async () => { const r = await api('empresa-activa', { body: { empresa_id: null } }); location.href = YO.empresa ? `/empresas/${YO.empresa.id}#usuarios` : r.destino || '/empresas'; });
   if (YO.modo !== 'backoffice') activarBuscador(app);
+  // Fase 1 (1-nov): toda lista pagina de a 50 (paginador.js) y todo campo obligatorio lleva « *» (ver arriba).
+  instalarPaginador();
+  instalarObligatorios();
   return YO;
 }
 
@@ -285,34 +325,34 @@ function franjaSiguelo(bo) {
   return `<div class="bo-franja operar" role="status">${ICONOS.persona}<span><b>Operando como Síguelo en ${nombre}</b> · todo lo que hagas queda en la bitácora del cliente con tu nombre</span><span class="bo-pase">${YO.siguelo_desde ? `Desde ${hora(YO.siguelo_desde)} · ` : ''}motivo: ${esc(YO.siguelo_motivo || '—')}</span><button type="button" class="btn" id="bo-volver">← Volver al backoffice</button></div>`;
 }
 
-// «Mi cuenta» (igual que en los demás sistemas Síguelo): cambiar la clave y salir.
+// «Mi cuenta» (igual que en los demás sistemas Síguelo): cambiar la clave y cerrar sesión.
 const OJO = I('<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>', ' width="18" height="18"');
 function abrirMiCuenta() {
-  const campo = (name, etiqueta, ac) => `<label class="etiqueta">${etiqueta}<span class="rc-clave"><input class="campo" type="password" name="${name}" autocomplete="${ac}"><button type="button" class="rc-ojo" aria-label="Mostrar u ocultar la clave" tabindex="-1">${OJO}</button></span></label>`;
+  const campo = (name, etiqueta, ac, oblig = false) => `<label class="etiqueta">${etiqueta}<span class="rc-clave"><input class="campo" type="password" name="${name}" autocomplete="${ac}"${oblig ? ' data-obligatorio' : ''}><button type="button" class="rc-ojo" aria-label="Mostrar u ocultar la clave" tabindex="-1">${OJO}</button></span></label>`;
   const fondo = document.createElement('div');
   fondo.className = 'modal-fondo';
   fondo.innerHTML = `<form class="modal" style="width:min(720px,100%)" role="dialog" aria-modal="true" aria-label="Mi cuenta">
     <div class="modal-cab"><h2>Mi cuenta</h2><button type="button" class="btn-icono" data-cerrar aria-label="Cerrar">${ICONOS.x}</button></div>
     <div class="modal-cuerpo">
       <p class="peq muted">${esc(YO.usuario.nombre)} · ${esc(YO.usuario.correo)}</p>
-      ${campo('actual', 'Clave actual', 'current-password')}
-      ${campo('nueva', 'Clave nueva (mínimo 10 caracteres)', 'new-password')}
-      ${campo('repite', 'Repite la clave nueva', 'new-password')}
+      ${campo('actual', 'Clave actual', 'current-password', true)}
+      ${campo('nueva', 'Clave nueva (mínimo 10 caracteres)', 'new-password', true)}
+      ${campo('repite', 'Repite la clave nueva', 'new-password', true)}
       <div class="aviso error" data-err hidden></div>
       ${YO.usuario.rol === 'superadmin' ? '' : `<details class="rc-eliminar-cuenta"><summary>Eliminar mi cuenta</summary>
         <p class="peq muted">Se borran tu nombre, correo, teléfono y clave, y se cierran tus sesiones en todos los equipos. No se puede deshacer. Los contratos, inspecciones y movimientos que hiciste quedan en la empresa a nombre de «Usuario eliminado».</p>
-        <label class="etiqueta">Escribe tu clave para confirmar<input class="campo" type="password" name="clave_eliminar" autocomplete="current-password"></label>
+        <label class="etiqueta">Escribe tu clave para confirmar<input class="campo" type="password" name="clave_eliminar" autocomplete="current-password" data-obligatorio></label>
         <button type="button" class="btn peligro" data-eliminar>Eliminar mi cuenta definitivamente</button></details>`}
     </div>
-    <div class="modal-pie rc-pie-cuenta"><button type="button" class="btn" data-salir>${ICONOS.salir} Salir</button><button type="submit" class="btn primario">${ICONOS.ok} Cambiar clave</button></div></form>`;
+    <div class="modal-pie rc-pie-cuenta"><button type="button" class="btn" data-salir>${ICONOS.salir} Cerrar sesión</button><button type="submit" class="btn primario">${ICONOS.ok} Cambiar clave</button></div></form>`;
   const cerrar = () => { fondo.remove(); document.removeEventListener('keydown', tecla); };
   const tecla = (e) => { if (e.key === 'Escape') cerrar(); };
   document.addEventListener('keydown', tecla);
   fondo.addEventListener('click', async (e) => {
-    if (e.target === fondo || e.target.closest('[data-cerrar]')) return cerrar();
+    if (e.target.closest('[data-cerrar]')) return cerrar(); // un clic fuera no cierra (fase 1): se perdería lo escrito
     const ojo = e.target.closest('.rc-ojo');
     if (ojo) { const inp = ojo.previousElementSibling; inp.type = inp.type === 'password' ? 'text' : 'password'; return; }
-    // Si la sesión se abrió desde el menú Apps de la plataforma GPS, «Salir» vuelve allá (franja-plataforma.js).
+    // Si la sesión se abrió desde el menú Apps de la plataforma GPS, «Cerrar sesión» vuelve allá (franja-plataforma.js).
     if (e.target.closest('[data-salir]')) { await api('salir', { body: {} }).catch(() => {}); location.href = (window.salidaPlataforma && window.salidaPlataforma()) || '/ingresar'; }
     if (e.target.closest('[data-eliminar]')) {
       err.hidden = true;

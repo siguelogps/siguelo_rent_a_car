@@ -65,7 +65,7 @@ async function tomarFolio(empresaId, tipo, caf) {
     let siguiente = Number(f.siguiente);
     let desde = f.desde, hasta = f.hasta;
     if (caf) { desde = caf.desde; hasta = caf.hasta; if (siguiente < caf.desde) siguiente = caf.desde; }
-    if (hasta && siguiente > hasta) throw new ErrorHttp(409, `No quedan folios de ${TIPOS_DTE[tipo]}: pide un CAF nuevo en el SII y súbelo en Configuración › Integraciones › SimpleAPI`);
+    if (hasta && siguiente > hasta) throw new ErrorHttp(409, `No quedan folios de ${TIPOS_DTE[tipo]}: pide un CAF nuevo en el SII y súbelo en Configuración › Conexiones › SimpleAPI`);
     await tx.query('UPDATE dte_folios SET siguiente = $3, desde = $4, hasta = $5, actualizado_en = now() WHERE empresa_id = $1 AND tipo = $2', [empresaId, tipo, siguiente + 1, desde, hasta]);
     return siguiente;
   });
@@ -93,7 +93,7 @@ export async function procesarDocumento(empresaId, id, usuarioId = null) {
   if (!['pendiente', 'retenido', 'error'].includes(d.estado)) throw new ErrorHttp(409, 'El documento ya fue enviado al SII');
   const p = await puedeActuar(empresaId, 'simpleapi');
   if (!p.ok) {
-    const mensaje = p.marchaBlanca || await marchaBlanca(empresaId) ? 'Retenido por marcha blanca: se emitirá al desactivarla (Configuración › Integraciones).' : `Retenido: ${p.motivo}.`;
+    const mensaje = p.marchaBlanca || await marchaBlanca(empresaId) ? 'Retenido por marcha blanca: se emitirá al desactivarla (Configuración › Conexiones).' : `Retenido: ${p.motivo}.`;
     const [r] = await q(`UPDATE documentos_tributarios SET estado = 'retenido', mensaje = $3 WHERE id = $1 AND empresa_id = $2 RETURNING *`, [id, empresaId, mensaje]);
     await bit(empresaId, usuarioId, 'dte_retenido', id, { motivo: p.motivo });
     return r;
@@ -101,7 +101,7 @@ export async function procesarDocumento(empresaId, id, usuarioId = null) {
   let folio = d.folio;
   try {
     const { sapi, cafXml } = await confSimpleApi(empresaId, p.config, d.tipo);
-    if (!cafXml) throw new ErrorHttp(409, `Falta el CAF de ${TIPOS_DTE_CORTO[d.tipo].toLowerCase()}s en Configuración › Integraciones › SimpleAPI`);
+    if (!cafXml) throw new ErrorHttp(409, `Falta el CAF de ${TIPOS_DTE_CORTO[d.tipo].toLowerCase()}s en Configuración › Conexiones › SimpleAPI`);
     const caf = leerCaf(cafXml);
     if (caf.tipo !== d.tipo) throw new ErrorHttp(409, `El CAF cargado es de tipo ${caf.tipo}, no de ${TIPOS_DTE[d.tipo]}`);
     if (!folio) folio = await tomarFolio(empresaId, d.tipo, caf);

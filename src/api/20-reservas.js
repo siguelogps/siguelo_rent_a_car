@@ -1,6 +1,8 @@
 // Módulo 3 · Reservas: calendario (Gantt), lista con filtros y Excel, cotizador, alta/edición, mover (arrastrar y soltar)
 // con revisión de disponibilidad en transacción, cambios de estado y ficha completa de la reserva.
 import express from 'express';
+import { porPalabras } from '../busqueda.js';
+import { tramo } from '../paginacion.js';
 import ExcelJS from 'exceljs';
 import { q, uno, transaccion, siguienteFolio } from '../db.js';
 import { requiere, ErrorHttp } from '../auth.js';
@@ -11,7 +13,7 @@ import { lecturaActual } from '../gps/index.js';
 import { ocupacionHoy } from '../flota/comun.js';
 import { tokenAleatorio } from '../cifrado.js';
 import { diasArriendo, fechaHora } from '../util/formato.js';
-import { formatearPatente, normalizarPatente } from '../util/patente.js';
+import { formatearPatente } from '../util/patente.js';
 import { cambiarEstado, recalcularEstadoVehiculo, MANUALES, NOMBRES } from '../reservas/estados.js';
 import { SQL_LISTA, avisarConfirmada, urlPortal, documentoTxt } from '../reservas/datos.js';
 
@@ -139,19 +141,15 @@ function filtrosLista(req) {
   if (req.query.categoria_id) add('r.categoria_id = ?', Number(req.query.categoria_id));
   if (req.query.cliente_id) add('r.cliente_id = ?', Number(req.query.cliente_id));
   if (req.query.vehiculo_id) add('r.vehiculo_id = ?', Number(req.query.vehiculo_id));
-  const t = String(req.query.q || '').trim();
-  if (t) {
-    add(`(r.folio ILIKE ? OR (c.nombre || ' ' || coalesce(c.apellidos,'')) ILIKE ? OR c.documento ILIKE ?`, `%${t}%`);
-    const np = normalizarPatente(t);
-    if (np.length >= 3) { p.push(`%${np}%`); w[w.length - 1] += ` OR v.patente ILIKE $${p.length})`; } else w[w.length - 1] += ')';
-  }
+  // Fase 1 (1-nov): por palabras, sin tildes ni mayúsculas; patente y documento sin guiones ni puntos.
+  const porQ = porPalabras(['r.folio', `(c.nombre || ' ' || coalesce(c.apellidos,''))`, { col: 'c.documento', limpiar: true }, { col: 'v.patente', limpiar: true }], req.query.q, p);
+  if (porQ) w.push(porQ);
   return { where: w.join(' AND '), p };
 }
 
 r.get('/reservas', ver, async (req, res) => {
   const { where, p } = filtrosLista(req);
-  const limite = Math.min(Number(req.query.limite) || 300, 1000);
-  res.json(await q(`${SQL_LISTA} WHERE ${where} ORDER BY r.inicio DESC LIMIT ${limite}`, p));
+  res.json(await q(`${SQL_LISTA} WHERE ${where} ORDER BY r.inicio DESC, r.id DESC ${tramo(req).sql}`, p));
 });
 
 r.get('/reservas/excel', ver, async (req, res) => {

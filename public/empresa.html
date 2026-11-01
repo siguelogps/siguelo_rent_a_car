@@ -15,7 +15,7 @@
 </main>
 <script type="module">
 // Backoffice Síguelo · ficha del cliente (22-oct, espec. aprobada por Pablo; mockups 03, 04, 05 en On Bus, aquí con el
-// estilo de On Rent). Pestañas: Datos, Plan y módulos, Integraciones, Usuarios, Apps con marca, Actividad y bitácora.
+// estilo de On Rent). Pestañas: Datos, Plan y módulos, Conexiones (antes «Integraciones»; fase 1, 1-nov), Usuarios, Apps con marca, Actividad y bitácora.
 // Nunca llega un secreto: los campos secretos vienen como «••••••••» y solo se reemplazan si se escribe uno nuevo.
 import { iniciarPagina, api, esc, fecha, fechaHora, hora, rut, validarRut, modal, confirmar, toast, toastError, leerForm, ICONOS } from '/comun.js';
 const yo = await iniciarPagina({ activo: 'empresas', titulo: 'Clientes' });
@@ -25,7 +25,7 @@ let D = null;
 const ed = () => D?.puede_operar;
 const SIN = '—';
 
-const TABS = [['datos', 'Datos'], ['plan', 'Plan y módulos'], ['integraciones', 'Integraciones'], ['usuarios', 'Usuarios'], ['apps', 'Apps con marca'], ['actividad', 'Actividad y bitácora']];
+const TABS = [['datos', 'Datos'], ['plan', 'Plan y módulos'], ['integraciones', 'Conexiones'], ['usuarios', 'Usuarios'], ['apps', 'Apps con marca'], ['actividad', 'Actividad y bitácora']];
 const tab = () => (TABS.some(([k]) => k === location.hash.slice(1)) ? location.hash.slice(1) : 'datos');
 addEventListener('hashchange', () => pintar());
 
@@ -58,7 +58,7 @@ document.querySelector('main').addEventListener('click', async (ev) => {
   const motivoEnLinea = document.getElementById('motivo-operar');
   if (modo === 'operar' && !(motivoEnLinea && b.closest('.bo-entrar'))) {
     return modal({ titulo: `Operar en ${D.empresa.nombre}`, html: `<p class="peq muted">Actúas como administrador del cliente. La franja amarilla queda arriba todo el rato y cada cambio va a la bitácora del cliente con tu nombre y este motivo.</p>
-      <label class="etiqueta">Motivo<input class="campo" name="motivo" placeholder="Soporte, ticket 1187" maxlength="300"></label>`,
+      <label class="etiqueta">Motivo<input class="campo" name="motivo" placeholder="Soporte, ticket 1187" maxlength="300" data-obligatorio></label>`,
     botones: [{ texto: 'Cancelar' }, { texto: 'Operar', clase: 'contorno', accion: async (c) => entrar('operar', c.querySelector('[name=motivo]').value) }] });
   }
   try { await entrar(modo, motivoEnLinea?.value); } catch (e) { toastError(e); }
@@ -113,8 +113,8 @@ function plan() {
         <label class="switch"><input type="checkbox" id="mb"${e.marcha_blanca ? ' checked' : ''}${ed() && e.estado !== 'baja' ? '' : ' disabled'} aria-label="Marcha blanca"><span></span></label></div></div>
       <div class="tarjeta bo-riesgo">
         ${e.estado === 'suspendido' ? `<div class="sec"><div><b>Reactivar</b><small>Suspendido por «${esc(e.estado_motivo || SIN)}» el ${fecha(e.estado_en)}. Al reactivar, sus usuarios vuelven a entrar.</small></div><button class="btn" id="reactivar"${ed() ? '' : ' disabled'}>Reactivar</button></div>`
-    : activo ? `<div class="sec"><div><b>Suspender</b><small>El cliente no puede entrar ni recibir mensajes. Sus datos e integraciones se conservan. Se reactiva en un clic.</small></div><button class="btn peligro" id="suspender"${ed() ? '' : ' disabled'}>Suspender</button></div>` : ''}
-        ${e.estado !== 'baja' ? `<div class="sec"><div><b>Dar de baja</b><small>Fin del contrato: se desconectan las integraciones, se borran los secretos y los datos se guardan ${D.dias_exportar} días para exportarlos. Después se eliminan o anonimizan.</small></div><button class="btn peligro" id="baja"${ed() ? '' : ' disabled'}>Dar de baja</button></div>`
+    : activo ? `<div class="sec"><div><b>Suspender</b><small>El cliente no puede entrar ni recibir mensajes. Sus datos y conexiones se conservan. Se reactiva en un clic.</small></div><button class="btn peligro" id="suspender"${ed() ? '' : ' disabled'}>Suspender</button></div>` : ''}
+        ${e.estado !== 'baja' ? `<div class="sec"><div><b>Dar de baja</b><small>Fin del contrato: se desconectan las conexiones, se borran los secretos y los datos se guardan ${D.dias_exportar} días para exportarlos. Después se eliminan o anonimizan.</small></div><button class="btn peligro" id="baja"${ed() ? '' : ' disabled'}>Dar de baja</button></div>`
     : `<div class="sec"><div><b>Dado de baja</b><small>El ${fecha(e.estado_en)} (${esc(e.estado_motivo || SIN)}). El cliente puede exportar hasta el ${fecha(e.exportar_hasta)}${e.datos_eliminados_en ? `; datos anonimizados el ${fecha(e.datos_eliminados_en)}` : ''}.</small></div></div>`}
       </div></div></div>`;
   let elegido = e.plan;
@@ -144,7 +144,7 @@ function confirmarEstado(accion) {
   const n = D.usuarios.filter((u) => u.activo).length;
   const motivos = baja ? ['Fin del contrato', 'Cambio de proveedor', 'Cierre del negocio', 'Pago pendiente', 'Otro'] : ['Pago pendiente', 'Solicitud del cliente', 'Uso indebido', 'Otro'];
   return modal({ titulo: `${baja ? 'Dar de baja' : 'Suspender'} a ${e.nombre}`, html: `
-    <div class="aviso error">${baja ? `Se desconectan las integraciones y se borran sus secretos. Los ${n} usuarios quedan en solo lectura por ${D.dias_exportar} días para exportar sus datos; después se eliminan o anonimizan. No se puede deshacer.` : `Sus ${n} usuarios pierden el acceso ahora mismo, el portal de reservas se cierra y no sale ningún mensaje. No se borra nada.`}</div>
+    <div class="aviso error">${baja ? `Se desconectan las conexiones y se borran sus secretos. Los ${n} usuarios quedan en solo lectura por ${D.dias_exportar} días para exportar sus datos; después se eliminan o anonimizan. No se puede deshacer.` : `Sus ${n} usuarios pierden el acceso ahora mismo, el portal de reservas se cierra y no sale ningún mensaje. No se borra nada.`}</div>
     <div class="rejilla-2"><label class="etiqueta">Motivo<select class="campo" name="motivo">${motivos.map((m) => `<option>${m}</option>`).join('')}</select></label>
       <label class="etiqueta">Avisar al administrador del cliente<select class="campo" name="avisar"><option value="1">Sí, por correo</option><option value="">No</option></select></label></div>
     <label class="etiqueta">Detalle (queda en la bitácora)<textarea class="campo" name="detalle" placeholder="${baja ? 'Contrato terminado el …' : 'Facturas de agosto y septiembre impagas…'}"></textarea></label>
@@ -315,7 +315,7 @@ function usuarios() {
     <div class="tarjeta bloque"><h2>Entradas del equipo Síguelo a esta cuenta <a class="peq" href="#actividad">Ver bitácora completa</a></h2>
       ${D.entradas.length ? `<ul class="historial">${D.entradas.map((x) => `<li><span class="marca-ev ${x.modo === 'operar' ? '' : 'persona'}"></span><p><b>${x.modo === 'operar' ? 'Operar' : 'Ver como'}</b> · ${esc(x.usuario)}${x.motivo ? ` · motivo: ${esc(x.motivo)}` : ''} · ${x.cambios ? `${x.cambios} ${x.cambios === 1 ? 'cambio' : 'cambios'}` : 'sin cambios'}<small class="mono">${fecha(x.inicio)} ${hora(x.inicio)} – ${x.fin ? hora(x.fin) : 'en curso'}</small></p></li>`).join('')}</ul>` : '<p class="peq muted">Nadie del equipo Síguelo ha entrado todavía.</p>'}</div>`;
   const avisoInv = (inv, correo) => inv.enviado ? toast(`Invitación enviada a ${correo}`, 'ok') : setTimeout(() => modal({ titulo: 'No se pudo enviar la invitación', html: `<p>${esc(inv.motivo)}</p><p class="peq muted">Entrega este enlace a la persona por otro medio (vence en 72 h, un solo uso). Con él crea su propia clave:</p><div class="cf-clave mono" style="font-size:12px;word-break:break-all">${esc(inv.enlace)}</div>` }), 50);
-  $('#nuevo-u')?.addEventListener('click', () => modal({ titulo: 'Nuevo usuario del cliente', html: `<div class="cf-form"><label class="etiqueta">Nombre<input class="campo" name="nombre"></label><label class="etiqueta">Correo<input class="campo" type="email" name="correo"></label>
+  $('#nuevo-u')?.addEventListener('click', () => modal({ titulo: 'Nuevo usuario del cliente', html: `<div class="cf-form"><label class="etiqueta">Nombre<input class="campo" name="nombre" data-obligatorio></label><label class="etiqueta">Correo<input class="campo" type="email" name="correo" data-obligatorio></label>
       <label class="etiqueta">Teléfono<input class="campo" name="telefono"></label><label class="etiqueta">Rol<select class="campo" name="rol"><option value="administrador">Administrador</option><option value="counter">Counter</option><option value="patio">Patio</option><option value="finanzas">Finanzas</option></select></label></div>
       <p class="peq muted">Recibe una invitación por correo para crear su clave (vence en 72 h). Síguelo no escribe ni ve la clave.</p>`,
   botones: [{ texto: 'Cancelar' }, { texto: 'Crear e invitar', clase: 'primario', accion: async (c) => { const d = leerForm(c); const r = await api(`backoffice/clientes/${ID}/usuarios`, { body: d }); avisoInv(r.invitacion, d.correo); cargar(); } }] }));
@@ -354,11 +354,11 @@ async function actividad(pagina = 1, soloEquipo = false) {
       ${D.solicitudes.map((s) => `<tr><td class="mono peq">${fechaHora(s.creado_en)}</td><td>${esc(TIPO_SOL[s.tipo] || s.tipo)}</td><td class="peq">${esc(s.detalle || '')}</td><td class="peq">${esc(s.solicitante_nombre || '')}</td><td><span class="chip ${ESTADO_SOL[s.estado][0]}">${ESTADO_SOL[s.estado][1]}</span></td><td class="mono peq">${s.crm_ticket ? `ticket ${esc(s.crm_ticket)}` : s.crm_estado?.startsWith('pendiente') ? 'reintentando' : SIN}</td></tr>`).join('') || '<tr><td colspan="6" class="rc-vacio">Sin solicitudes</td></tr>'}
       </tbody></table></div></div>
     <div class="tarjeta"><div class="bloque" style="padding-bottom:8px"><h2>Bitácora <label class="cf-check-linea peq" style="font-weight:400"><input type="checkbox" id="solo-eq"${soloEquipo ? ' checked' : ''}> Solo el equipo Síguelo</label></h2></div>
-      <div class="tabla-env"><table class="tabla"><thead><tr><th>Fecha</th><th>Quién</th><th>Acción</th><th>Detalle</th></tr></thead><tbody>
+      <div class="tabla-env"><table class="tabla" data-sin-paginar><thead><tr><th>Fecha</th><th>Quién</th><th>Acción</th><th>Detalle</th></tr></thead><tbody>
       ${b.filas.map((f) => `<tr><td class="mono peq" style="white-space:nowrap">${fechaHora(f.creado_en)}</td><td>${f.usuario ? esc(f.usuario) : '<span class="muted">Sistema / portal</span>'}${['superadmin', 'soporte'].includes(f.rol) ? ' <span class="chip marca">Síguelo</span>' : ''}</td><td>${esc(ACCION(f.accion))}</td>
         <td class="peq"><div class="cf-detalle-json">${esc(f.detalle?.motivo || f.detalle?.siguelo?.motivo ? `motivo: ${f.detalle.motivo || f.detalle.siguelo.motivo}` : Object.keys(f.detalle || {}).length ? JSON.stringify(f.detalle) : '')}</div></td></tr>`).join('') || '<tr><td colspan="4" class="rc-vacio">Sin registros</td></tr>'}
       </tbody></table></div>
-      <div class="cf-paginas"><span class="muted">página ${pagina}</span><button class="btn peq" id="p-ant"${pagina <= 1 ? ' disabled' : ''}>← Anterior</button><button class="btn peq" id="p-sig"${b.filas.length < 50 ? ' disabled' : ''}>Siguiente →</button></div></div>`;
+      <nav class="cf-paginas pg-nav" aria-label="Páginas de la bitácora"><button class="btn peq" id="p-ant"${pagina <= 1 ? ' disabled' : ''}>Anterior</button><span>Página ${b.pagina || pagina} de ${b.paginas || 1}</span><button class="btn peq" id="p-sig"${(b.pagina || pagina) >= (b.paginas || 1) ? ' disabled' : ''}>Siguiente</button></nav></div>`;
   $('#solo-eq').onchange = (ev) => actividad(1, ev.target.checked);
   $('#p-ant').onclick = () => actividad(pagina - 1, soloEquipo);
   $('#p-sig').onclick = () => actividad(pagina + 1, soloEquipo);

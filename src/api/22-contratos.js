@@ -1,6 +1,8 @@
 // Módulo 5 · Contrato digital: lista, ficha, generación desde la reserva, enlace de firma, PDF, anulación,
 // y las rutas públicas (sin sesión) de firma (/api/firmar/:token) y verificación por QR (/api/verificar/:codigo).
 import express from 'express';
+import { porPalabras } from '../busqueda.js';
+import { tramo } from '../paginacion.js';
 import QRCode from 'qrcode';
 import { q, uno } from '../db.js';
 import { requiere, ErrorHttp } from '../auth.js';
@@ -23,18 +25,13 @@ r.get('/contratos', ver, async (req, res) => {
   if (/^\d{4}-\d{2}-\d{2}$/.test(req.query.desde || '')) { p.push(req.query.desde); w.push(`(ct.creado_en AT TIME ZONE 'America/Santiago')::date >= $${p.length}::date`); }
   if (/^\d{4}-\d{2}-\d{2}$/.test(req.query.hasta || '')) { p.push(req.query.hasta); w.push(`(ct.creado_en AT TIME ZONE 'America/Santiago')::date <= $${p.length}::date`); }
   if (req.query.reserva_id) { p.push(Number(req.query.reserva_id)); w.push(`ct.reserva_id = $${p.length}`); }
-  const t = String(req.query.q || '').trim();
-  if (t) {
-    p.push(`%${t}%`); const i = p.length;
-    const np = t.toUpperCase().replace(/[^A-Z0-9]/g, '');
-    let pat = '';
-    if (np.length >= 3) { p.push(`%${np}%`); pat = ` OR v.patente ILIKE $${p.length}`; }
-    w.push(`(ct.folio ILIKE $${i} OR r.folio ILIKE $${i} OR (c.nombre || ' ' || coalesce(c.apellidos,'')) ILIKE $${i} OR ct.codigo_verificacion ILIKE $${i}${pat})`);
-  }
+  // Fase 1 (1-nov): por palabras, sin tildes ni mayúsculas; la patente sin guión.
+  const porQ = porPalabras(['ct.folio', 'r.folio', `(c.nombre || ' ' || coalesce(c.apellidos,''))`, 'ct.codigo_verificacion', { col: 'v.patente', limpiar: true }], req.query.q, p);
+  if (porQ) w.push(porQ);
   const filas = await q(`SELECT ct.id, ct.folio, ct.estado, ct.creado_en, ct.firmado_en, ct.firmante_nombre, ct.pdf_archivo_id, ct.codigo_verificacion, ct.reserva_id,
       r.folio AS reserva_folio, r.estado AS reserva_estado, r.inicio, r.fin, trim(c.nombre || ' ' || coalesce(c.apellidos,'')) AS cliente, v.patente, v.marca, v.modelo
     FROM contratos ct JOIN reservas r ON r.id = ct.reserva_id LEFT JOIN clientes c ON c.id = r.cliente_id LEFT JOIN vehiculos v ON v.id = r.vehiculo_id
-    WHERE ${w.join(' AND ')} ORDER BY ct.creado_en DESC LIMIT 500`, p);
+    WHERE ${w.join(' AND ')} ORDER BY ct.creado_en DESC, ct.id DESC ${tramo(req).sql}`, p);
   const totales = await uno(`SELECT count(*)::int AS total, count(*) FILTER (WHERE estado = 'pendiente_firma')::int AS pendiente_firma,
       count(*) FILTER (WHERE estado = 'firmado')::int AS firmado, count(*) FILTER (WHERE estado = 'anulado')::int AS anulado FROM contratos WHERE empresa_id = $1`, [E]);
   res.json({ contratos: filas, totales });

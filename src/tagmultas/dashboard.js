@@ -46,7 +46,7 @@ export class ErrorDashboard extends Error {
 
 export async function llamar(config, ruta, params = {}, timeout = 30000) {
   if (!config?.url) throw new ErrorDashboard('Falta la URL del dashboard', 0);
-  if (!config?.api_key && !config?.token_plataforma) throw new ErrorDashboard('Conecta primero la plataforma GPS (Configuración › Integraciones): el dashboard usa esa misma conexión', 0);
+  if (!config?.api_key && !config?.token_plataforma) throw new ErrorDashboard('Conecta primero la plataforma GPS (Configuración › Conexiones): el dashboard usa esa misma conexión', 0);
   const u = new URL(`${String(config.url).replace(/\/+$/, '')}/api/integracion/v1/${ruta}`);
   for (const [k, v] of Object.entries(params)) if (v != null && v !== '') u.searchParams.set(k, v);
   let r;
@@ -61,7 +61,7 @@ export async function llamar(config, ruta, params = {}, timeout = 30000) {
     const det = j?.error || j?.mensaje;
     // Con la conexión de la plataforma GPS (sin clave), los rechazos se explican con qué hacer.
     const porToken = !config.api_key && {
-      401: 'la conexión con la plataforma GPS venció o fue revocada: vuelve a conectarla en Configuración › Integraciones',
+      401: 'la conexión con la plataforma GPS venció o fue revocada: vuelve a conectarla en Configuración › Conexiones',
       403: j?.codigo === 'CLIENTE_NO_REGISTRADO' ? 'tu usuario de la plataforma GPS no está registrado en el dashboard Síguelo: pide a soporte Síguelo que lo active' : null,
       503: j?.codigo === 'PLATAFORMA_NO_DISPONIBLE' ? 'la plataforma GPS no respondió al validar la conexión (se reintentará)' : null
     }[r.status];

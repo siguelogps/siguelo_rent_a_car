@@ -254,7 +254,8 @@ test('conector del dashboard con la conexión de la plataforma GPS: X-Token-Plat
     assert.equal(vistas[0]['X-Cuenta-Plataforma'], 'lite');
     assert.equal(vistas[0]['X-Api-Key'], undefined);
     respuesta = { status: 401, cuerpo: { ok: false, codigo: 'TOKEN_INVALIDO', error: 'x' } };
-    await assert.rejects(() => dash.salud(config), /vuelve a conectarla en Configuración › Integraciones/);
+    // fase 1 (1-nov): en pantalla se dice «Conexiones», no «Integraciones».
+    await assert.rejects(() => dash.salud(config), /vuelve a conectarla en Configuración › Conexiones/);
     respuesta = { status: 403, cuerpo: { ok: false, codigo: 'CLIENTE_NO_REGISTRADO', error: 'x' } };
     await assert.rejects(() => dash.salud(config), /no está registrado en el dashboard Síguelo/);
     // Con clave de integración manda la clave

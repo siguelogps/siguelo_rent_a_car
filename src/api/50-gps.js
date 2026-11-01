@@ -62,7 +62,7 @@ r.get('/gps/vehiculos/:id', requiere('gps'), async (req, res) => {
 
 r.post('/gps/sincronizar', requiere('gps', 'editar'), async (req, res) => {
   const { config } = await leer(req.empresaId, 'gps');
-  if (!config.token) throw new ErrorHttp(400, 'Primero configura la plataforma GPS en Configuración › Integraciones');
+  if (!config.token) throw new ErrorHttp(400, 'Primero configura la plataforma GPS en Configuración › Conexiones');
   try {
     const resultado = await sincronizarEmpresa(req.empresaId);
     await registrar(req, 'gps_sincronizado', 'gps', null, resultado);
@@ -101,7 +101,7 @@ r.post('/gps/alertas/:id/atender', requiere('gps'), puedeAtender, async (req, re
 // ── Asignar unidades de la plataforma a vehículos ──
 r.get('/gps/unidades', requiere('gps', 'editar'), async (req, res) => {
   const { config } = await leer(req.empresaId, 'gps');
-  if (!config.token) throw new ErrorHttp(400, 'Primero configura la plataforma GPS en Configuración › Integraciones');
+  if (!config.token) throw new ErrorHttp(400, 'Primero configura la plataforma GPS en Configuración › Conexiones');
   let unidades;
   try { unidades = await leerUnidades(req.empresaId, { config, conSensores: false }); }
   catch (e) { throw new ErrorHttp(502, e.message); }

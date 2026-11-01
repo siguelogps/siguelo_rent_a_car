@@ -4,6 +4,8 @@
 //                      const yo = await iniciarPagina({ activo: 'reservas', titulo: 'Reservas' });
 import { esNativa, guardarYCompartir, abrirArchivo } from '/nativa.js';
 import { instalarPaginador } from '/paginador.js';
+import { instalarSelectorBuscable, sinTildes, calzaPalabras } from '/selector-buscable.js'; // 1-nov: todo <select> de 8 opciones o más con buscador por palabras
+export { instalarSelectorBuscable, convertirSelect, revisarSelectores } from '/selector-buscable.js'; // para las páginas públicas (reservar), que no pasan por iniciarPagina()
 
 export { esNativa, abrirArchivo };
 
@@ -109,8 +111,9 @@ export const documento = (tipo, doc) => (tipo === 'rut' ? rut(doc) : `${tipo ===
 // ── Búsqueda por palabras (fase 1 de estandarización, 1-nov-2026) ──
 // Cada palabra escrita tiene que aparecer, en cualquier orden, sin importar mayúsculas ni tildes: «juan perez» encuentra
 // a «Juan Carlos Pérez González». Es lo mismo que hace el servidor con sin_tildes() (src/busqueda.js).
-export const sinTildes = (s) => String(s ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ').trim();
-export const calzaPalabras = (texto, q) => { const t = sinTildes(texto); return sinTildes(q).split(' ').filter(Boolean).every((p) => t.includes(p)); };
+// La definición vive en selector-buscable.js (que no puede importar comun.js para probarse en Node); aquí se reexporta
+// para que las pantallas sigan importándola de comun.js como siempre.
+export { sinTildes, calzaPalabras };
 
 // ── Campos obligatorios (fase 1) ──
 // La marca « *» va al final de la etiqueta y la pone un solo lugar, no cada pantalla a mano: cualquier control con
@@ -311,6 +314,7 @@ export async function iniciarPagina({ activo, titulo = '' } = {}) {
   if (YO.modo !== 'backoffice') activarBuscador(app);
   // Fase 1 (1-nov): toda lista pagina de a 50 (paginador.js) y todo campo obligatorio lleva « *» (ver arriba).
   instalarPaginador();
+  instalarSelectorBuscable(); // 1-nov (maqueta aprobada por Pablo): todo <select> de 8 opciones o más tiene buscador (public/selector-buscable.js)
   instalarObligatorios();
   return YO;
 }

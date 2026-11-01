@@ -57,7 +57,9 @@
 tr.bo-apagada td { color: var(--muted); }
 tr.bo-apagada .bo-cli b { color: var(--muted); }
 .bo-salud { display: inline-flex; gap: 4px; }
-.bo-salud i { width: 22px; height: 22px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; font: 600 10px/1 var(--mono); font-style: normal; }
+/* Fase 2 (1-nov): la letra dice cuál conexión y el signo cómo está (✓ funciona · … en preparación · ! falla · – no contratada). */
+.bo-salud i { height: 22px; padding: 0 6px; border-radius: 6px; display: inline-flex; align-items: center; justify-content: center; gap: 3px; font: 600 10px/1 var(--mono); font-style: normal; }
+.bo-salud i b { font-weight: 600; }
 .bo-salud i.ok { background: var(--green-soft); color: var(--tx-verde); }
 .bo-salud i.mal { background: var(--red-soft); color: var(--tx-rojo); }
 .bo-salud i.no { background: var(--line-2); color: var(--muted); opacity: .7; }

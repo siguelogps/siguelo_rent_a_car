@@ -5,6 +5,10 @@
 import { esNativa, guardarYCompartir, abrirArchivo } from '/nativa.js';
 import { instalarPaginador } from '/paginador.js';
 import { instalarSelectorBuscable, sinTildes, calzaPalabras } from '/selector-buscable.js'; // 1-nov: todo <select> de 8 opciones o más con buscador por palabras
+// Fase 2 del estándar (1-nov, maqueta aprobada): menú por grupos, botón «?» solo con manual, pestañas base y franjas viven en
+// /estandar.js (módulo puro, probado en Node); aquí solo se pintan.
+import { MENU, BACKOFFICE_MENU, manualDe, botonAyuda, htmlFranja, vieneDeOnBoard } from '/estandar.js';
+export { MENU, BACKOFFICE_MENU, PESTANAS_BASE, ordenarPestanas } from '/estandar.js';
 export { instalarSelectorBuscable, convertirSelect, revisarSelectores } from '/selector-buscable.js'; // para las páginas públicas (reservar), que no pasan por iniciarPagina()
 
 export { esNativa, abrirArchivo };
@@ -49,13 +53,7 @@ export const ICONOS = {
   camara: I('<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3.5"/>')
 };
 
-// Menú: [grupo, [[módulo/permiso, nombre, href]]]
-const MENU = [
-  ['Operación', [['inicio', 'Inicio', '/inicio'], ['reservas', 'Reservas', '/reservas'], ['patio', 'Entregas y devoluciones', '/patio'], ['contratos', 'Contratos', '/contratos'], ['clientes', 'Clientes', '/clientes']]],
-  ['Flota', [['flota', 'Vehículos', '/vehiculos'], ['mantencion', 'Mantención', '/mantencion'], ['gps', 'Plataforma GPS', '/gps']]],
-  ['Finanzas', [['pagos', 'Pagos y garantías', '/pagos'], ['liquidaciones', 'Liquidaciones', '/liquidaciones'], ['facturacion', 'Facturación', '/facturacion'], ['incidentes', 'Incidentes y daños', '/incidentes'], ['tag_multas', 'TAG y multas', '/tag-multas']]],
-  ['Gestión', [['reportes', 'Reportes', '/reportes'], ['tarifas', 'Tarifas', '/tarifas'], ['apps', 'Apps', '/apps'], ['configuracion', 'Configuración', '/configuracion']]]
-];
+// El menú del cliente (MENU) y el del backoffice (BACKOFFICE_MENU) están en /estandar.js.
 
 // ── API ──
 export async function api(ruta, { method, body, crudo = false } = {}) {
@@ -240,11 +238,6 @@ export const puede = (modulo, accion = 'ver') => { const n = YO?.permisos?.[modu
 
 // Páginas del backoffice Síguelo (sin empresa). Cualquier otra página exige estar dentro de una empresa.
 // 22-oct (espec. Backoffice): menú propio del equipo Síguelo, oscuro y separado del menú del cliente, con franja negra.
-const BACKOFFICE_MENU = [
-  ['Clientes', [['empresas', 'Clientes', '/empresas', 'clientes'], ['empresa-nueva', 'Nuevo cliente', '/empresa-nueva'], ['solicitudes', 'Solicitudes', '/solicitudes', 'solicitudes']]],
-  ['Catálogo', [['planes', 'Planes y módulos', '/planes'], ['apps-marca', 'Apps con marca', '/apps-marca'], ['conexiones', 'Conexiones generales', '/conexiones']]],
-  ['Control', [['bitacora-global', 'Bitácora global', '/bitacora-global'], ['equipo', 'Equipo Síguelo', '/equipo']]]
-];
 const BACKOFFICE = BACKOFFICE_MENU.flatMap(([, items]) => items);
 const NIVEL = { admin: 'admin', usa: 'usa', ve: 've' };
 
@@ -254,7 +247,8 @@ const NIVEL = { admin: 'admin', usa: 'usa', ve: 've' };
 const LOGO_MENU = '<img class="logo logo-onrent logo-onrent-claro" src="/img/siguelo-onrent-b-claro.png" alt="Síguelo GPS · On Rent" width="400" height="124">'
   + '<img class="logo logo-onrent logo-onrent-oscuro" src="/img/siguelo-onrent-b-oscuro.png" alt="Síguelo GPS · On Rent" width="400" height="124">';
 
-export async function iniciarPagina({ activo, titulo = '' } = {}) {
+// manual: ruta del manual de la pantalla (abre el botón «?» de la barra). Sin manual, el botón no se muestra.
+export async function iniciarPagina({ activo, titulo = '', manual = null } = {}) {
   YO = await api('yo');
   // Franja «Abierto desde tu plataforma de rastreo» (solo si la sesión vino del menú Apps; ver franja-plataforma.js).
   if (!document.getElementById('rc-franja-plataforma')) { const s = document.createElement('script'); s.id = 'rc-franja-plataforma'; s.src = '/franja-plataforma.js'; document.head.appendChild(s); }
@@ -271,7 +265,7 @@ export async function iniciarPagina({ activo, titulo = '' } = {}) {
   const plegada = (() => { try { return localStorage.getItem('rc_menu_plegado') === '1'; } catch { return false; } })();
   const app = document.createElement('div');
   app.className = `app${plegada ? ' plegada' : ''}${bo ? ' bo' : ''}`;
-  const fr = franjaSiguelo(bo);
+  const fr = franjaSiguelo();
   app.innerHTML = `
   <nav class="menu" aria-label="Menú principal">
     <div class="menu-marca">${LOGO_MENU}<img class="marca-pin" src="/img/logo-pin.png" alt=""><button type="button" class="btn-plegar" aria-label="Plegar menú">${ICONOS.plegar}</button></div>
@@ -283,19 +277,20 @@ export async function iniciarPagina({ activo, titulo = '' } = {}) {
       return vis.length ? `<div class="menu-grupo">${g}</div>${vis.map(([m, n, href]) => `<a class="item" href="${href}" title="${n}"${m === activo ? ' aria-current="page"' : ''}>${ICONOS[m]}<span>${n}</span></a>`).join('')}` : '';
     }).join('')}
     <div class="menu-pie">
-      <button type="button" class="menu-usuario" id="rc-usuario"><span class="avatar">${esc(iniciales)}</span><div><b>${esc(YO.usuario.nombre)}</b><span>${YO.siguelo ? `Equipo Síguelo · ${esc(NIVEL[YO.siguelo_nivel] || '')}` : esc(YO.usuario.rol_nombre)}</span></div></button>
+      <button type="button" class="menu-usuario" id="rc-usuario"><span class="avatar">${esc(iniciales)}</span><div><b>${esc(YO.usuario.nombre)}</b><span>${YO.siguelo ? `Síguelo · ${esc(NIVEL[YO.siguelo_nivel] || '')}` : esc(YO.usuario.rol_nombre)} · Mi cuenta</span></div></button>
     </div>
   </nav>
   <div class="principal">
     ${fr}
     <header class="barra"${fr ? ' style="top:var(--bo-franja-alto)"' : ''}>
       <button type="button" class="btn-icono btn-menu-movil" aria-label="Abrir menú">${ICONOS.menu}</button>
-      <span class="titulo">${esc(titulo)}</span>
+      <span class="titulo">${esc(titulo)}</span>${botonAyuda(manualDe(activo, manual))}
       ${bo ? '' : `<div class="buscar">${ICONOS.buscar}<input id="rc-buscar" placeholder="Buscar patente, RUT, cliente o folio…" autocomplete="off"><div class="buscar-res" id="rc-buscar-res" hidden></div></div>`}
       <div class="acciones">
         <span id="rc-tema"></span>
         ${e?.marcha_blanca ? '<a class="chip rc-marcha" href="/configuracion#conexiones" title="Correos, WhatsApp, cobros y documentos tributarios detenidos hasta que Síguelo GPS la termine">● Marcha blanca</a>' : ''}
         ${e?.estado === 'baja' ? `<span class="chip error" title="Puedes revisar y exportar tus datos hasta esa fecha">Cuenta dada de baja · exportar hasta ${fecha(e.exportar_hasta)}</span>` : ''}
+        <button type="button" class="rc-avatar" id="rc-avatar" title="Mi cuenta" aria-label="Mi cuenta"><span class="avatar">${esc(iniciales)}</span></button>
       </div>
     </header>
   </div>`;
@@ -307,6 +302,9 @@ export async function iniciarPagina({ activo, titulo = '' } = {}) {
   app.querySelector('.btn-plegar').onclick = () => { app.classList.toggle('plegada'); try { localStorage.setItem('rc_menu_plegado', app.classList.contains('plegada') ? '1' : '0'); } catch { /* sin almacenamiento */ } };
   app.querySelector('.btn-menu-movil').onclick = () => app.classList.toggle('menu-abierto');
   app.querySelector('#rc-usuario').onclick = abrirMiCuenta;
+  app.querySelector('#rc-avatar').onclick = abrirMiCuenta;
+  // Enlaces viejos a «Configuración › Mi clave» (#mi-clave): la clave se cambia en «Mi cuenta».
+  if (location.hash === '#mi-clave') { history.replaceState(null, '', location.pathname); setTimeout(abrirMiCuenta, 0); }
   // Tema Automático / Claro / Oscuro (lo maneja /tema.js, cargado en el <head>).
   if (window.SigueloTema) app.querySelector('#rc-tema').replaceWith(window.SigueloTema.boton());
   else app.querySelector('#rc-tema').remove();
@@ -319,65 +317,76 @@ export async function iniciarPagina({ activo, titulo = '' } = {}) {
   return YO;
 }
 
-// Franja superior del equipo Síguelo: negra en el backoffice; azul en «Ver como» (solo lectura); amarilla al «Operar».
-// El color dice de un vistazo si lo que hagas tiene efecto. Mientras se opera no aparece el menú Síguelo: se vuelve con la franja.
-function franjaSiguelo(bo) {
-  if (bo) return `<div class="bo-franja" role="note">${ICONOS.persona}<span><b>Equipo Síguelo · On Rent</b> · backoffice de clientes</span><span class="bo-pase">${YO.siguelo_nivel ? `Nivel On Board <i>${esc(YO.siguelo_nivel)}</i> · ` : ''}<a href="https://admin.siguelogps.com">Volver a On Board</a></span></div>`;
-  if (!YO.siguelo_modo) return '';
-  const nombre = esc(YO.empresa?.nombre || '');
-  if (YO.siguelo_modo === 'ver') return `<div class="bo-franja ver" role="status">${ICONOS.ojo}<span><b>Ver como · ${nombre}</b> · solo lectura, no puedes cambiar nada</span><button type="button" class="btn" id="bo-volver">← Volver al backoffice</button></div>`;
-  return `<div class="bo-franja operar" role="status">${ICONOS.persona}<span><b>Operando como Síguelo en ${nombre}</b> · todo lo que hagas queda en la bitácora del cliente con tu nombre</span><span class="bo-pase">${YO.siguelo_desde ? `Desde ${hora(YO.siguelo_desde)} · ` : ''}motivo: ${esc(YO.siguelo_motivo || '—')}</span><button type="button" class="btn" id="bo-volver">← Volver al backoffice</button></div>`;
+// Franja superior del equipo Síguelo: negra en el backoffice y al «Operar»; azul en «Ver como» (solo lectura). Fase 2 del
+// estándar: el amarillo queda para la marcha blanca. El HTML lo arma /estandar.js (probado en Node); aquí se le pasa la sesión.
+function franjaSiguelo() {
+  let cookie = '';
+  try { cookie = document.cookie; } catch { /* sin cookies */ }
+  return htmlFranja(YO, { esc, hora, iconos: ICONOS, desdeOnBoard: vieneDeOnBoard(cookie) });
 }
 
-// «Mi cuenta» (igual que en los demás sistemas Síguelo): cambiar la clave y cerrar sesión.
+// «Mi cuenta» (fase 2 del estándar, igual en toda la familia Síguelo): nombre, correo y rol; «Cambiar mi clave» (plegado);
+// Tema (Claro · Automático · Oscuro, con /tema.js); «Eliminar mi cuenta» (lo exigen las tiendas); y «Cerrar sesión» al final.
 const OJO = I('<path d="M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/>', ' width="18" height="18"');
-function abrirMiCuenta() {
+const TEMAS = [['claro', 'Claro'], ['auto', 'Automático'], ['oscuro', 'Oscuro']];
+export function abrirMiCuenta() {
+  if (!YO || document.querySelector('.rc-cuenta')) return;
   const campo = (name, etiqueta, ac, oblig = false) => `<label class="etiqueta">${etiqueta}<span class="rc-clave"><input class="campo" type="password" name="${name}" autocomplete="${ac}"${oblig ? ' data-obligatorio' : ''}><button type="button" class="rc-ojo" aria-label="Mostrar u ocultar la clave" tabindex="-1">${OJO}</button></span></label>`;
+  const pref = window.SigueloTema?.preferencia() || 'auto';
+  const rol = YO.siguelo ? `Equipo Síguelo · ${NIVEL[YO.siguelo_nivel] || ''}` : YO.usuario.rol_nombre || '';
   const fondo = document.createElement('div');
   fondo.className = 'modal-fondo';
-  fondo.innerHTML = `<form class="modal" style="width:min(720px,100%)" role="dialog" aria-modal="true" aria-label="Mi cuenta">
+  fondo.innerHTML = `<form class="modal rc-cuenta" style="width:min(560px,100%)" role="dialog" aria-modal="true" aria-label="Mi cuenta">
     <div class="modal-cab"><h2>Mi cuenta</h2><button type="button" class="btn-icono" data-cerrar aria-label="Cerrar">${ICONOS.x}</button></div>
     <div class="modal-cuerpo">
-      <p class="peq muted">${esc(YO.usuario.nombre)} · ${esc(YO.usuario.correo)}</p>
-      ${campo('actual', 'Clave actual', 'current-password', true)}
-      ${campo('nueva', 'Clave nueva (mínimo 10 caracteres)', 'new-password', true)}
-      ${campo('repite', 'Repite la clave nueva', 'new-password', true)}
-      <div class="aviso error" data-err hidden></div>
+      <div class="rc-cuenta-quien"><span class="avatar">${esc(YO.usuario.nombre.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase())}</span><div><b>${esc(YO.usuario.nombre)}</b><span class="peq muted">${esc(YO.usuario.correo)} · ${esc(rol)}</span></div></div>
+      <details class="rc-cuenta-clave" id="rc-cuenta-clave"><summary class="btn">Cambiar mi clave</summary>
+        <div class="rc-cuenta-form">
+          ${campo('actual', 'Clave actual', 'current-password', true)}
+          ${campo('nueva', 'Clave nueva (mínimo 10 caracteres)', 'new-password', true)}
+          ${campo('repite', 'Repite la clave nueva', 'new-password', true)}
+          <div class="aviso error" data-err hidden></div>
+          <div class="cf-pie"><button type="submit" class="btn primario">${ICONOS.ok} Cambiar clave</button></div>
+        </div></details>
+      ${window.SigueloTema ? `<div class="rc-cuenta-tema"><span>Tema</span><div class="segmentado" role="radiogroup" aria-label="Tema">${TEMAS.map(([k, t]) => `<button type="button" role="radio" data-tema="${k}" aria-pressed="${pref === k}" aria-checked="${pref === k}">${t}</button>`).join('')}</div></div>` : ''}
       ${YO.usuario.rol === 'superadmin' ? '' : `<details class="rc-eliminar-cuenta"><summary>Eliminar mi cuenta</summary>
         <p class="peq muted">Se borran tu nombre, correo, teléfono y clave, y se cierran tus sesiones en todos los equipos. No se puede deshacer. Los contratos, inspecciones y movimientos que hiciste quedan en la empresa a nombre de «Usuario eliminado».</p>
         <label class="etiqueta">Escribe tu clave para confirmar<input class="campo" type="password" name="clave_eliminar" autocomplete="current-password" data-obligatorio></label>
+        <div class="aviso error" data-err-el hidden></div>
         <button type="button" class="btn peligro" data-eliminar>Eliminar mi cuenta definitivamente</button></details>`}
     </div>
-    <div class="modal-pie rc-pie-cuenta"><button type="button" class="btn" data-salir>${ICONOS.salir} Cerrar sesión</button><button type="submit" class="btn primario">${ICONOS.ok} Cambiar clave</button></div></form>`;
+    <div class="modal-pie"><button type="button" class="btn peligro" data-salir>${ICONOS.salir} Cerrar sesión</button></div></form>`;
   const cerrar = () => { fondo.remove(); document.removeEventListener('keydown', tecla); };
   const tecla = (e) => { if (e.key === 'Escape') cerrar(); };
   document.addEventListener('keydown', tecla);
+  const f = fondo.querySelector('form'), err = fondo.querySelector('[data-err]'), errEl = fondo.querySelector('[data-err-el]');
   fondo.addEventListener('click', async (e) => {
     if (e.target.closest('[data-cerrar]')) return cerrar(); // un clic fuera no cierra (fase 1): se perdería lo escrito
     const ojo = e.target.closest('.rc-ojo');
     if (ojo) { const inp = ojo.previousElementSibling; inp.type = inp.type === 'password' ? 'text' : 'password'; return; }
+    const tema = e.target.closest('[data-tema]');
+    if (tema) { window.SigueloTema?.elegir(tema.dataset.tema); fondo.querySelectorAll('[data-tema]').forEach((b) => { const on = b === tema; b.setAttribute('aria-pressed', on); b.setAttribute('aria-checked', on); }); return; }
     // Si la sesión se abrió desde el menú Apps de la plataforma GPS, «Cerrar sesión» vuelve allá (franja-plataforma.js).
     if (e.target.closest('[data-salir]')) { await api('salir', { body: {} }).catch(() => {}); location.href = (window.salidaPlataforma && window.salidaPlataforma()) || '/ingresar'; }
     if (e.target.closest('[data-eliminar]')) {
-      err.hidden = true;
+      errEl.hidden = true;
       const clave = f.clave_eliminar.value;
-      if (!clave) { err.textContent = 'Escribe tu clave para confirmar.'; err.hidden = false; return; }
+      if (!clave) { errEl.textContent = 'Escribe tu clave para confirmar.'; errEl.hidden = false; return; }
       if (!await confirmar('Eliminar mi cuenta', 'Tu cuenta se elimina ahora y no podrás volver a ingresar con ella. ¿Continuar?', { boton: 'Eliminar', peligro: true })) return;
       try { await api('configuracion/eliminar-mi-cuenta', { body: { clave } }); location.href = '/ingresar?cuenta=eliminada'; }
-      catch (e2) { err.textContent = e2.message; err.hidden = false; }
+      catch (e2) { errEl.textContent = e2.message; errEl.hidden = false; }
     }
   });
-  const f = fondo.querySelector('form'), err = fondo.querySelector('[data-err]');
   f.onsubmit = async (e) => {
     e.preventDefault(); err.hidden = true;
     const actual = f.actual.value, nueva = f.nueva.value;
     const mal = !actual ? 'Escribe tu clave actual.' : nueva.length < 10 ? 'La clave nueva debe tener al menos 10 caracteres.' : nueva !== f.repite.value ? 'Las claves nuevas no coinciden.' : null;
     if (mal) { err.textContent = mal; err.hidden = false; return; }
-    try { await api('configuracion/mi-clave', { body: { actual, nueva } }); cerrar(); toast('Clave cambiada', 'ok'); }
+    try { await api('configuracion/mi-clave', { body: { actual, nueva } }); cerrar(); toast('Clave cambiada. Se cerraron tus otras sesiones.', 'ok'); }
     catch (e2) { err.textContent = e2.message; err.hidden = false; }
   };
+  fondo.querySelector('#rc-cuenta-clave').addEventListener('toggle', (ev) => { if (ev.target.open) f.actual.focus(); });
   document.body.appendChild(fondo);
-  f.actual.focus();
 }
 
 function activarBuscador(app) {

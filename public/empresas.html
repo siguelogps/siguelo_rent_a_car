@@ -28,6 +28,7 @@ import { iniciarPagina, api, esc, fecha, hora, rut, modal, toastError, calzaPala
 const yo = await iniciarPagina({ activo: 'empresas', titulo: 'Clientes' });
 const LETRA = { gps: 'G', simpleapi: 'F', correo: 'C', whatsapp: 'W', dashboard_siguelo: 'O' };
 const NOMBRE_SALUD = { ok: 'funciona', esp: 'en preparación', mal: 'falla', no: 'no contratada' };
+const SIMBOLO_SALUD = { ok: '✓', esp: '…', mal: '!', no: '–' }; // fase 2: la letra dice cuál y el signo cómo está
 const F = { estado: 'todos', plan: '', integ: '', texto: '' };
 let D = { clientes: [], tipos: [] };
 if (!yo.puede_operar) document.getElementById('nueva').hidden = true;
@@ -80,7 +81,7 @@ function pintar() {
       <td>${chipEstado(e)}</td>
       <td><span class="chip">${esc(e.plan_nombre || e.plan)}</span>${(e.modulos_extra || []).includes('app_propia') ? ' <span class="chip marca">App con marca</span>' : ''}</td>
       <td class="mono">${e.vehiculos}</td><td class="mono">${e.usuarios}</td>
-      <td><span class="bo-salud">${D.tipos.map((x) => `<i class="${e.salud[x.tipo]}" title="${esc(x.nombre)}: ${NOMBRE_SALUD[e.salud[x.tipo]]}">${LETRA[x.tipo] || '?'}</i>`).join('')}</span></td>
+      <td><span class="bo-salud">${D.tipos.map((x) => `<i class="${e.salud[x.tipo]}" title="${esc(x.nombre)}: ${NOMBRE_SALUD[e.salud[x.tipo]]}"><b>${LETRA[x.tipo] || '?'}</b>${SIMBOLO_SALUD[e.salud[x.tipo]] || '–'}</i>`).join('')}</span></td>
       <td class="mono peq" style="white-space:nowrap">${cuando(e.ultima_actividad)}</td>
       <td><div class="bo-acc"><button class="btn peq" data-ver="${e.id}">Ver como</button><button class="btn peq" data-operar="${e.id}"${apagado || !yo.puede_operar ? ' disabled title="A un cliente suspendido o dado de baja solo se puede «Ver como»"' : ''}>Operar</button><a class="btn peq primario" href="/empresas/${e.id}">Abrir</a></div></td></tr>`;
   }).join('') || '<tr><td colspan="8" class="rc-vacio">Sin clientes con estos filtros</td></tr>';
@@ -98,7 +99,7 @@ main.addEventListener('click', async (ev) => {
   const o = ev.target.closest('[data-operar]');
   if (o) {
     const c = D.clientes.find((x) => x.id === Number(o.dataset.operar));
-    modal({ titulo: `Operar en ${c.nombre}`, html: `<p class="peq muted">Actúas como administrador del cliente. La franja amarilla queda arriba todo el rato y cada cambio va a la bitácora del cliente con tu nombre y este motivo.</p>
+    modal({ titulo: `Operar en ${c.nombre}`, html: `<p class="peq muted">Actúas como administrador del cliente. La franja negra queda arriba todo el rato y cada cambio va a la bitácora del cliente con tu nombre y este motivo.</p>
       <label class="etiqueta">Motivo<input class="campo" name="motivo" placeholder="Soporte, ticket 1187" maxlength="300" data-obligatorio></label>`,
     botones: [{ texto: 'Cancelar' }, { texto: 'Operar', clase: 'contorno', accion: async (cu) => { const r = await api(`backoffice/clientes/${c.id}/entrar`, { body: { modo: 'operar', motivo: cu.querySelector('[name=motivo]').value } }); location.href = r.destino; } }] });
   }

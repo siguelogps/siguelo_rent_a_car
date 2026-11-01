@@ -40,13 +40,14 @@ r.post('/ingresar', async (req, res) => {
   // App nativa (Android): pide { nativa: true } y recibe el token de la sesión en la respuesta, no en una cookie.
   const nativa = req.body.nativa === true;
   const token = await crearSesion(res, { ...u, empresa_id: empresaId }, req.headers['user-agent'], { nativa });
+  if (!nativa) res.clearCookie('desde_onboard', { path: '/' }); // con clave no se vino de On Board (ver 09-acceso-admin.js)
   await registrar({ usuario: u, empresaId, ip: req.ip }, nativa ? 'ingreso_app' : 'ingreso', 'usuario', u.id);
   // Si vino del menú Apps de la plataforma GPS sin estar vinculado, este ingreso lo vincula (misma empresa, 15 min).
   if (!nativa) await vincularTrasIngreso(req, res, { ...u, empresa_id: empresaId });
   res.json({ ok: true, destino: esSiguelo(u.rol) ? '/empresas' : u.rol === 'patio' ? '/patio' : '/inicio', ...(nativa ? { token } : {}) });
 });
 
-r.post('/salir', async (req, res) => { await cerrarSesion(req, res); res.json({ ok: true }); });
+r.post('/salir', async (req, res) => { await cerrarSesion(req, res); res.clearCookie('desde_onboard', { path: '/' }); res.json({ ok: true }); });
 
 r.get('/yo', requiere(null, 'ver', { sinEmpresa: true }), async (req, res) => {
   const empresa = req.empresaId ? await uno('SELECT id, nombre, slug, rut, razon_social, logo_clave, color, marcha_blanca, plan, ajustes, estado, exportar_hasta FROM empresas WHERE id = $1', [req.empresaId]) : null;

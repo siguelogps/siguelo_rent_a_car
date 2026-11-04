@@ -102,7 +102,7 @@ jobs:
         with:
           name: on-rent-prueba-${{ env.VERSION_NAME }}
           path: on-rent-prueba-*.apk
-          retention-days: 14
+          retention-days: 7
           if-no-files-found: error
 
   firmado:

@@ -87,8 +87,13 @@ function descifrarDatos(b) {
 
 const EXT = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp', 'application/pdf': 'pdf', 'image/svg+xml': 'svg', 'application/vnd.android.package-archive': 'apk', 'application/vnd.android.aab': 'aab' };
 
-export async function guardarArchivo({ empresaId, entidad, entidadId = null, tipo = null, nombre = null, mime = 'application/octet-stream', datos, meta = {}, usuarioId = null, maximoMb = 15, cifrado = false }) {
+// svgServidor (5-nov, revisión exhaustiva RNT-02): true SOLO para un SVG que arma el propio servidor (los dibujos de la demo
+// con su sello). Queda marcado en meta.svg_servidor y entregarArchivo() lo muestra en pantalla, con una CSP que no deja
+// correr nada. Nadie puede ponerse esa marca por `meta` (lo que llega del navegador por /api/archivos): se borra siempre.
+export async function guardarArchivo({ empresaId, entidad, entidadId = null, tipo = null, nombre = null, mime = 'application/octet-stream', datos, meta = {}, usuarioId = null, maximoMb = 15, cifrado = false, svgServidor = false }) {
   if (!Buffer.isBuffer(datos)) throw new Error('datos debe ser un Buffer');
+  const { svg_servidor: _ignorada, ...metaLimpia } = meta || {};
+  meta = { ...metaLimpia, ...(svgServidor === true && mime === 'image/svg+xml' && !cifrado ? { svg_servidor: true } : {}) };
   if (datos.length > maximoMb * 1024 * 1024) throw new Error(`El archivo supera los ${maximoMb} MB`);
   const d = await driverParaGuardar(empresaId);
   const clave = `${d.prefijo}/${empresaId}/${entidad}/${new Date().toISOString().slice(0, 7)}/${crypto.randomUUID()}.${cifrado ? 'cif' : (EXT[mime] || 'bin')}`;
@@ -133,9 +138,15 @@ export function exigirMime(mime, permitidos, mensaje = 'Sube una foto (JPG, PNG 
 }
 
 // Manda un archivo leído con leerArchivo(). Solo fotos y PDF van «inline» con su tipo real; el resto, como descarga binaria.
+// RNT-02: el único SVG que se muestra es el que armó el servidor (meta.svg_servidor, ver guardarArchivo); va con una CSP
+// «sandbox» sin scripts, así que aunque se abra directo en el navegador no puede correr nada en el origen del sistema.
+export const CSP_SVG = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; font-src 'self'; sandbox";
+export const svgDelServidor = (fila) => String(fila?.mime || '').toLowerCase() === 'image/svg+xml' && fila?.meta?.svg_servidor === true;
 export function entregarArchivo(res, { fila, datos }, { nombre = null, cache = 'private, no-cache', descarga = false } = {}) {
   const mime = String(fila.mime || '').toLowerCase();
-  const seguro = MIME_EN_PANTALLA.includes(mime);
+  const svg = svgDelServidor(fila);
+  const seguro = MIME_EN_PANTALLA.includes(mime) || svg;
+  if (svg) res.setHeader('Content-Security-Policy', CSP_SVG);
   const archivo = encodeURIComponent(nombre || fila.nombre || 'archivo');
   res.setHeader('Content-Type', seguro ? mime : 'application/octet-stream');
   res.setHeader('X-Content-Type-Options', 'nosniff');

@@ -7,7 +7,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import { levantar } from './ayuda.js';
-import { MENU, BACKOFFICE_MENU, MANUALES, manualDe, botonAyuda, PESTANAS_BASE, ordenarPestanas, htmlFranja, vieneDeOnBoard, COOKIE_ONBOARD } from '../public/estandar.js';
+import { MENU, BACKOFFICE_MENU, MANUALES, manualDe, botonAyuda, PESTANAS_BASE, ordenarPestanas, htmlFranja, vieneDeOnBoard, COOKIE_ONBOARD, sinAcceso, htmlSinAcceso } from '../public/estandar.js';
 
 let t, sop, a;
 before(async () => { t = await levantar(); sop = await t.como('soporte@siguelogps.cl'); a = await t.como('demo@siguelogps.cl'); });
@@ -186,4 +186,25 @@ test('vocabulario: nunca el proveedor en pantalla; «—» para lo desconocido e
     assert.ok(d.empresa.nombre && d.empresa.rut && d.empresa.creado_en && d.uso && typeof d.uso.vehiculos === 'number' && Array.isArray(d.usuarios));
     assert.equal((await a.get('/api/yo')).datos.modo, 'cliente');
   })();
+});
+
+// 5-nov (revisión exhaustiva, RNT-05 y RNT-06): las pantallas sin permiso se abrían por URL y quedaban vacías o colgadas
+// («Cargando…» con TypeError en Configuración para counter, patio y finanzas). Ahora iniciarPagina() muestra un aviso.
+test('guarda por página: cada rol ve el aviso en las pantallas que su permiso no incluye', async () => {
+  const yoDe = async (correo) => (await (await t.como(correo)).get('/api/yo')).datos;
+  const counter = await yoDe('counter@siguelogps.cl'), patio = await yoDe('patio@siguelogps.cl'), finanzas = await yoDe('finanzas@siguelogps.cl');
+  const admin = (await a.get('/api/yo')).datos;
+  for (const yo of [counter, patio, finanzas]) assert.equal(sinAcceso(yo, 'configuracion'), true, `${yo.usuario.rol}: Configuración`);
+  for (const m of ['tarifas', 'pagos', 'liquidaciones', 'facturacion', 'tag_multas', 'reportes', 'apps']) assert.equal(sinAcceso(patio, m), true, `patio: ${m}`);
+  for (const m of ['inicio', 'reservas', 'patio', 'flota', 'incidentes']) assert.equal(sinAcceso(patio, m), false, `patio sí entra a ${m}`);
+  for (const [, items] of MENU) for (const [m] of items) assert.equal(sinAcceso(admin, m), false, `administrador entra a ${m}`);
+  assert.equal(sinAcceso(finanzas, 'facturacion'), false);
+  assert.equal(sinAcceso({ modo: 'backoffice', permisos: {} }, 'empresas'), false, 'el backoffice no pasa por esta guarda');
+  assert.equal(sinAcceso(patio, 'algo-que-no-es-del-menu'), false);
+  const h = htmlSinAcceso((x) => x, 'Tarifas');
+  assert.match(h, /No tienes acceso a Tarifas/);
+  assert.match(h, /href="\/inicio"/);
+  assert.doesNotMatch(h, /Elegí|Pedí|tenés/, 'español neutro');
+  assert.match(leer('public/comun.js'), /if \(sinAcceso\(YO, activo\)\) \{ main\.innerHTML = htmlSinAcceso\(esc, titulo\); await new Promise/);
+  assert.match(leer('public/configuracion.html'), /if \(!TABS\.length\)/);
 });

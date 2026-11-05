@@ -53,6 +53,31 @@ test('«Mi clave» y «Eliminar mi cuenta»: 6 claves malas seguidas bloquean 15
   assert.equal((await fin.get('/api/yo')).estado, 200);
 });
 
+// 5-nov (revisión exhaustiva, RNT-02): las fotos de la demo (dibujos SVG con sello) se entregaban como descarga desde el
+// arreglo del 31-oct y en Incidentes, Vehículos y la devolución se veían rotas. Toda imagen de la demo tiene que verse.
+test('demo: todos sus archivos se muestran en pantalla; solo el SVG que armó el servidor, con CSP sin scripts', async () => {
+  const admin = await t.como('demo@siguelogps.cl');
+  const { MIME_EN_PANTALLA, svgDelServidor } = await import('../src/almacenamiento/index.js');
+  const E = (await t.db.uno(`SELECT id FROM empresas WHERE slug = 'andes-rent'`)).id;
+  const filas = await t.db.q(`SELECT id, mime, meta, nombre FROM archivos WHERE empresa_id = $1 AND (mime LIKE 'image/%' OR entidad IN ('inspeccion', 'dano'))`, [E]);
+  assert.ok(filas.length > 10, `la demo trae fotos (${filas.length})`);
+  for (const f of filas) assert.ok(MIME_EN_PANTALLA.includes(f.mime) || svgDelServidor(f), `${f.nombre} (${f.mime}) se tiene que ver en pantalla`);
+  const svgDemo = filas.find((f) => f.mime === 'image/svg+xml');
+  const r = await admin.get(`/api/archivos/${svgDemo.id}`);
+  assert.equal(r.headers.get('content-type'), 'image/svg+xml');
+  assert.match(r.headers.get('content-disposition'), /^inline/);
+  assert.match(r.headers.get('content-security-policy'), /default-src 'none'.*sandbox/);
+  // nadie se pone la marca por `meta`: lo que llega del navegador la pierde (y un SVG subido sigue rechazado)
+  const png = Buffer.from('89504e470d0a1a0a0000000d49484452', 'hex').toString('base64');
+  const sube = await admin.post('/api/archivos', { entidad: 'prueba', nombre: 'x.png', dataUrl: `data:image/png;base64,${png}`, meta: { svg_servidor: true } });
+  assert.equal(sube.estado, 200);
+  assert.equal((await t.db.uno('SELECT meta FROM archivos WHERE id = $1', [sube.datos.id])).meta.svg_servidor, undefined);
+  // un SVG viejo (de antes del 31-oct) sin la marca sigue bajando como binario
+  await t.db.q(`UPDATE archivos SET mime = 'image/svg+xml' WHERE id = $1`, [sube.datos.id]);
+  const viejo = await admin.get(`/api/archivos/${sube.datos.id}`);
+  assert.equal(viejo.headers.get('content-type'), 'application/octet-stream');
+});
+
 test('archivos: un HTML o SVG subido no se sirve como tal; solo fotos y PDF se muestran en pantalla', async () => {
   const admin = await t.como('demo@siguelogps.cl');
   const html = Buffer.from('<script>alert(1)</script>').toString('base64');
@@ -143,10 +168,11 @@ test('POST /api/csp-informe: sin sesión, acepta el formato del navegador, respo
     assert.match(avisos[2], /font-src · bloqueado: https:\/\/ajeno\.example/);
     assert.equal((await fetch(`${t.base}/api/csp-informe`, { method: 'POST', headers: { 'Content-Type': 'application/csp-report' }, body: '"hola"' })).status, 204);
     assert.equal(avisos.length, 3);
-    // Tope por IP: 20 por minuto, después 429
+    // Tope por IP: 20 por minuto. 5-nov (RNT-15): pasado el tope responde 204 y no anota (antes 429, que el navegador
+    // mostraba como error en la consola de cada pantalla); el registro sigue protegido.
     let ultimo = 0;
     for (let i = 0; i < 20; i++) ultimo = (await fetch(`${t.base}/api/csp-informe`, { method: 'POST', headers: { 'Content-Type': 'application/csp-report' }, body: JSON.stringify(informe) })).status;
-    assert.equal(ultimo, 429);
+    assert.equal(ultimo, 204);
     assert.ok(avisos.length <= 20, 'después del tope no se anota más');
   } finally { console.warn = original; }
 });
@@ -172,4 +198,33 @@ test('cuerpo JSON: 2 MB en las rutas comunes (413 en español) y 25 MB solo dond
   for (const [method, path] of [['GET', '/api/archivos'], ['POST', '/api/reservas'], ['POST', '/api/clientes'], ['PUT', '/api/vehiculos/1'], ['POST', '/api/incidentes/4/estado'], ['POST', '/api/ingresar']]) {
     assert.equal(recibeArchivos({ method, path }), false, `${method} ${path}`);
   }
+});
+
+// 5-nov (revisión exhaustiva, RNT-09): descartar un mensaje que no existe (o de otra empresa) respondía 200 vacío.
+test('bandeja de salida: descartar un mensaje inexistente o ajeno responde 404', async () => {
+  const admin = await t.como('demo@siguelogps.cl');
+  assert.equal((await admin.post('/api/salidas/999999/descartar', {})).estado, 404);
+  assert.equal((await admin.post('/api/salidas/abc/descartar', {})).estado, 404);
+  const propia = (await admin.get('/api/salidas')).datos[0];
+  assert.ok(propia, 'la demo trae mensajes en la bandeja');
+  // de otra empresa: el mensaje pasa a otra empresa y la de la sesión ya no lo puede descartar
+  const otra = await t.db.uno(`INSERT INTO empresas (nombre, slug) VALUES ('Otra Rent', 'otra-rent-salidas') RETURNING id`);
+  await t.db.q('UPDATE salidas SET empresa_id = $2 WHERE id = $1', [propia.id, otra.id]);
+  assert.equal((await admin.post(`/api/salidas/${propia.id}/descartar`, {})).estado, 404);
+  assert.notEqual((await t.db.uno('SELECT estado FROM salidas WHERE id = $1', [propia.id])).estado, 'descartada');
+  await t.db.q('UPDATE salidas SET empresa_id = (SELECT id FROM empresas WHERE slug = $2) WHERE id = $1', [propia.id, 'andes-rent']);
+});
+
+// 5-nov (revisión exhaustiva, RNT-15): cada pantalla reportaba su propio <script> en línea en la CSP de informe. La
+// política trae ahora el hash de cada script en línea de public/*.html: esos no se reportan y uno nuevo o inyectado sí.
+test('CSP de informe: los scripts en línea de las páginas van con su hash; uno ajeno no', async () => {
+  const crypto = await import('node:crypto');
+  const fs = await import('node:fs');
+  const csp = (await fetch(`${t.base}/reservas`)).headers.get('content-security-policy-report-only');
+  const html = fs.readFileSync(new URL('../public/reservas.html', import.meta.url), 'utf8');
+  const cuerpos = [...html.matchAll(/<script(?![^>]*\bsrc\s*=)[^>]*>([\s\S]*?)<\/script>/gi)].map((m) => m[1]).filter((c) => c.trim());
+  assert.ok(cuerpos.length >= 1, 'reservas.html tiene su script en línea');
+  for (const c of cuerpos) assert.ok(csp.includes(`'sha256-${crypto.createHash('sha256').update(c, 'utf8').digest('base64')}'`), 'su hash está en script-src');
+  assert.doesNotMatch(csp, /'unsafe-inline'[^;]*;[^;]*report-uri|script-src[^;]*'unsafe-inline'/, 'script-src no permite cualquier script en línea');
+  assert.ok(!csp.includes(`'sha256-${crypto.createHash('sha256').update('alert(1)', 'utf8').digest('base64')}'`));
 });

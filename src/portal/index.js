@@ -22,8 +22,10 @@ const MAX_DIAS = 90;
 
 export async function empresaPorSlug(slug) {
   const e = await uno('SELECT * FROM empresas WHERE slug = $1 AND activa', [String(slug || '').toLowerCase()]);
-  if (!e) throw new ErrorHttp(404, 'No encontramos este rent a car.');
-  if (!(await incluye(e.id, 'portal'))) throw new ErrorHttp(404, 'Este rent a car no tiene activas las reservas en línea.');
+  // 5-nov (RNT-14): la pantalla ya dice «No encontramos este rentacar»; el detalle no lo repite (y era «rent a car»,
+  // cuando la regla del producto es «rentacar»). `codigo` le dice a la pantalla cuál de los dos casos es.
+  if (!e) throw new ErrorHttp(404, 'Revisa el enlace que te dio la empresa.', { codigo: 'no_existe' });
+  if (!(await incluye(e.id, 'portal'))) throw new ErrorHttp(404, 'Este rentacar no tiene activas las reservas en línea.', { codigo: 'sin_portal' });
   return e;
 }
 

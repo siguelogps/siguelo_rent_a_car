@@ -40,7 +40,7 @@ async function pintar() {
         ${I.reserva_id ? `<a class="btn" href="/liquidaciones/${I.reserva_id}">Liquidación</a>` : ''}
       </div>
     </div>
-    ${I.estado === 'anulado' ? '<div class="aviso neutro">Incidente anulado.</div>' : `<div class="tarjeta bloque"><div class="pt-estados">${ORDEN_INCIDENTE.map((e, k) => `<div class="${k < idx ? 'hecho' : k === idx ? 'actual' : ''}"><i>${k < idx ? '✓' : k + 1}</i>${esc(ESTADOS_INCIDENTE[e])}</div>`).join('')}</div></div>`}
+    ${I.estado === 'anulado' ? '<div class="aviso neutro">Incidente anulado.</div>' : `<div class="tarjeta bloque"><div class="pt-estados">${ORDEN_INCIDENTE.map((e, k) => `<div class="${k < idx ? 'hecho' : k === idx ? 'actual' : ''}"><i>${k < idx ? '✓' : k + 1}</i><span>${esc(ESTADOS_INCIDENTE[e])}</span></div>`).join('')}</div>${idx >= 0 ? `<p class="pt-estados-actual">Etapa ${idx + 1} de ${ORDEN_INCIDENTE.length}: <b>${esc(ESTADOS_INCIDENTE[ORDEN_INCIDENTE[idx]])}</b></p>` : ''}</div>`}
     <div class="columnas">
       <div style="display:flex;flex-direction:column;gap:18px;min-width:0">
         <div class="tarjeta bloque">
@@ -56,7 +56,7 @@ async function pintar() {
         </div>
         ${I.fotos.length ? `<div class="tarjeta bloque"><h2>Fotos: entrega vs devolución</h2>${fotos}</div>` : ''}
         ${I.danos.length ? `<div class="tarjeta bloque"><h2>Daños ligados</h2>
-          <div class="columnas-2" style="grid-template-columns:200px minmax(0,1fr);align-items:start">
+          <div class="columnas-2 pt-danos-ligados">
             <div class="rc-esquema">${svgEsquema(I.danos.map((d) => ({ ...d, nuevo: true, reparado: d.estado === 'reparado' })), { etiquetas: false })}</div>
             <div class="rc-danos">${I.danos.map((d) => `<div class="rc-dano"><span class="n ${d.tipo}">${d.n}</span><div><b>${esc(d.titulo)}</b><small>${d.inspeccion_tipo === 'devolucion' ? 'Detectado en la devolución' : 'Registrado'} · ${fecha(d.creado_en)}${d.estado === 'reparado' ? ` · reparado ${fecha(d.reparado_en)}` : ''}</small></div><span class="chip ${d.estado === 'reparado' ? 'ok' : 'error'}">${d.estado === 'reparado' ? 'Reparado' : 'Activo'}</span></div>`).join('')}</div>
           </div></div>` : ''}

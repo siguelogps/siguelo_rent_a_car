@@ -57,3 +57,18 @@ test('solo administradores activan integraciones', async () => {
   const r = await admin.put('/api/integraciones/mercadopago', { public_key: 'pk', access_token: 'secreto' });
   assert.equal(r.datos.config.access_token, '••••••••');
 });
+
+// 5-nov (revisión exhaustiva, RNT-12): 160_app_nativa.sql y 160_app_plataforma.sql comparten número. No se renombran (ya
+// están aplicadas por nombre en las bases); lo que se exige es que ninguna migración nueva repita un número.
+test('migraciones: cada número se usa una sola vez (salvo el par 160 ya aplicado)', async () => {
+  const fs = await import('node:fs');
+  const archivos = fs.readdirSync(new URL('../src/migraciones/', import.meta.url)).filter((f) => f.endsWith('.sql'));
+  const porNumero = {};
+  for (const f of archivos) {
+    const m = f.match(/^(\d{3})_[a-z0-9_]+\.sql$/);
+    assert.ok(m, `${f}: el nombre es NNN_nombre.sql`);
+    (porNumero[m[1]] ||= []).push(f);
+  }
+  const repetidos = Object.entries(porNumero).filter(([, l]) => l.length > 1).map(([, l]) => l.sort().join(' + '));
+  assert.deepEqual(repetidos, ['160_app_nativa.sql + 160_app_plataforma.sql'], 'una migración nueva necesita un número propio');
+});

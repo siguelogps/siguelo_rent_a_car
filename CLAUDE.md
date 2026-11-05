@@ -22,7 +22,7 @@ Node.js ≥ 22 (ESM), Express 5, PostgreSQL (PGlite embebido si no hay `DATABASE
 - `src/server.js` arranque · `src/app.js` Express (carga automática de `src/api/*.js`, cada uno `export default express.Router()` montado en `/api`).
 - `src/db.js`: `q(sql, params)` → filas, `uno()`, `transaccion(async (tx) => tx.query(...))`, `siguienteFolio(empresaId, 'R'|'C'|'CT'|'INC'|'OT'|'LQ', tx)`.
   **Dentro de `transaccion` usar solo `tx.query`** (con PGlite, llamar `q()` dentro de una transacción la bloquea).
-- Migraciones: `src/migraciones/NNN_nombre.sql` (se aplican solas al arrancar). El esquema completo está en `001_esquema.sql`. Cada módulo usa su propio rango de números si necesita columnas nuevas.
+- Migraciones: `src/migraciones/NNN_nombre.sql` (se aplican solas al arrancar). El esquema completo está en `001_esquema.sql`. Cada módulo usa su propio rango de números si necesita columnas nuevas. **El número es único**: una migración nueva no repite uno existente (`160_app_nativa.sql` y `160_app_plataforma.sql` quedaron así y no se renombran porque ya están aplicadas; `test/nucleo.test.js` lo vigila).
 - `src/auth.js`: `requiere('modulo', 'ver'|'editar')`, `ErrorHttp(estado, mensaje)`, `soloSuperadmin`. Permisos por rol en `src/permisos.js`.
 - `src/bitacora.js`: `registrar(req, accion, entidad, id, detalle)` para trazabilidad.
 - `src/cotizador.js` (precios), `src/disponibilidad.js` (sin dobles reservas), `src/gps/index.js` (`lecturaActual()` km/combustible), `src/tareas.js` (`registrarTarea(nombre, cadaMs, fn)`), `src/integraciones/probadores.js` (`registrarProbador(tipo, fn)`).

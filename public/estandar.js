@@ -26,6 +26,20 @@ export const BACKOFFICE_MENU = [
 // donde no hay manual todavía, el botón NO se muestra (regla de la maqueta). On Rent aún no tiene manuales escritos:
 // cuando exista uno, se agrega aquí (por ejemplo `reservas: '/ayuda/reservas.html'`) y aparece solo.
 export const MANUALES = {};
+
+// Guarda por página (5-nov, revisión exhaustiva RNT-05 y RNT-06). El menú ya escondía lo que el rol (o el plan) no
+// permite, pero la pantalla se abría igual por URL: quedaba vacía o colgada en «Cargando…», con errores 403 en la consola
+// (el servidor sí bloqueaba: no era una fuga). Una pantalla del menú del cliente cuyo módulo viene sin permiso en /api/yo
+// no se carga: se muestra un aviso con enlace a Inicio. «Apps» se rige por Configuración, igual que en el menú.
+export const MODULO_DE_PANTALLA = { apps: 'configuracion' };
+export function sinAcceso(yo, activo) {
+  if (!yo || yo.modo === 'backoffice') return false;
+  if (!MENU.some(([, items]) => items.some(([m]) => m === activo))) return false;
+  return !yo.permisos?.[MODULO_DE_PANTALLA[activo] || activo];
+}
+export const htmlSinAcceso = (esc, titulo = '') => `<div class="tarjeta rc-sin-acceso" role="alert"><h2>No tienes acceso a ${titulo ? esc(titulo) : 'esta pantalla'}</h2>
+  <p class="muted">Tu usuario no tiene permiso para esta pantalla, por su rol o por el plan de la empresa. Si lo necesitas, pídeselo a un administrador.</p>
+  <a class="btn primario" href="/inicio">Ir a Inicio</a></div>`;
 export const manualDe = (activo, manual = null) => manual || MANUALES[activo] || null;
 export function botonAyuda(manual) {
   if (!manual) return '';

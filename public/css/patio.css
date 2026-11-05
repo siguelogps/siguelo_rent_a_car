@@ -124,6 +124,20 @@
 .pt-estados .hecho i { background: var(--ink); border-color: var(--ink); color: var(--marca); }
 .pt-estados .actual i { background: var(--marca); border-color: var(--ink); color: var(--ink); }
 .pt-estados .hecho, .pt-estados .actual { color: var(--ink); font-weight: 500; }
+/* 5-nov (RNT-10): en 390 px las seis etiquetas se montaban («Presupuestado», «Cobrado al cliente»…). En pantallas angostas
+   quedan solo los círculos numerados (el texto sigue para lectores de pantalla) y debajo se lee la etapa actual. */
+.pt-estados-actual { display: none; margin: 10px 0 0; text-align: center; font-size: 13px; color: var(--muted); }
+.pt-estados-actual b { color: var(--ink); font-weight: 600; }
+/* 5-nov (RNT-10): «Daños ligados» tenía la grilla de 200 px en un style en línea, que le ganaba a la regla móvil de
+   .columnas-2 (app.css): en 390 px la página quedaba 20 px más ancha. Ahora es una clase y en pantallas angostas va en
+   una columna, como las demás. */
+.pt-danos-ligados { grid-template-columns: 200px minmax(0, 1fr); align-items: start; }
+@media (max-width: 560px) {
+  .pt-danos-ligados { grid-template-columns: minmax(0, 1fr); }
+  .pt-danos-ligados .rc-esquema { max-width: 240px; margin: 0 auto; }
+  .pt-estados span { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  .pt-estados-actual { display: block; }
+}
 .pt-fotos-inc { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
 .pt-fotos-inc figure { margin: 0; display: flex; flex-direction: column; gap: 4px; }
 .pt-fotos-inc figcaption { font-size: 12px; color: var(--muted); font-weight: 600; }

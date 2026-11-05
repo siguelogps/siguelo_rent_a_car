@@ -117,7 +117,10 @@ r.post('/salidas/:id/reenviar', requiere('configuracion', 'editar'), async (req,
 });
 
 r.post('/salidas/:id/descartar', requiere('configuracion', 'editar'), async (req, res) => {
-  const [s] = await q(`UPDATE salidas SET estado = 'descartada' WHERE id = $1 AND empresa_id = $2 RETURNING id, estado`, [req.params.id, req.empresaId]);
+  // 5-nov (RNT-09): sin fila (no existe o es de otra empresa) respondía 200 vacío y la pantalla creía que se descartó.
+  const id = Number(req.params.id);
+  const [s] = Number.isInteger(id) ? await q(`UPDATE salidas SET estado = 'descartada' WHERE id = $1 AND empresa_id = $2 RETURNING id, estado`, [id, req.empresaId]) : [];
+  if (!s) throw new ErrorHttp(404, 'Mensaje no encontrado');
   res.json(s);
 });
 

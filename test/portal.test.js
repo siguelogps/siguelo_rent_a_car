@@ -195,3 +195,17 @@ test('el cliente ubica su reserva con folio y RUT para subir documentos (sin rev
   const mal = await pub({ folio: r.folio, documento: '11111111-1' });
   assert.equal(mal.status, 404);
 });
+
+// 5-nov (revisión exhaustiva, RNT-14): /reservar/<inexistente> decía «No encontramos este rentacar» y repetía «No
+// encontramos este rent a car.» (otra grafía). Ahora el detalle es útil y distingue el rentacar sin reservas en línea.
+test('portal: rentacar inexistente o sin reservas en línea, con un solo texto y «rentacar»', async () => {
+  const r = await fetch(`${t.base}/api/portal/empresa/no-existe`);
+  assert.equal(r.status, 404);
+  const j = await r.json();
+  assert.equal(j.codigo, 'no_existe');
+  assert.equal(j.error, 'Revisa el enlace que te dio la empresa.');
+  assert.doesNotMatch(j.error, /rent a car/i);
+  const fuente = (await import('node:fs')).readFileSync(new URL('../src/portal/index.js', import.meta.url), 'utf8');
+  assert.doesNotMatch(fuente.replace(/\/\/[^\n]*/g, ''), /rent a car/i);
+  assert.match(fuente, /codigo: 'sin_portal'/);
+});

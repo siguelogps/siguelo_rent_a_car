@@ -228,3 +228,16 @@ test('Webpay real (integración activa, sin marcha blanca): garantía retenida, 
     await t.db.q('UPDATE empresas SET marcha_blanca = true WHERE id = $1', [E]);
   }
 });
+
+// 5-nov (revisión exhaustiva, RNT-13): /pago-resultado?error= mostraba el texto que viniera en la URL (un enlace del
+// dominio oficial con un mensaje falso). Ahora el servidor manda un código y la página solo conoce una lista cerrada.
+test('resultado de pago: el error va como código de una lista cerrada, nunca como texto libre', async () => {
+  const r = await fetch(`${t.base}/api/pagos/link/no-existe`, { redirect: 'manual' });
+  assert.equal(r.status, 303);
+  assert.equal(r.headers.get('location'), '/pago-resultado?error=enlace');
+  const w = await fetch(`${t.base}/api/pagos/retorno/webpay?token_ws=no-existe`, { redirect: 'manual' });
+  assert.match(w.headers.get('location'), /^\/pago-resultado\?error=(confirmacion|enlace)$/);
+  const pagina = await (await fetch(`${t.base}/pago-resultado`)).text();
+  assert.doesNotMatch(pagina, /esc\(p\.get\('error'\)\)/, 'la página no pinta el texto de la URL');
+  assert.match(pagina, /ERRORES\[p\.get\('error'\)\] \|\| ERRORES\.confirmacion/);
+});

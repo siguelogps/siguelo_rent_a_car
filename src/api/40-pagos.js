@@ -136,7 +136,14 @@ r.get('/pagos/:id', requiere('pagos', 'ver'), async (req, res, next) => {
 
 // ── Públicos (sin sesión): retornos, notificaciones, enlace de pago y página de resultado ──
 const aResultado = (res, pago) => res.redirect(303, urlResultado(pago.id));
-const errorPublico = (res, e) => res.redirect(303, `/pago-resultado?error=${encodeURIComponent(e.message || 'No se pudo confirmar el pago')}`);
+// 5-nov (revisión exhaustiva, RNT-13): antes iba el texto del error en la URL y la página lo mostraba tal cual: cualquiera
+// podía armar un enlace del dominio oficial con un mensaje falso («llama al +56…»). Ahora va solo un código de una lista
+// cerrada (public/pago-resultado.html los traduce) y el detalle queda en el registro del servidor.
+export const CODIGOS_ERROR_PAGO = ['confirmacion', 'enlace'];
+const errorPublico = (res, e, codigo = 'confirmacion') => {
+  console.error(`[pago público] ${codigo}: ${e?.message || e}`);
+  res.redirect(303, `/pago-resultado?error=${CODIGOS_ERROR_PAGO.includes(codigo) ? codigo : 'confirmacion'}`);
+};
 
 const retornoWebpay = async (req, res) => {
   try { aResultado(res, await confirmarRetorno('webpay', { ...req.query, ...(req.body || {}) })); }
@@ -159,7 +166,7 @@ r.get('/pagos/link/:token', async (req, res) => {
     const x = await abrirLink(req.params.token);
     if (x.redirigir.metodo === 'POST') return res.type('html').send(htmlRedireccion(x.redirigir));
     res.redirect(303, x.redirigir.url);
-  } catch (e) { errorPublico(res, e); }
+  } catch (e) { errorPublico(res, e, e.estado === 404 ? 'enlace' : 'confirmacion'); }
 });
 r.get('/pagos/publico/:id', async (req, res) => {
   if (!verificarFirma(req.params.id, req.query.t)) throw new ErrorHttp(404, 'Pago no encontrado');

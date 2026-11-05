@@ -10,7 +10,27 @@
 //   El resto solo se incrusta desde el propio sitio (SAMEORIGIN; p. ej. la vista previa del portal en Configuración).
 // · Cuerpo JSON: 2 MB por defecto para toda la API. Solo las rutas que reciben fotos, firmas o documentos como data URL
 //   aceptan 25 MB; antes el límite de 25 MB regía para todo y cualquier ruta podía recibir un cuerpo enorme.
+import crypto from 'node:crypto';
+import fs from 'node:fs';
 import { config } from './config.js';
+
+// 🔥 5-nov (revisión exhaustiva, RNT-15): cada página tiene su <script type="module"> en línea, así que TODA carga
+// reportaba «script-src-elem» y el registro se llenaba de la misma infracción conocida (y con 20 por minuto por IP, una
+// sesión normal recibía 429 en pocos clics). Se suman a la política los hash sha256 de los scripts en línea que trae
+// public/*.html, calculados al arrancar: esos ya no se reportan, y cualquier script en línea que NO esté en los archivos
+// (uno nuevo sin pasar por aquí, o uno inyectado) sí, que es justo lo que sirve medir antes de pasar a una CSP de bloqueo.
+// Los atributos onclick=/onsubmit= (9 en total) siguen reportándose: son lo que falta mover a archivos.
+const PUBLICO = new URL('../public/', import.meta.url);
+export function hashesScriptsEnLinea(dir = PUBLICO) {
+  const hashes = new Set();
+  for (const f of fs.readdirSync(dir).filter((x) => x.endsWith('.html'))) {
+    const html = fs.readFileSync(new URL(f, dir), 'utf8');
+    for (const [, cuerpo] of html.matchAll(/<script(?![^>]*\bsrc\s*=)[^>]*>([\s\S]*?)<\/script>/gi)) {
+      if (cuerpo.trim()) hashes.add(`'sha256-${crypto.createHash('sha256').update(cuerpo, 'utf8').digest('base64')}'`);
+    }
+  }
+  return [...hashes].sort();
+}
 
 // Orígenes externos que la pantalla usa hoy: mapas de OpenStreetMap (gps.html, vehiculo.html) y el formulario de pago
 // que se envía a Webpay (reservar.html). Las fuentes IBM Plex y Leaflet se sirven desde el propio servidor.
@@ -18,7 +38,7 @@ export const POLITICA_CSP_INFORME = [
   "default-src 'self'",
   "base-uri 'self'",
   "object-src 'none'",
-  "script-src 'self'",
+  `script-src 'self' ${hashesScriptsEnLinea().join(' ')}`,
   "style-src 'self' 'unsafe-inline'", // estilos en línea (style="…" y <style>) por todas las pantallas: se permiten
   "img-src 'self' data: blob: https://*.tile.openstreetmap.org",
   "font-src 'self' data:",

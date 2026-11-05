@@ -7,7 +7,7 @@ import { instalarPaginador } from '/paginador.js';
 import { instalarSelectorBuscable, sinTildes, calzaPalabras } from '/selector-buscable.js'; // 1-nov: todo <select> de 8 opciones o más con buscador por palabras
 // Fase 2 del estándar (1-nov, maqueta aprobada): menú por grupos, botón «?» solo con manual, pestañas base y franjas viven en
 // /estandar.js (módulo puro, probado en Node); aquí solo se pintan.
-import { MENU, BACKOFFICE_MENU, manualDe, botonAyuda, htmlFranja, vieneDeOnBoard } from '/estandar.js';
+import { MENU, BACKOFFICE_MENU, manualDe, botonAyuda, htmlFranja, vieneDeOnBoard, sinAcceso, htmlSinAcceso } from '/estandar.js';
 export { MENU, BACKOFFICE_MENU, PESTANAS_BASE, ordenarPestanas } from '/estandar.js';
 export { instalarSelectorBuscable, convertirSelect, revisarSelectores } from '/selector-buscable.js'; // para las páginas públicas (reservar), que no pasan por iniciarPagina()
 
@@ -310,6 +310,9 @@ export async function iniciarPagina({ activo, titulo = '', manual = null } = {})
   else app.querySelector('#rc-tema').remove();
   app.querySelector('#bo-volver')?.addEventListener('click', async () => { const r = await api('empresa-activa', { body: { empresa_id: null } }); location.href = YO.empresa ? `/empresas/${YO.empresa.id}#usuarios` : r.destino || '/empresas'; });
   if (YO.modo !== 'backoffice') activarBuscador(app);
+  // 5-nov (RNT-05/06): sin permiso para esta pantalla (por URL directa), aviso con enlace a Inicio y la pantalla no sigue
+  // cargando (sus pedidos darían 403 y quedaría vacía o colgada en «Cargando…»).
+  if (sinAcceso(YO, activo)) { main.innerHTML = htmlSinAcceso(esc, titulo); await new Promise(() => {}); }
   // Fase 1 (1-nov): toda lista pagina de a 50 (paginador.js) y todo campo obligatorio lleva « *» (ver arriba).
   instalarPaginador();
   instalarSelectorBuscable(); // 1-nov (maqueta aprobada por Pablo): todo <select> de 8 opciones o más tiene buscador (public/selector-buscable.js)

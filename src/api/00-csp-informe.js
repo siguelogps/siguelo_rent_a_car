@@ -26,8 +26,13 @@ export function resumirInforme(i) {
   return `[CSP] ${directiva} · bloqueado: ${bloqueado} · en ${documento}${archivo !== '—' ? ` (${archivo}${linea ? `:${linea}` : ''})` : ''}`;
 }
 
+// 5-nov (RNT-15): pasado el tope ya no se responde 429 (el navegador lo mostraba como error en la consola de cada
+// pantalla): se responde 204 igual, sin anotar nada. El tope sigue protegiendo el registro.
+const tope = limitar({ nombre: 'csp-informe', max: 20, ventanaMs: 60e3 });
+const callarSobreTope = (req, res, next) => { try { tope(req, res, next); } catch (e) { if (e.estado === 429) return res.status(204).end(); throw e; } };
+
 r.post('/csp-informe',
-  limitar({ nombre: 'csp-informe', max: 20, ventanaMs: 60e3 }),
+  callarSobreTope,
   express.json({ type: ['application/csp-report', 'application/reports+json', 'application/json'], limit: '20kb', strict: false }), // strict: false → un JSON que no sea objeto ni lista también se acepta (y se ignora) en vez de responder 400
   (req, res) => {
     for (const i of informes(req.body).slice(0, 5)) console.warn(resumirInforme(i));

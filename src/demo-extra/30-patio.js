@@ -1,6 +1,8 @@
 // Datos de prueba de Entrega y devolución + Incidentes: inspecciones completas (con fotos estampadas, checklist y firma)
 // para la reserva devuelta de PBVX-61 y la cerrada de RTKP-42, daños preexistentes en la flota e incidentes en distintos estados.
 // Las «fotos» son dibujos SVG del vehículo (public/js/patio-dibujos.js) con el sello de fecha, hora y ubicación.
+// 5-nov (RNT-02): se guardan con svgServidor: true; si no, /api/archivos (desde el 31-oct solo fotos y PDF en pantalla) las
+// entregaba como descarga y en Incidentes, Vehículos y la devolución se veían rotas, justo en las demostraciones.
 import { q, uno, transaccion } from '../db.js';
 import { guardarArchivo } from '../almacenamiento/index.js';
 import { foto } from '../../public/js/patio-dibujos.js';
@@ -24,11 +26,11 @@ async function inspeccion(E, { reserva, tipo, en, km, combustible, checklist, su
     const t = new Date(en - (11 - k) * 50e3);
     const img = foto(pos, { color, patente, km: String(km).padStart(6, '0').replace(/(\d{3})$/, '.$1'), nivel: combustible / 8, dano: danosFoto[pos] || null,
       sello: [sello(t), `${sucursal.lat.toFixed(4)}, ${sucursal.lng.toFixed(4)} · ${sucursal.nombre}`] });
-    const a = await guardarArchivo({ empresaId: E, entidad: 'inspeccion', entidadId: i.id, tipo: `foto_${pos}`, nombre: `${tipo}-${pos}.svg`, mime: 'image/svg+xml', datos: svg(img),
+    const a = await guardarArchivo({ empresaId: E, entidad: 'inspeccion', entidadId: i.id, tipo: `foto_${pos}`, nombre: `${tipo}-${pos}.svg`, mime: 'image/svg+xml', datos: svg(img), svgServidor: true,
       meta: { posicion: pos, lat: sucursal.lat, lng: sucursal.lng, tomada_en: t.toISOString(), sello: true, demo: true }, usuarioId });
     await q('INSERT INTO inspeccion_fotos (empresa_id, inspeccion_id, posicion, archivo_id, lat, lng, tomada_en) VALUES ($1,$2,$3,$4,$5,$6,$7)', [E, i.id, pos, a.id, sucursal.lat, sucursal.lng, t]);
   }
-  const f = await guardarArchivo({ empresaId: E, entidad: 'inspeccion', entidadId: i.id, tipo: 'firma', nombre: 'firma.svg', mime: 'image/svg+xml', datos: svg(FIRMA), meta: { firmante }, usuarioId });
+  const f = await guardarArchivo({ empresaId: E, entidad: 'inspeccion', entidadId: i.id, tipo: 'firma', nombre: 'firma.svg', mime: 'image/svg+xml', datos: svg(FIRMA), svgServidor: true, meta: { firmante }, usuarioId });
   await q('UPDATE inspecciones SET firma_archivo_id = $2 WHERE id = $1', [i.id, f.id]);
   await q('INSERT INTO gps_lecturas (empresa_id, vehiculo_id, reserva_id, km, combustible, lat, lng, leido_en) VALUES ($1,$2,$3,$4,$5,$6,$7,$8)', [E, reserva.vehiculo_id, reserva.id, km, combustible, sucursal.lat, sucursal.lng, en]);
   return i;
@@ -38,7 +40,7 @@ async function dano(E, { vehiculoId, inspeccionId = null, vista, x, y, tipo, des
   const [d] = await q(`INSERT INTO danos (empresa_id, vehiculo_id, inspeccion_id, vista, x, y, tipo, descripcion, creado_en) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING *`,
     [E, vehiculoId, inspeccionId, vista, x, y, tipo, descripcion, creadoEn]);
   const img = foto('detalle', { color, dano: tipo === 'trizadura' ? null : tipo, sello: [sello(creadoEn), descripcion] });
-  const a = await guardarArchivo({ empresaId: E, entidad: 'dano', entidadId: d.id, tipo: 'foto_dano', nombre: `dano-${d.id}.svg`, mime: 'image/svg+xml', datos: svg(img), meta: { demo: true }, usuarioId });
+  const a = await guardarArchivo({ empresaId: E, entidad: 'dano', entidadId: d.id, tipo: 'foto_dano', nombre: `dano-${d.id}.svg`, mime: 'image/svg+xml', datos: svg(img), svgServidor: true, meta: { demo: true }, usuarioId });
   await q('UPDATE danos SET archivo_id = $2 WHERE id = $1', [d.id, a.id]);
   return d;
 }

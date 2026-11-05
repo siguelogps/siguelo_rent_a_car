@@ -32,7 +32,9 @@ function pintarTabs(actual, retenidas = null) {
   document.getElementById('tabs').innerHTML = TABS.map(([k, t]) => `<a href="#${k}"${k === actual ? ' aria-current="page"' : ''}>${t}${k === 'salidas' && retenidas ? ` <span class="n">${retenidas}</span>` : ''}</a>`).join('');
 }
 let retenidas = null;
-api('salidas?estado=retenida').then((l) => { retenidas = l.length; pintarTabs(actual()); }).catch(() => {});
+// 5-nov (RNT-05): sin pestañas visibles no se pide nada (antes TABS[0][0] reventaba y /api/salidas respondía 403).
+if (!TABS.length) { panel.innerHTML = '<p class="aviso neutro">Tu usuario no tiene acceso a ninguna parte de Configuración.</p>'; await new Promise(() => {}); }
+if (puede('configuracion')) api('salidas?estado=retenida').then((l) => { retenidas = l.length; pintarTabs(actual()); }).catch(() => {});
 // «#integraciones» (enlaces anteriores) abre «Conexiones».
 const actual = () => { const h = location.hash.slice(1) === 'integraciones' ? 'conexiones' : location.hash.slice(1); return TABS.some(([k]) => k === h) ? h : TABS[0][0]; };
 addEventListener('hashchange', mostrar);

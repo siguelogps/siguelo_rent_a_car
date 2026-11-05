@@ -42,19 +42,25 @@ test('cotizar: tarifa, extras, otra sucursal, conductor joven y descuento', asyn
 test('editar tarifa y temporada se reflejan en la cotización', async () => {
   const d = (await admin.get('/api/tarifas')).datos;
   const van = d.categorias.find((c) => c.nombre === 'Van');
-  const desde = new Date(Date.now() + 40 * 864e5).toISOString().slice(0, 10), hasta = new Date(Date.now() + 50 * 864e5).toISOString().slice(0, 10);
+  // 5-nov (revisión exhaustiva, RNT-07): la prueba cotizaba a 42-44 días de hoy y esperaba «Base», pero la demo crea la
+  // «Temporada alta (verano)» del 15-dic al 28-feb: entre noviembre y febrero fallaba sin que el cotizador tuviera nada
+  // malo. Ahora usa una fecha fija de mayo del año siguiente (siempre futura y fuera de toda temporada de la demo, que
+  // solo tiene septiembre y diciembre-febrero; mayo además ya pasó el cambio de hora de abril: UTC−4).
+  const anio = new Date().getFullYear() + 1;
+  const desde = `${anio}-05-01`, hasta = `${anio}-05-20`;
+  const cotizarVan = () => admin.post('/api/tarifas/cotizar', { categoria_id: van.id, inicio: `${anio}-05-10T10:00:00-04:00`, fin: `${anio}-05-12T10:00:00-04:00` });
   const tem = await admin.post('/api/temporadas', { nombre: 'Evento prueba', desde, hasta, prioridad: 50 });
   assert.equal(tem.estado, 201);
   const ta = await admin.put('/api/tarifas', { categoria_id: van.id, temporada_id: tem.datos.id, precio_dia: 100000, km_libre: true, garantia: 900000, deducible: 800000 });
   assert.equal(ta.estado, 200);
-  const r = await admin.post('/api/tarifas/cotizar', { categoria_id: van.id, inicio: enDias(42), fin: enDias(44) });
+  const r = await cotizarVan();
   assert.equal(r.datos.temporada, 'Evento prueba');
   assert.equal(r.datos.lineas[0].monto, 200000);
   assert.equal(r.datos.km_libre, true);
   assert.equal((await admin.put('/api/tarifas', { categoria_id: van.id, precio_dia: 0 })).estado, 400);
   // borrar la temporada borra su tarifa
   assert.equal((await admin.del(`/api/temporadas/${tem.datos.id}`)).estado, 200);
-  const r2 = await admin.post('/api/tarifas/cotizar', { categoria_id: van.id, inicio: enDias(42), fin: enDias(44) });
+  const r2 = await cotizarVan();
   assert.equal(r2.datos.temporada, 'Base');
 });
 

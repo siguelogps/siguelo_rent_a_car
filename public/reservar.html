@@ -24,7 +24,7 @@ const app = document.getElementById('app');
 async function pedir(ruta, body) {
   const r = await fetch(`/api/portal/${ruta}`, { method: body ? 'POST' : 'GET', headers: body ? { 'Content-Type': 'application/json' } : {}, body: body ? JSON.stringify(body) : undefined });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok) throw Object.assign(new Error(j.error || 'No pudimos completar la solicitud. Inténtalo de nuevo.'), { estado: r.status, campo: j.campo });
+  if (!r.ok) throw Object.assign(new Error(j.error || 'No pudimos completar la solicitud. Inténtalo de nuevo.'), { estado: r.status, campo: j.campo, codigo: j.codigo });
   return j;
 }
 const hoyIso = () => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(new Date());
@@ -408,7 +408,9 @@ try {
   history.replaceState({ paso: 1 }, '', location.pathname + location.search);
   pintar();
 } catch (e) {
-  app.innerHTML = `<div class="tarjeta pt-ok"><h2>No encontramos este rentacar</h2><p class="muted">${esc(e.message)}</p></div>`;
+  // 5-nov (RNT-14): un solo texto, con «rentacar», y un detalle útil (antes repetía el título con otra grafía)
+  const titulo = e.codigo === 'sin_portal' ? 'Reservas en línea no disponibles' : 'No encontramos este rentacar';
+  app.innerHTML = `<div class="tarjeta pt-ok"><h2>${titulo}</h2><p class="muted">${esc(e.message)}</p></div>`;
 }
 </script>
 </body>

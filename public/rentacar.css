@@ -265,6 +265,10 @@
 img.rc-empresa-logo { object-fit: contain; background: #fff; border: 1px solid var(--line); }
 a.rc-marcha { text-decoration: none; }
 .rc-vacio { padding: 32px; text-align: center; color: var(--muted); }
+/* 5-nov (RNT-05/06): aviso de pantalla sin permiso (comun.js › iniciarPagina, estandar.js › htmlSinAcceso). */
+.rc-sin-acceso { max-width: 560px; margin: 24px auto; padding: 28px 24px; text-align: center; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.rc-sin-acceso h2 { margin: 0; font-size: 18px; }
+.rc-sin-acceso p { margin: 0 0 6px; }
 .rc-cargando { padding: 32px; text-align: center; color: var(--muted); }
 @media (max-width: 860px) { .app:not(.menu-abierto) .menu { box-shadow: none; } }
 /* «Mi cuenta»: clave con botón para mostrarla y pie con Salir a la izquierda */

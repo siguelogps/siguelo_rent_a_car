@@ -22,8 +22,15 @@ const caja = document.getElementById('caja');
 const p = new URLSearchParams(location.search);
 const pie = '<div class="pie">Pago seguro gestionado con <img class="logo-onrent logo-onrent-claro" src="/img/siguelo-onrent-a-claro.png" alt="Síguelo GPS · On Rent" width="639" height="80"><img class="logo-onrent logo-onrent-oscuro" src="/img/siguelo-onrent-a-oscuro.png" alt="Síguelo GPS · On Rent" width="639" height="80"></div>';
 
+// 5-nov (RNT-13): ?error= trae un código, no un texto. Solo se muestran mensajes de esta lista: un enlace armado con otro
+// texto («llama a este número…») ya no aparece en la página. Un código desconocido usa el mensaje general.
+const ERRORES = {
+  confirmacion: ['No pudimos confirmar el pago', 'El medio de pago no confirmó la operación.'],
+  enlace: ['Enlace de pago no válido', 'El enlace de pago no existe o venció. Pide uno nuevo al rentacar.']
+};
 if (p.get('error')) {
-  caja.innerHTML = `<div class="icono mal">${ICONO.mal}</div><h1>No pudimos confirmar el pago</h1><p class="muted">${esc(p.get('error'))}</p><p class="peq muted">Si se descontó dinero de tu tarjeta, contacta al rentacar con este mensaje.</p>${pie}`;
+  const [titulo, texto] = ERRORES[p.get('error')] || ERRORES.confirmacion;
+  caja.innerHTML = `<div class="icono mal">${ICONO.mal}</div><h1>${titulo}</h1><p class="muted">${texto}</p><p class="peq muted">Si se descontó dinero de tu tarjeta, contacta al rentacar que te envió el enlace.</p>${pie}`;
 } else {
   try {
     const r = await fetch(`/api/pagos/publico/${encodeURIComponent(p.get('pago') || '')}?t=${encodeURIComponent(p.get('t') || '')}`);

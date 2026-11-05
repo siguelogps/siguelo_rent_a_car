@@ -10,7 +10,8 @@ import { desdeLocal } from './util/formato.js';
 const DIA = 864e5;
 const isoFecha = (ms) => new Date(ms).toISOString().slice(0, 10);
 
-export async function sembrarDemo({ clave = 'demo1234' } = {}) {
+// superadminDemo: false en producción (src/arranque.js, RNT-03): no se crea la cuenta compartida soporte@siguelogps.cl.
+export async function sembrarDemo({ clave = 'demo1234', superadminDemo = true } = {}) {
   const e = await crearEmpresa({
     nombre: 'Andes Rent a Car', slug: 'andes-rent', rut: '76543210-3', razon_social: 'Andes Rent a Car SpA', giro: 'Arriendo de vehículos',
     direccion: 'Av. Providencia 2133, of. 401', comuna: 'Providencia', ciudad: 'Santiago', telefono: '+56 2 2345 6789', correo: 'reservas@andesrent.cl',
@@ -25,7 +26,7 @@ export async function sembrarDemo({ clave = 'demo1234' } = {}) {
   for (const [n, c, rol, s] of [['Paula Contreras', 'counter@siguelogps.cl', 'counter', scl.id], ['Jorge Salinas', 'patio@siguelogps.cl', 'patio', scl.id], ['Rodrigo Fuenzalida', 'finanzas@siguelogps.cl', 'finanzas', prov.id]]) {
     await q('INSERT INTO usuarios (empresa_id, nombre, correo, clave_hash, rol, sucursal_id) VALUES ($1,$2,$3,$4,$5,$6)', [E, n, c, h, rol, s]);
   }
-  await q(`INSERT INTO usuarios (empresa_id, nombre, correo, clave_hash, rol) VALUES (NULL, 'Soporte Síguelo', 'soporte@siguelogps.cl', $1, 'superadmin') ON CONFLICT (correo) DO NOTHING`, [h]);
+  if (superadminDemo) await q(`INSERT INTO usuarios (empresa_id, nombre, correo, clave_hash, rol) VALUES (NULL, 'Soporte Síguelo', 'soporte@siguelogps.cl', $1, 'superadmin') ON CONFLICT (correo) DO NOTHING`, [h]);
 
   // Categorías y tarifas
   const cats = {};

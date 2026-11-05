@@ -24,12 +24,14 @@ export const mesCorto = (fechaIso) => new Intl.DateTimeFormat('es-CL', { month: 
 export const ddmm = (v) => fecha(v).slice(0, 5);
 export const fechaHoraTxt = (v) => (v ? `${fecha(v)} · ${hora(v)}` : '');
 
-/** Días de arriendo (bloques de 24 h con tolerancia), igual que el servidor. */
+/** Días de arriendo (bloques de 24 h de reloj en Santiago, con tolerancia), igual que el servidor (src/util/formato.js).
+ *  5-nov (RNT-01): con milisegundos absolutos, un arriendo que cruzaba el cambio de hora de abril sumaba un día. */
+const minutosReloj = (d) => { const p = partes(d); return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute) / 6e4; };
 export function diasArriendo(inicio, fin, tol = 59) {
-  const ms = new Date(fin) - new Date(inicio);
-  if (ms <= 0) return 1;
-  const d = Math.floor(ms / 864e5), resto = ms - d * 864e5;
-  return Math.max(1, d + (resto > tol * 6e4 ? 1 : 0));
+  const min = minutosReloj(fin) - minutosReloj(inicio);
+  if (!(min > 0)) return 1;
+  const d = Math.floor(min / 1440), resto = min - d * 1440;
+  return Math.max(1, d + (resto > tol ? 1 : 0));
 }
 
 /** Clase visual de una reserva (atrasada = en curso con devolución vencida). */

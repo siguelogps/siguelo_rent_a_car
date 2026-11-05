@@ -44,6 +44,9 @@ test('cálculo: tolerancia, km libre, sin faltante y presupuesto pendiente', () 
   assert.equal(diasAtraso('2026-10-16T15:00:00Z', '2026-10-16T15:59:00Z', 59), 0);
   assert.equal(diasAtraso('2026-10-16T15:00:00Z', '2026-10-17T15:30:00Z', 59), 1);
   assert.equal(diasAtraso('2026-10-16T15:00:00Z', '2026-10-17T16:30:00Z', 59), 2);
+  // 5-nov (RNT-01): quien devuelve a la hora pactada no queda atrasado porque entre medio se atrasó el reloj (abril):
+  // pactado sábado 03-04-2027 23:30, devuelto domingo 04-04 00:30 de reloj = 2 h reales, 1 h de reloj (dentro de 60 min).
+  assert.equal(diasAtraso(new Date('2027-04-04T02:30:00Z'), new Date('2027-04-04T04:30:00Z'), 60), 0);
   const ls = calcularLineas({
     reserva: { fin: '2026-10-16T15:00:00Z', devolucion_real: '2026-10-16T15:20:00Z', km_incluidos: null, precio_km_extra: 0, deducible: 450000 },
     ajustes: AJ, tarifaDia: 30000,

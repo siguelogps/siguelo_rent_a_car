@@ -23,12 +23,14 @@ export function crearClienteMp(config = {}, { fetch: f = globalThis.fetch } = {}
   const token = config.access_token;
   if (!token) throw new Error('Falta el access token de Mercado Pago');
 
+  // idempotencia: true = clave nueva al azar; texto = clave fija (5-nov, RNT-04: la captura y la liberación de una garantía
+  // usan una por garantía y operación, así un reintento no se aplica dos veces en Mercado Pago)
   async function llamar(metodo, ruta, cuerpo, { idempotencia = false } = {}) {
     let r;
     try {
       r = await f(`${BASE}${ruta}`, {
         method: metodo,
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(idempotencia ? { 'X-Idempotency-Key': crypto.randomUUID() } : {}) },
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json', ...(idempotencia ? { 'X-Idempotency-Key': typeof idempotencia === 'string' ? idempotencia : crypto.randomUUID() } : {}) },
         body: cuerpo ? JSON.stringify(cuerpo) : undefined,
         signal: AbortSignal.timeout(30000)
       });
@@ -61,8 +63,8 @@ export function crearClienteMp(config = {}, { fetch: f = globalThis.fetch } = {}
     }, { idempotencia: true }),
     obtenerPago: (id) => llamar('GET', `/v1/payments/${encodeURIComponent(id)}`),
     buscarPorReferencia: (ref) => llamar('GET', `/v1/payments/search?external_reference=${encodeURIComponent(ref)}&sort=date_created&criteria=desc`),
-    capturar: (id, monto) => llamar('PUT', `/v1/payments/${encodeURIComponent(id)}`, { capture: true, transaction_amount: Math.round(Number(monto)) }),
-    cancelar: (id) => llamar('PUT', `/v1/payments/${encodeURIComponent(id)}`, { status: 'cancelled' }),
-    reembolsar: (id, monto) => llamar('POST', `/v1/payments/${encodeURIComponent(id)}/refunds`, monto ? { amount: Math.round(Number(monto)) } : {}, { idempotencia: true })
+    capturar: (id, monto, clave = null) => llamar('PUT', `/v1/payments/${encodeURIComponent(id)}`, { capture: true, transaction_amount: Math.round(Number(monto)) }, { idempotencia: clave || false }),
+    cancelar: (id, clave = null) => llamar('PUT', `/v1/payments/${encodeURIComponent(id)}`, { status: 'cancelled' }, { idempotencia: clave || false }),
+    reembolsar: (id, monto, clave = null) => llamar('POST', `/v1/payments/${encodeURIComponent(id)}/refunds`, monto ? { amount: Math.round(Number(monto)) } : {}, { idempotencia: clave || true })
   };
 }

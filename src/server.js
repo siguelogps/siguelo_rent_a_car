@@ -3,6 +3,7 @@ import { config } from './config.js';
 import { abrir, migrar, uno } from './db.js';
 import { crearApp } from './app.js';
 import { iniciarTareas } from './tareas.js';
+import { planDemo } from './arranque.js';
 
 // En producción sin DATABASE_URL no se arranca la base embebida (no persiste y consume mucha memoria):
 // se levanta una página que explica el paso que falta.
@@ -22,10 +23,13 @@ const aplicadas = await migrar();
 if (aplicadas.length) console.log(`Migraciones aplicadas: ${aplicadas.join(', ')}`);
 
 const hay = await uno('SELECT count(*)::int AS n FROM empresas');
-if (!hay.n && config.sembrarDemo) {
+// 5-nov (RNT-03): qué se siembra lo decide planDemo() (src/arranque.js): en producción, sin superadmin demo y sin demo1234.
+const demo = hay.n ? { sembrar: false } : planDemo({ produccion: config.produccion, sembrarDemo: config.sembrarDemo, demoClave: process.env.DEMO_CLAVE });
+if (demo.aviso) console.error(demo.aviso);
+if (demo.sembrar) {
   const { sembrarDemo } = await import('./demo.js');
-  await sembrarDemo({ clave: process.env.DEMO_CLAVE || 'demo1234' });
-  console.log(`Datos de prueba creados: administrador demo@siguelogps.cl${process.env.DEMO_CLAVE ? ' (clave en DEMO_CLAVE)' : ' / demo1234'}`);
+  await sembrarDemo({ clave: demo.clave, superadminDemo: demo.superadminDemo });
+  console.log(`Datos de prueba creados: administrador demo@siguelogps.cl${process.env.DEMO_CLAVE ? ' (clave en DEMO_CLAVE)' : ' / demo1234'}${demo.superadminDemo ? '' : ' · sin superadmin demo (producción)'}`);
 }
 
 const { asegurarSuperadmin } = await import('./superadmin.js');

@@ -2,7 +2,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { levantar } from './ayuda.js';
 import { validarRut, formatearRut } from '../src/util/rut.js';
-import { diasArriendo, clp, fecha } from '../src/util/formato.js';
+import { diasArriendo, clp, fecha, desdeLocal } from '../src/util/formato.js';
 import { cifrar, descifrar } from '../src/cifrado.js';
 
 let t;
@@ -21,6 +21,17 @@ test('formato chileno', () => {
   assert.equal(fecha('2026-10-11'), '11-10-2026');
   assert.equal(diasArriendo('2026-10-11T14:00:00Z', '2026-10-16T14:30:00Z'), 5);
   assert.equal(diasArriendo('2026-10-11T14:00:00Z', '2026-10-16T15:30:00Z'), 6);
+});
+
+// 5-nov (revisión exhaustiva, RNT-01): los días se cuentan en hora de reloj de Santiago. En abril el reloj se atrasa una
+// hora (el arriendo dura 73 h reales) y en septiembre se adelanta (71 h): los dos son 3 días, no 4 ni 2.
+test('días de arriendo a través de los cambios de hora de abril y septiembre', () => {
+  const L = (f, h) => desdeLocal(f, h);
+  assert.equal(diasArriendo(L('2027-04-02', '10:00'), L('2027-04-05', '10:00'), 59), 3, 'abril: 73 h reales = 3 días de reloj');
+  assert.equal(diasArriendo(L('2027-04-02', '10:00'), L('2027-04-05', '10:59'), 59), 3, 'abril: dentro de la tolerancia');
+  assert.equal(diasArriendo(L('2027-04-02', '10:00'), L('2027-04-05', '11:00'), 59), 4, 'abril: pasada la tolerancia');
+  assert.equal(diasArriendo(L('2027-09-03', '10:00'), L('2027-09-06', '10:00'), 59), 3, 'septiembre: 71 h reales = 3 días de reloj');
+  assert.equal(diasArriendo(L('2027-09-03', '10:00'), L('2027-09-06', '11:00'), 59), 4, 'septiembre: una hora de atraso sí se cobra');
 });
 
 test('cifrado de credenciales', () => {

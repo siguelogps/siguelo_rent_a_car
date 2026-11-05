@@ -154,7 +154,12 @@ r.get('/reservas', ver, async (req, res) => {
 
 r.get('/reservas/excel', ver, async (req, res) => {
   const { where, p } = filtrosLista(req);
-  const filas = await q(`${SQL_LISTA} WHERE ${where} ORDER BY r.inicio LIMIT 5000`, p);
+  // 5-nov (RNT-08): el Excel cortaba en 5.000 sin avisar. Se pide una fila más para saber si hay más y, si las hay, la
+  // planilla lo dice en su última fila (y en la cabecera X-Tope-Alcanzado) para que se acote el período con los filtros.
+  const TOPE = 5000;
+  const todas = await q(`${SQL_LISTA} WHERE ${where} ORDER BY r.inicio, r.id LIMIT ${TOPE + 1}`, p);
+  const tope = todas.length > TOPE;
+  const filas = tope ? todas.slice(0, TOPE) : todas;
   const wb = new ExcelJS.Workbook();
   wb.creator = 'Síguelo On Rent';
   const ws = wb.addWorksheet('Reservas', { views: [{ state: 'frozen', ySplit: 1 }] });
@@ -168,6 +173,11 @@ r.get('/reservas/excel', ver, async (req, res) => {
   for (const x of filas) ws.addRow({ folio: x.folio, estado: x.atrasada ? 'Atrasada' : NOMBRES[x.estado], cliente: x.cliente, documento: documentoTxt(x.documento_tipo, x.documento), telefono: x.telefono,
     patente: x.patente ? formatearPatente(x.patente) : '', vehiculo: x.marca ? `${x.marca} ${x.modelo}` : '', categoria: x.categoria, inicio: fechaHora(x.inicio), sr: x.sucursal_retiro,
     fin: fechaHora(x.fin), sd: x.sucursal_devolucion, dias: diasArriendo(x.inicio, x.fin), total: Number(x.total), origen: x.origen });
+  if (tope) {
+    ws.addRow([]);
+    ws.addRow({ folio: `Se exportaron las primeras ${TOPE.toLocaleString('es-CL')} reservas: hay más. Acota las fechas con los filtros y vuelve a exportar.` }).font = { bold: true, color: { argb: 'FFB42318' } };
+    res.setHeader('X-Tope-Alcanzado', String(TOPE));
+  }
   ws.getRow(1).font = { bold: true };
   ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFD500' } };
   ws.autoFilter = { from: 'A1', to: 'O1' };

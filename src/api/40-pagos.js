@@ -33,8 +33,8 @@ r.get('/pagos', requiere('pagos', 'ver'), async (req, res) => {
   if (f.metodo) add('p.metodo = ?', f.metodo);
   if (f.estado === 'simulado') cond.push(`(p.estado = 'simulado' OR (p.detalle->>'simulado')::boolean IS TRUE)`);
   else if (f.estado) add('p.estado = ?', f.estado);
-  if (f.desde) add(`p.creado_en >= (?::date)::timestamp AT TIME ZONE 'America/Santiago'`, f.desde);
-  if (f.hasta) add(`p.creado_en < ((?::date + 1)::timestamp AT TIME ZONE 'America/Santiago')`, f.hasta);
+  if (f.desde && /^\d{4}-\d{2}-\d{2}$/.test(String(f.desde))) add(`p.creado_en >= (?::date)::timestamp AT TIME ZONE 'America/Santiago'`, f.desde);
+  if (f.hasta && /^\d{4}-\d{2}-\d{2}$/.test(String(f.hasta))) add(`p.creado_en < ((?::date + 1)::timestamp AT TIME ZONE 'America/Santiago')`, f.hasta);
   // Fase 1 (1-nov): por palabras, sin tildes ni mayúsculas; folio, referencia y patente sin guiones.
   const porQ = porPalabras([{ col: 'r.folio', limpiar: true }, `(c.nombre || ' ' || coalesce(c.apellidos,''))`, { col: 'p.referencia', limpiar: true }, { col: 'v.patente', limpiar: true }], f.q, vals);
   if (porQ) cond.push(porQ);
@@ -54,7 +54,7 @@ r.get('/pagos', requiere('pagos', 'ver'), async (req, res) => {
 // Garantías: retenidas, por vencer, capturadas y liberadas
 r.get('/pagos/garantias', requiere('pagos', 'ver'), async (req, res) => {
   const filas = (await q(`${SELECT_PAGO} WHERE p.empresa_id = $1 AND p.concepto = 'garantia' AND p.estado NOT IN ('rechazado')
-                          ORDER BY (p.estado IN ('retenido','simulado'))::int DESC, p.vence_retencion NULLS LAST, p.id DESC LIMIT 300`, [req.empresaId])).map(decorar);
+                          ORDER BY (p.estado IN ('retenido','simulado'))::int DESC, p.vence_retencion NULLS LAST, p.id DESC ${tramo(req, { porDefecto: 300 }).sql}`, [req.empresaId])).map(decorar); // RNT-08
   const emp = await uno('SELECT ajustes FROM empresas WHERE id = $1', [req.empresaId]);
   res.json({ garantias: filas.map((g) => ({ ...g, dias_restantes: g.vence_retencion ? Math.ceil((new Date(g.vence_retencion) - Date.now()) / 864e5) : null })), dias_retencion: Number(emp?.ajustes?.garantia_dias_retencion) || 30 });
 });

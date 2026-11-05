@@ -3,6 +3,7 @@
 import express from 'express';
 import { porPalabras } from '../busqueda.js';
 import { q, uno } from '../db.js';
+import { tramo } from '../paginacion.js';
 import { requiere, ErrorHttp } from '../auth.js';
 import { registrar } from '../bitacora.js';
 import { leer } from '../integraciones/index.js';
@@ -48,13 +49,14 @@ r.get('/tag-multas/resumen', requiere('tag_multas'), async (req, res) => {
 r.get('/tag-multas/tag', requiere('tag_multas'), async (req, res) => {
   const estado = req.query.estado || null;
   // Fase 1 (1-nov): por palabras (patente sin guión, pórtico, cliente, folio), sin tildes ni mayúsculas.
-  const params = [req.empresaId, estado, req.query.desde || null, req.query.hasta || null];
+  const fecha = (v) => (/^\d{4}-\d{2}-\d{2}$/.test(String(v || '')) ? v : null); // RNT-08: ?desde= numérico es la fila (tramo), no una fecha
+  const params = [req.empresaId, estado, fecha(req.query.desde), fecha(req.query.hasta)];
   const porQ = porPalabras([{ col: 't.patente', limpiar: true }, 't.portico', CLIENTE, { col: 'r.folio', limpiar: true }], req.query.q, params) || 'TRUE';
   res.json(await q(`SELECT t.*, r.folio, r.estado AS reserva_estado, ${CLIENTE} AS cliente, c.id AS cliente_id, v.marca, v.modelo
       FROM tag_transitos t LEFT JOIN reservas r ON r.id = t.reserva_id LEFT JOIN clientes c ON c.id = r.cliente_id LEFT JOIN vehiculos v ON v.id = t.vehiculo_id
      WHERE t.empresa_id = $1 AND ($2::text IS NULL OR t.estado = $2) AND ${porQ}
        AND ($3::date IS NULL OR t.fecha_hora >= $3::date) AND ($4::date IS NULL OR t.fecha_hora < $4::date + 1)
-     ORDER BY t.fecha_hora DESC LIMIT 1000`, params));
+     ORDER BY t.fecha_hora DESC, t.id DESC ${tramo(req, { porDefecto: 1000 }).sql}`, params)); // RNT-08: por partes, orden total
 });
 
 r.get('/tag-multas/multas', requiere('tag_multas'), async (req, res) => {
@@ -64,7 +66,7 @@ r.get('/tag-multas/multas', requiere('tag_multas'), async (req, res) => {
   res.json(await q(`SELECT m.*, r.folio, r.estado AS reserva_estado, ${CLIENTE} AS cliente, v.marca, v.modelo
       FROM multas m LEFT JOIN reservas r ON r.id = m.reserva_id LEFT JOIN clientes c ON c.id = m.cliente_id LEFT JOIN vehiculos v ON v.id = m.vehiculo_id
      WHERE m.empresa_id = $1 AND ($2::text IS NULL OR m.estado = $2) AND ${porQ}
-     ORDER BY m.fecha_infraccion DESC LIMIT 1000`, params));
+     ORDER BY m.fecha_infraccion DESC, m.id DESC ${tramo(req, { porDefecto: 1000 }).sql}`, params)); // RNT-08
 });
 
 // Reservas con TAG o multas aún sin avisar al cliente

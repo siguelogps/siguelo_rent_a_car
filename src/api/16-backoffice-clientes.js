@@ -7,7 +7,7 @@
 // las conexiones generales, solo superadmin. Nunca vuelve un secreto al navegador.
 import express from 'express';
 import { porPalabras } from '../busqueda.js';
-import { tramo } from '../paginacion.js';
+import { tramo, porPagina } from '../paginacion.js';
 import { q, uno } from '../db.js';
 import { requiere, soloSiguelo, soloSuperadmin, puedeOperar, ErrorHttp } from '../auth.js';
 import { registrar } from '../bitacora.js';
@@ -379,20 +379,21 @@ r.post('/backoffice/clientes/:id/entrar', ...base, async (req, res) => {
 r.get('/backoffice/clientes/:id/bitacora', ...base, async (req, res) => {
   const e = await empresaDe(req.params.id);
   const pagina = Math.max(1, Number(req.query.pagina) || 1);
+  const por = porPagina(req); // 5-nov (RNT-11): «Filas por página» 10 · 25 · 50 · 100
   const soloSiguelo_ = req.query.siguelo === '1';
   const donde = `b.empresa_id = $1 ${soloSiguelo_ ? `AND u.rol IN ('superadmin','soporte')` : ''}`;
   const [{ n }] = await q(`SELECT count(*)::int AS n FROM bitacora b LEFT JOIN usuarios u ON u.id = b.usuario_id WHERE ${donde}`, [e.id]);
   const filas = await q(`SELECT b.id, b.accion, b.entidad, b.entidad_id, b.detalle, b.creado_en, u.nombre AS usuario, u.rol FROM bitacora b LEFT JOIN usuarios u ON u.id = b.usuario_id
-    WHERE ${donde} ORDER BY b.id DESC LIMIT 50 OFFSET ${(pagina - 1) * 50}`, [e.id]);
+    WHERE ${donde} ORDER BY b.id DESC LIMIT ${por} OFFSET ${(pagina - 1) * por}`, [e.id]);
   // Fase 1 (1-nov): total y páginas para «Página X de Y», como en las demás bitácoras.
-  res.json({ filas, pagina, total: n, paginas: Math.max(1, Math.ceil(n / 50)) });
+  res.json({ filas, pagina, por, total: n, paginas: Math.max(1, Math.ceil(n / por)) });
 });
 
 // ── Solicitudes ──
 r.get('/backoffice/solicitudes', ...base, async (req, res) => {
   const estado = ['pendiente', 'en_curso', 'resuelta', 'descartada'].includes(req.query.estado) ? req.query.estado : null;
   const filas = await q(`SELECT s.*, e.nombre AS empresa, e.rut, u.nombre AS resuelta_por_nombre FROM solicitudes_siguelo s JOIN empresas e ON e.id = s.empresa_id LEFT JOIN usuarios u ON u.id = s.resuelta_por
-    WHERE ($1::text IS NULL OR s.estado = $1) ORDER BY (s.estado IN ('pendiente','en_curso')) DESC, s.id DESC LIMIT 200`, [estado]);
+    WHERE ($1::text IS NULL OR s.estado = $1) ORDER BY (s.estado IN ('pendiente','en_curso')) DESC, s.id DESC ${tramo(req, { porDefecto: 200 }).sql}`, [estado]); // RNT-08
   res.json({ solicitudes: filas, tipos: TIPOS_SOLICITUD });
 });
 
@@ -461,6 +462,7 @@ r.post('/backoffice/conexiones/:tipo/probar', ...base, soloSuperadmin, async (re
 // ── Bitácora global ──
 r.get('/backoffice/bitacora', ...base, async (req, res) => {
   const pagina = Math.max(1, Number(req.query.pagina) || 1);
+  const por = porPagina(req); // 5-nov (RNT-11)
   const empresaId = req.query.empresa_id ? Number(req.query.empresa_id) : null;
   const soloEquipo = req.query.equipo === '1';
   // Fase 1 (1-nov): de a 50 como todas las listas, con el total para «Página X de Y».
@@ -469,8 +471,8 @@ r.get('/backoffice/bitacora', ...base, async (req, res) => {
   const filas = await q(`SELECT b.id, b.accion, b.entidad, b.entidad_id, b.detalle, b.creado_en, b.empresa_id, e.nombre AS empresa, u.nombre AS usuario, u.rol
     FROM bitacora b LEFT JOIN usuarios u ON u.id = b.usuario_id LEFT JOIN empresas e ON e.id = b.empresa_id
     WHERE ${donde}
-    ORDER BY b.id DESC LIMIT 50 OFFSET ${(pagina - 1) * 50}`, [empresaId, soloEquipo]);
-  res.json({ filas, pagina, total: n, paginas: Math.max(1, Math.ceil(n / 50)) });
+    ORDER BY b.id DESC LIMIT ${por} OFFSET ${(pagina - 1) * por}`, [empresaId, soloEquipo]);
+  res.json({ filas, pagina, por, total: n, paginas: Math.max(1, Math.ceil(n / por)) });
 });
 
 // Tareas: reintento de tickets al CRM y anonimización de bajas vencidas.

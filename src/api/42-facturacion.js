@@ -2,6 +2,7 @@
 import express from 'express';
 import { porPalabras } from '../busqueda.js';
 import { q, uno } from '../db.js';
+import { tramo } from '../paginacion.js';
 import { requiere, ErrorHttp } from '../auth.js';
 import { emitirDocumento, procesarDocumento, consultarEstado, notaCredito, receptorDeCliente, resumenFolios } from '../facturacion/index.js';
 import { TIPOS_DTE, ESTADOS_DTE, desglosar } from '../facturacion/calculo.js';
@@ -16,15 +17,15 @@ r.get('/facturacion', requiere('facturacion', 'ver'), async (req, res) => {
   const add = (sql, v) => { vals.push(v); cond.push(sql.replaceAll('?', `$${vals.length}`)); };
   if (f.tipo) add('d.tipo = ?', Number(f.tipo));
   if (f.estado) add('d.estado = ?', f.estado);
-  if (f.desde) add(`d.creado_en >= (?::date)::timestamp AT TIME ZONE 'America/Santiago'`, f.desde);
-  if (f.hasta) add(`d.creado_en < ((?::date + 1)::timestamp AT TIME ZONE 'America/Santiago')`, f.hasta);
+  if (f.desde && /^\d{4}-\d{2}-\d{2}$/.test(String(f.desde))) add(`d.creado_en >= (?::date)::timestamp AT TIME ZONE 'America/Santiago'`, f.desde);
+  if (f.hasta && /^\d{4}-\d{2}-\d{2}$/.test(String(f.hasta))) add(`d.creado_en < ((?::date + 1)::timestamp AT TIME ZONE 'America/Santiago')`, f.hasta);
   // Fase 1 (1-nov): por palabras, sin tildes ni mayúsculas; el RUT sin puntos ni guión.
   const porQ = porPalabras([`(d.receptor->>'razonSocial')`, { col: `(d.receptor->>'rut')`, limpiar: true }, 'r.folio', 'd.folio::text'], f.q, vals);
   if (porQ) cond.push(porQ);
   const docs = await q(`SELECT d.*, r.folio AS reserva_folio, l.folio AS liquidacion_folio, ref.folio AS ref_folio, ref.tipo AS ref_tipo, nc.folio AS nc_folio, nc.estado AS nc_estado
                           FROM documentos_tributarios d LEFT JOIN reservas r ON r.id = d.reserva_id LEFT JOIN liquidaciones l ON l.id = d.liquidacion_id
                           LEFT JOIN documentos_tributarios ref ON ref.id = d.dte_ref_id LEFT JOIN documentos_tributarios nc ON nc.id = d.anulado_por
-                         WHERE ${cond.join(' AND ')} ORDER BY d.creado_en DESC, d.id DESC LIMIT 500`, vals);
+                         WHERE ${cond.join(' AND ')} ORDER BY d.creado_en DESC, d.id DESC ${tramo(req, { porDefecto: 500 }).sql}`, vals); // RNT-08: por partes
   const validos = docs.filter((d) => ['emitido', 'aceptado', 'reparos'].includes(d.estado));
   const totales = {
     emitido: validos.filter((d) => d.tipo !== 61).reduce((s, d) => s + d.total, 0) - validos.filter((d) => d.tipo === 61).reduce((s, d) => s + d.total, 0),

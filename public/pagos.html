@@ -55,7 +55,7 @@
   </section>
 </main>
 <script type="module">
-import { iniciarPagina, api, esc, clp, fecha, fechaHora, hora, pat, modal, toast, toastError, confirmar, leerForm, puede } from '/comun.js';
+import { iniciarPagina, api, esc, clp, fecha, fechaHora, hora, pat, modal, toast, toastError, confirmar, leerForm, puede, avisarTope } from '/comun.js';
 import { CONCEPTOS, METODOS, metodo, chipPago, barraGarantia, proveedor, diasRestantes, selectorReserva } from '/js/pagos.js';
 
 const yo = await iniciarPagina({ activo: 'pagos', titulo: 'Pagos y garantías' });
@@ -103,7 +103,7 @@ $('#filas').addEventListener('click', (e) => { const tr = e.target.closest('tr[d
 // ── Garantías ──
 let garantias = [];
 async function cargarGarantias() {
-  const d = await api('pagos/garantias');
+  const d = await api('pagos/garantias?limite=300'); // RNT-08: por partes, con aviso de tope
   garantias = d.garantias;
   const activas = garantias.filter((g) => g.etapa === 'retenida' || g.etapa === 'solicitada');
   $('#n-gar').textContent = garantias.filter((g) => g.etapa === 'retenida').length;
@@ -121,6 +121,7 @@ async function cargarGarantias() {
   const hist = garantias.filter((g) => !['retenida', 'solicitada'].includes(g.etapa));
   $('#gar-hist').innerHTML = hist.map((g) => `<tr class="clic" data-id="${g.id}"><td>${g.reserva_folio ? `<span class="mono">${esc(g.reserva_folio)}</span>` : '—'}</td><td>${esc(g.cliente || '')}</td><td>${g.tarjeta ? `···· ${esc(g.tarjeta)}` : '—'}</td><td>${metodo(g.metodo)}</td><td>${chipPago(g)}</td>
       <td class="monto">${clp(g.monto)}</td><td class="monto">${clp(g.monto_capturado)}</td><td class="monto">${clp(g.monto_liberado)}</td></tr>`).join('') || '<tr><td colspan="8" class="rc-vacio">Sin historial</td></tr>';
+  avisarTope($('#gar-hist'), garantias.length, 300);
 }
 $('#gar-activas').addEventListener('click', (e) => {
   const c = e.target.closest('[data-capturar]'), l = e.target.closest('[data-liberar]'), a = e.target.closest('[data-anular-gar]');

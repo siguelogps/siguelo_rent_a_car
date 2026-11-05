@@ -34,7 +34,7 @@
   </div>
 </main>
 <script type="module">
-import { iniciarPagina, api, esc, clp, fecha, rut, modal, toast, toastError, confirmar, leerForm, descargar, puede } from '/comun.js';
+import { iniciarPagina, api, esc, clp, fecha, rut, modal, toast, toastError, confirmar, leerForm, descargar, puede, avisarTope } from '/comun.js';
 import { selectorReserva } from '/js/pagos.js';
 
 const yo = await iniciarPagina({ activo: 'facturacion', titulo: 'Facturación' });
@@ -46,11 +46,12 @@ if (editar) $('#acciones').innerHTML = '<button type="button" class="btn primari
 if (yo.empresa?.marcha_blanca) $('#aviso-mb').innerHTML = '<div class="aviso info"><b>Marcha blanca:</b> los documentos quedan «Retenidos» y no se envían al SII. Al desactivarla y activar SimpleAPI, se emiten desde aquí con «Emitir ahora».</div>';
 const filtros = $('#filtros');
 let docs = [];
+const TOPE_DOCS = 500;
 
 async function cargar() {
   const f = leerForm(filtros);
   const qs = new URLSearchParams(Object.entries(f).filter(([, x]) => x)).toString();
-  const d = await api(`facturacion${qs ? `?${qs}` : ''}`);
+  const d = await api(`facturacion?${qs ? `${qs}&` : ''}limite=${TOPE_DOCS}`); // RNT-08: se pide por partes y se avisa el tope
   docs = d.documentos;
   const t = d.totales;
   $('#kpis').innerHTML = `
@@ -68,6 +69,7 @@ async function cargar() {
       <td class="monto">${clp(x.neto)}</td><td class="monto">${clp(x.iva)}</td><td class="monto">${x.tipo === 61 ? clp(-x.total) : clp(x.total)}</td>
       <td><span class="chip ${ec}" title="${esc(x.mensaje || '')}">${et}</span>${x.respuesta?.simulado ? '<span class="sub">folio de prueba</span>' : ''}</td></tr>`;
   }).join('') || '<tr><td colspan="8" class="rc-vacio">No hay documentos con estos filtros</td></tr>';
+  avisarTope($('#filas'), docs.length, TOPE_DOCS);
 }
 
 async function cargarFolios() {

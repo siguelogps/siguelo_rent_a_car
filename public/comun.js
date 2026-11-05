@@ -74,6 +74,19 @@ export async function api(ruta, { method, body, crudo = false } = {}) {
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 export const clp = (n) => (n == null || n === '' ? '' : `${Number(n) < 0 ? '−' : ''}$${Math.abs(Math.round(Number(n))).toLocaleString('es-CL')}`);
 export const miles = (n) => (n == null || n === '' ? '' : Math.round(Number(n)).toLocaleString('es-CL'));
+
+// Aviso de lista que llegó a su tope (5-nov, revisión exhaustiva RNT-08). Las listas se piden por partes (?limite=, ver
+// src/paginacion.js); si llegan justo `limite` filas puede haber más y la pantalla lo dice en vez de cortar en silencio.
+// `el` es la tabla, su tbody o el contenedor de la lista; el aviso va justo después de su .tabla-env. Sin tope, lo quita.
+export const textoTope = (limite) => `Se muestran los primeros ${miles(limite)} registros: puede haber más. Usa los filtros (fechas, estado o búsqueda) para ver el resto.`;
+export function avisarTope(el, n, limite) {
+  if (!el) return;
+  const ancla = el.closest?.('.tabla-env') || el.closest?.('table') || el;
+  let p = ancla.nextElementSibling?.classList?.contains('rc-tope') ? ancla.nextElementSibling : null;
+  if (!(n >= limite)) { p?.remove(); return; }
+  if (!p) { p = document.createElement('p'); p.className = 'rc-tope aviso neutro peq'; p.setAttribute('role', 'status'); ancla.after(p); }
+  p.textContent = textoTope(limite);
+}
 const partes = (d) => Object.fromEntries(new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).formatToParts(new Date(d)).map((p) => [p.type, p.value]));
 export function fecha(v) {
   if (!v) return '';

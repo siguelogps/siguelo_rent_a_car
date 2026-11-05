@@ -9,9 +9,17 @@ import { hashSha256 } from './cifrado.js';
 
 const DEMO = 'soporte@siguelogps.cl';
 
-export async function asegurarSuperadmin() {
+// 5-nov (RNT-03): sin SUPERADMIN_CORREO el superadmin demo no se desactiva. No se apaga desde aquí (si hoy es la única
+// entrada del equipo Síguelo a una instalación, dejaría a todos afuera); en producción se avisa en el registro para que se
+// defina SUPERADMIN_CORREO/SUPERADMIN_CLAVE, y entonces se desactiva solo en el arranque siguiente.
+export const AVISO_SUPERADMIN_DEMO = `El superadmin demo ${DEMO} está activo en producción y no hay SUPERADMIN_CORREO: define SUPERADMIN_CORREO y SUPERADMIN_CLAVE en el servicio para desactivarlo.`;
+
+export async function asegurarSuperadmin({ produccion = process.env.NODE_ENV === 'production', log = console } = {}) {
   const correo = String(process.env.SUPERADMIN_CORREO || '').trim().toLowerCase();
-  if (!correo) return null;
+  if (!correo) {
+    if (produccion && (await uno(`SELECT 1 AS si FROM usuarios WHERE lower(correo) = $1 AND rol = 'superadmin' AND activo`, [DEMO]))) { log.error(AVISO_SUPERADMIN_DEMO); return { aviso: AVISO_SUPERADMIN_DEMO }; }
+    return null;
+  }
   const u = await uno('SELECT id, rol, activo FROM usuarios WHERE lower(correo) = $1', [correo]);
   const clave = process.env.SUPERADMIN_CLAVE || '';
   const huella = clave ? hashSha256(`superadmin:${correo}:${clave}`) : null;

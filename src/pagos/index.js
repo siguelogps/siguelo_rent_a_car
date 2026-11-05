@@ -261,6 +261,22 @@ function exigirRetenida(p) {
   if (etapaGarantia(p) !== 'retenida') throw new ErrorHttp(409, `La garantía no está retenida (estado: ${ESTADOS[p.estado] || p.estado})`);
 }
 
+// 🔥 5-nov (revisión exhaustiva, RNT-04): capturar() y liberar() leían el pago, validaban «retenida», llamaban al
+// proveedor y recién después lo actualizaban sin condición. Dos pedidos a la vez (doble clic, reintento de la app) pasaban
+// los dos la validación y capturaban dos veces en Webpay o Mercado Pago. Ahora, antes de llamar al proveedor, el pago se
+// «toma» con un UPDATE condicional (mismo estado que se validó y sin otra operación en curso): solo uno de los pedidos lo
+// consigue; el otro recibe 409. La marca se borra al terminar (bien o mal). Si el proceso se cae a mitad, la marca vence
+// a los 5 minutos para no dejar la garantía trabada para siempre.
+const MARCA_VENCE = "interval '5 minutes'";
+async function tomarGarantia(empresaId, p, operacion) {
+  const [x] = await q(`UPDATE pagos SET detalle = detalle || jsonb_build_object('en_proceso', $4::text, 'en_proceso_desde', now())
+                        WHERE id = $1 AND empresa_id = $2 AND estado = $3
+                          AND (NOT (detalle ? 'en_proceso') OR (detalle->>'en_proceso_desde')::timestamptz < now() - ${MARCA_VENCE}) RETURNING id`,
+    [p.id, empresaId, p.estado, operacion]);
+  if (!x) throw new ErrorHttp(409, 'Esta garantía ya se está procesando. Espera unos segundos y revisa su estado.');
+}
+const soltarGarantia = (p) => q(`UPDATE pagos SET detalle = detalle - 'en_proceso' - 'en_proceso_desde' WHERE id = $1`, [p.id]);
+
 export async function capturar(empresaId, pagoId, monto, { usuarioId = null, motivo = null } = {}) {
   const p = await obtenerPago(empresaId, pagoId);
   exigirRetenida(p);
@@ -268,6 +284,12 @@ export async function capturar(empresaId, pagoId, monto, { usuarioId = null, mot
   if (!Number.isFinite(m) || m < 0) throw new ErrorHttp(400, 'Monto a capturar no válido');
   if (m === 0) return liberar(empresaId, pagoId, { usuarioId, motivo });
   if (m > p.monto) throw new ErrorHttp(400, `No se puede capturar más que lo retenido (${clp(p.monto)})`);
+  await tomarGarantia(empresaId, p, 'captura');
+  try { return await capturarTomada(empresaId, p, m, { usuarioId, motivo }); }
+  finally { await soltarGarantia(p); }
+}
+
+async function capturarTomada(empresaId, p, m, { usuarioId, motivo }) {
   const libera = p.monto - m;
   const pa = await permisoProveedor(empresaId, p);
   let extra = { captura_motivo: motivo };
@@ -280,10 +302,11 @@ export async function capturar(empresaId, pagoId, monto, { usuarioId = null, mot
     extra = { ...extra, wp_captura: { autorizacion: r.authorization_code, fecha: r.authorization_date, monto: r.captured_amount } };
   } else if (p.metodo === 'mercadopago') {
     const mp = crearClienteMp(pa.config, { fetch: fetchPagos });
-    if (p.detalle?.garantia_como_cobro) { if (libera > 0) await mp.reembolsar(p.detalle.mp_pago, libera); }
-    else await mp.capturar(p.detalle?.mp_pago, m);
+    // clave de idempotencia fija por garantía y operación: si el pedido se repite, Mercado Pago no la aplica dos veces
+    if (p.detalle?.garantia_como_cobro) { if (libera > 0) await mp.reembolsar(p.detalle.mp_pago, libera, `garantia-${p.id}-captura-${m}`); }
+    else await mp.capturar(p.detalle?.mp_pago, m, `garantia-${p.id}-captura-${m}`);
   }
-  const [r] = await q(`UPDATE pagos SET estado = 'capturado', monto_capturado = $2, monto_liberado = $3, detalle = detalle || $4::jsonb, actualizado_en = now() WHERE id = $1 RETURNING *`,
+  const [r] = await q(`UPDATE pagos SET estado = 'capturado', monto_capturado = $2, monto_liberado = $3, detalle = (detalle - 'en_proceso' - 'en_proceso_desde') || $4::jsonb, actualizado_en = now() WHERE id = $1 RETURNING *`,
     [p.id, m, libera, JSON.stringify(extra)]);
   await bit(empresaId, usuarioId, 'garantia_capturada', p.id, { capturado: m, liberado: libera, simulado: !pa.ok && !pa.manual, motivo });
   return r;
@@ -297,6 +320,12 @@ export async function liberar(empresaId, pagoId, { usuarioId = null, motivo = nu
     return r;
   }
   exigirRetenida(p);
+  await tomarGarantia(empresaId, p, 'liberacion');
+  try { return await liberarTomada(empresaId, p, { usuarioId, motivo }); }
+  finally { await soltarGarantia(p); }
+}
+
+async function liberarTomada(empresaId, p, { usuarioId, motivo }) {
   const pa = await permisoProveedor(empresaId, p);
   let extra = { liberacion_motivo: motivo };
   if (pa.manual) extra = { ...extra, liberacion_manual: true };
@@ -307,10 +336,10 @@ export async function liberar(empresaId, pagoId, { usuarioId = null, motivo = nu
     extra = { ...extra, wp_reversa: { tipo: r.type, codigo: r.response_code ?? null } };
   } else if (p.metodo === 'mercadopago') {
     const mp = crearClienteMp(pa.config, { fetch: fetchPagos });
-    if (p.detalle?.garantia_como_cobro) await mp.reembolsar(p.detalle.mp_pago, p.monto);
-    else await mp.cancelar(p.detalle?.mp_pago);
+    if (p.detalle?.garantia_como_cobro) await mp.reembolsar(p.detalle.mp_pago, p.monto, `garantia-${p.id}-liberacion`);
+    else await mp.cancelar(p.detalle?.mp_pago, `garantia-${p.id}-liberacion`);
   }
-  const [r] = await q(`UPDATE pagos SET estado = 'liberado', monto_liberado = monto, detalle = detalle || $2::jsonb, actualizado_en = now() WHERE id = $1 RETURNING *`, [p.id, JSON.stringify(extra)]);
+  const [r] = await q(`UPDATE pagos SET estado = 'liberado', monto_liberado = monto, detalle = (detalle - 'en_proceso' - 'en_proceso_desde') || $2::jsonb, actualizado_en = now() WHERE id = $1 RETURNING *`, [p.id, JSON.stringify(extra)]);
   await bit(empresaId, usuarioId, 'garantia_liberada', p.id, { liberado: p.monto, simulado: !pa.ok && !pa.manual, motivo });
   return r;
 }

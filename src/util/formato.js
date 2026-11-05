@@ -39,11 +39,21 @@ export function desdeLocal(fechaIso, horaTxt = '00:00', zona = ZONA) {
   return new Date(supuesto - (comoLocal - supuesto));
 }
 
-// Días de arriendo: bloques de 24 h; lo que exceda la tolerancia (minutos) suma un día.
+// Minutos «de reloj» en Santiago: la fecha y hora que marca el reloj de pared, contadas como si no hubiera cambio de hora.
+// 🔥 5-nov (revisión exhaustiva, RNT-01): los días se contaban con milisegundos absolutos. En abril, cuando el reloj se
+// atrasa una hora, un arriendo del 02-04 10:00 al 05-04 10:00 dura 73 h reales: pasaba la tolerancia y cobraba 4 días en
+// vez de 3 (y en septiembre, 71 h, podía dejar fuera un atraso real). El contrato se pacta en hora de reloj, así que los
+// días y la tolerancia se miden entre horas de pared.
+export function minutosReloj(d, zona = ZONA) {
+  const p = partes(d, zona);
+  return Date.UTC(+p.year, +p.month - 1, +p.day, +p.hour, +p.minute) / 6e4;
+}
+
+// Días de arriendo: bloques de 24 h de reloj; lo que exceda la tolerancia (minutos) suma un día.
 export function diasArriendo(inicio, fin, toleranciaMin = 59) {
-  const ms = new Date(fin) - new Date(inicio);
-  if (ms <= 0) return 1;
-  const dias = Math.floor(ms / 864e5);
-  const resto = ms - dias * 864e5;
-  return Math.max(1, dias + (resto > toleranciaMin * 6e4 ? 1 : 0));
+  const min = minutosReloj(new Date(fin)) - minutosReloj(new Date(inicio));
+  if (!(min > 0)) return 1;
+  const dias = Math.floor(min / 1440);
+  const resto = min - dias * 1440;
+  return Math.max(1, dias + (resto > toleranciaMin ? 1 : 0));
 }

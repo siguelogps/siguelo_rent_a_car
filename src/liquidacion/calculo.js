@@ -1,23 +1,24 @@
 // Cálculo automático de la liquidación al cierre (sin efectos): cada cargo indica cómo se calculó y de dónde sale el dato.
 // Línea: { codigo, concepto, calculo, origen, monto, incluir, editado, motivo, aviso?, sub?, monto_calculado }
-import { clp, miles, hora, fecha } from '../util/formato.js';
+import { clp, miles, hora, fecha, minutosReloj } from '../util/formato.js';
 
 export const ORIGENES = { checkin: 'Check-in', gps: 'Plataforma GPS', tag: 'Importación TAG', multas: 'Importación multas', incidente: 'Incidente', manual: 'Manual' };
 export const FALTANTES = { repuesto: 'Rueda de repuesto', gata: 'Gata', extintor: 'Extintor', documentos: 'Documentos del vehículo', tag: 'Dispositivo TAG', botiquin: 'Botiquín', chaleco: 'Chaleco reflectante', llave: 'Llave o control' };
 // Montos por defecto si la empresa no los definió en ajustes.faltantes
 export const PRECIOS_FALTANTES = { repuesto: 90000, gata: 25000, extintor: 18000, documentos: 15000, tag: 20000, botiquin: 10000, chaleco: 5000, llave: 120000 };
 
-const DIA = 864e5;
 const plural = (n, s, p = `${s}s`) => `${miles(n)} ${n === 1 ? s : p}`;
 const octavos = (n) => (n === 8 ? 'lleno' : `${n}/8`);
 const linea = (o) => ({ incluir: o.monto > 0, editado: false, motivo: null, ...o, monto: Math.max(0, Math.round(o.monto || 0)), monto_calculado: Math.max(0, Math.round(o.monto || 0)) });
 
 // Días de atraso: bloques de 24 h desde la hora pactada; lo que exceda la tolerancia suma un día.
+// 🔥 5-nov (RNT-01): en hora de reloj de Santiago, igual que diasArriendo(): quien devuelve a la hora pactada no queda
+// atrasado porque entre medio se cambió la hora.
 export function diasAtraso(finPactado, devolucion, toleranciaMin = 59) {
-  const ms = new Date(devolucion) - new Date(finPactado);
-  if (!(ms > toleranciaMin * 6e4)) return 0;
-  const dias = Math.floor(ms / DIA);
-  return dias + (ms - dias * DIA > toleranciaMin * 6e4 ? 1 : 0);
+  const min = minutosReloj(new Date(devolucion)) - minutosReloj(new Date(finPactado));
+  if (!(min > toleranciaMin)) return 0;
+  const dias = Math.floor(min / 1440);
+  return dias + (min - dias * 1440 > toleranciaMin ? 1 : 0);
 }
 
 // Valor del día: arriendo de la cotización ÷ días; si no, la tarifa base de la categoría.

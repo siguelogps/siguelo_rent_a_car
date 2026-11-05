@@ -119,6 +119,57 @@ test('pago manual por API, listado por reserva, reembolso y permisos', async () 
   assert.equal((await (await t.como('finanzas@siguelogps.cl')).post('/api/pagos/manual', { reserva_id: r.id, metodo: 'efectivo', monto: 1000 })).estado, 200);
 });
 
+// 5-nov (revisión exhaustiva, RNT-04): dos capturas simultáneas de la misma garantía llamaban dos veces al proveedor.
+test('garantía: dos capturas a la vez llaman una sola vez al proveedor; un rechazo suelta la garantía', async () => {
+  await t.db.q('UPDATE empresas SET marcha_blanca = false WHERE id = $1', [E]);
+  const integ = await import('../src/integraciones/index.js');
+  await integ.guardar(E, 'webpay', { ambiente: 'integracion', codigo_comercio: INTEGRACION.codigo_comercio, codigo_comercio_diferido: INTEGRACION.codigo_comercio_diferido, api_key: INTEGRACION.api_key }, null);
+  await integ.activar(E, 'webpay', true, null);
+  let rechazar = true;
+  const { f, llamadas } = fetchFalso((c) => {
+    if (c.metodo === 'POST' && c.url.endsWith('/transactions')) return [200, { token: 'tokDoble', url: 'https://webpay3gint.transbank.cl/webpayserver/initTransaction' }];
+    if (c.url.endsWith('/capture')) return rechazar ? [200, { response_code: -1 }] : [200, { response_code: 0, authorization_code: '777', captured_amount: c.cuerpo.capture_amount }];
+    if (c.metodo === 'PUT') return [200, { status: 'AUTHORIZED', response_code: 0, authorization_code: '555001', card_detail: { card_number: '1111' }, payment_type_code: 'VN', amount: 200000 }];
+    return [404, {}];
+  });
+  // el proveedor tarda: así los dos pedidos se cruzan
+  P.usarFetch(async (url, op) => { if (String(url).endsWith('/capture')) await new Promise((ok) => setTimeout(ok, 80)); return f(url, op); });
+  try {
+    const r = await reservaDe('R-1004');
+    const x = await P.iniciarCobro({ empresaId: E, reservaId: r.id, concepto: 'garantia', monto: 200000, proveedor: 'webpay' });
+    await fetch(`${t.base}/api/pagos/retorno/webpay?token_ws=tokDoble`, { redirect: 'manual' });
+    assert.equal((await t.db.uno('SELECT estado FROM pagos WHERE id = $1', [x.pagoId])).estado, 'retenido');
+    // primero el proveedor rechaza: la garantía no queda trabada
+    assert.equal((await admin.post(`/api/pagos/${x.pagoId}/capturar`, { monto: 50000 })).estado, 502);
+    assert.equal((await t.db.uno('SELECT detalle FROM pagos WHERE id = $1', [x.pagoId])).detalle.en_proceso, undefined);
+    rechazar = false;
+    const antes = llamadas.filter((l) => l.url.endsWith('/capture')).length;
+    const [a, b] = await Promise.all([admin.post(`/api/pagos/${x.pagoId}/capturar`, { monto: 50000 }), admin.post(`/api/pagos/${x.pagoId}/capturar`, { monto: 50000 })]);
+    assert.deepEqual([a.estado, b.estado].sort(), [200, 409], JSON.stringify([a.datos, b.datos]));
+    assert.match((a.estado === 409 ? a : b).datos.error, /ya se está procesando/);
+    assert.equal(llamadas.filter((l) => l.url.endsWith('/capture')).length - antes, 1, 'una sola captura en el proveedor');
+    const p = await t.db.uno('SELECT estado, monto_capturado, detalle FROM pagos WHERE id = $1', [x.pagoId]);
+    assert.deepEqual([p.estado, p.monto_capturado, p.detalle.en_proceso], ['capturado', 50000, undefined]);
+    // ya capturada: liberar responde 409 sin llamar al proveedor
+    assert.equal((await admin.post(`/api/pagos/${x.pagoId}/liberar`, {})).estado, 409);
+  } finally {
+    P.usarFetch(null);
+    await integ.activar(E, 'webpay', false, null);
+    await t.db.q('UPDATE empresas SET marcha_blanca = true WHERE id = $1', [E]);
+  }
+});
+
+test('Mercado Pago: la captura y la liberación de una garantía mandan una clave de idempotencia fija', async () => {
+  const { f, llamadas } = fetchFalso(() => [200, {}]);
+  const mp = crearClienteMp({ access_token: 'x' }, { fetch: f });
+  await mp.capturar(77, 1000, 'garantia-9-captura-1000');
+  await mp.cancelar(77, 'garantia-9-liberacion');
+  await mp.capturar(77, 1000);
+  assert.equal(llamadas[0].headers['X-Idempotency-Key'], 'garantia-9-captura-1000');
+  assert.equal(llamadas[1].headers['X-Idempotency-Key'], 'garantia-9-liberacion');
+  assert.equal(llamadas[2].headers['X-Idempotency-Key'], undefined, 'sin clave, como antes');
+});
+
 test('enlace de pago: se crea, se envía (retenido) y al abrirlo redirige al resultado', async () => {
   const r = await reservaDe('R-1006');
   const x = await admin.post('/api/pagos/link', { reserva_id: r.id, concepto: 'arriendo', monto: 15000, proveedor: 'mercadopago', enviar: ['whatsapp', 'correo'] });

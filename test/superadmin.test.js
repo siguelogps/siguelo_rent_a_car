@@ -6,6 +6,28 @@ let t;
 before(async () => { t = await levantar(); });
 after(async () => { delete process.env.SUPERADMIN_CORREO; delete process.env.SUPERADMIN_CLAVE; await t.cerrar(); });
 
+// 5-nov (revisión exhaustiva, RNT-03): el Blueprint de producción sembraba la demo con su superadmin compartido.
+test('arranque: en producción la demo no crea el superadmin demo ni usa demo1234', async () => {
+  const { planDemo } = await import('../src/arranque.js');
+  assert.deepEqual(planDemo({ produccion: false, sembrarDemo: true }), { sembrar: true, clave: 'demo1234', superadminDemo: true }, 'desarrollo: igual que siempre');
+  assert.deepEqual(planDemo({ produccion: true, sembrarDemo: true, demoClave: 'clave-al-azar' }), { sembrar: true, clave: 'clave-al-azar', superadminDemo: false });
+  const sinClave = planDemo({ produccion: true, sembrarDemo: true });
+  assert.equal(sinClave.sembrar, false);
+  assert.match(sinClave.aviso, /DEMO_CLAVE/);
+  assert.deepEqual(planDemo({ produccion: true, sembrarDemo: false, demoClave: 'x' }), { sembrar: false });
+  // sembrarDemo({ superadminDemo: false }) no inserta soporte@: se comprueba en el SQL sin otra base (la de la prueba ya lo tiene)
+  const fuente = (await import('node:fs')).readFileSync(new URL('../src/demo.js', import.meta.url), 'utf8');
+  assert.match(fuente, /if \(superadminDemo\) await q\(`INSERT INTO usuarios[^`]*soporte@siguelogps\.cl/);
+  // sin SUPERADMIN_CORREO, en producción, el superadmin demo activo se avisa en el registro (no se apaga: podría ser la única entrada)
+  const { asegurarSuperadmin, AVISO_SUPERADMIN_DEMO } = await import('../src/superadmin.js');
+  const avisos = [];
+  const r = await asegurarSuperadmin({ produccion: true, log: { error: (m) => avisos.push(m) } });
+  assert.equal(r.aviso, AVISO_SUPERADMIN_DEMO);
+  assert.deepEqual(avisos, [AVISO_SUPERADMIN_DEMO]);
+  assert.equal((await t.db.uno(`SELECT activo FROM usuarios WHERE correo = 'soporte@siguelogps.cl'`)).activo, true);
+  assert.equal(await asegurarSuperadmin({ produccion: false, log: { error: (m) => avisos.push(m) } }), null, 'en desarrollo no avisa');
+});
+
 test('el superadmin se define por SUPERADMIN_CORREO y el de la demo queda desactivado', async () => {
   process.env.SUPERADMIN_CORREO = 'Pablo@siguelogps.cl';
   process.env.SUPERADMIN_CLAVE = 'clave-larga-123';

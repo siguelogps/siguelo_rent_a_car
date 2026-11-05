@@ -2,6 +2,7 @@
 // y recorrido por contrato. Toda consulta filtra por req.empresaId.
 import express from 'express';
 import { q, uno } from '../db.js';
+import { tramo } from '../paginacion.js';
 import { requiere, ErrorHttp } from '../auth.js';
 import { puede } from '../permisos.js';
 import { registrar } from '../bitacora.js';
@@ -80,7 +81,7 @@ r.get('/gps/alertas', requiere('gps'), async (req, res) => {
       FROM gps_alertas a JOIN vehiculos v ON v.id = a.vehiculo_id LEFT JOIN reservas r ON r.id = a.reserva_id LEFT JOIN clientes c ON c.id = r.cliente_id
       LEFT JOIN usuarios u ON u.id = a.atendida_por
      WHERE a.empresa_id = $1 AND ($2 OR NOT a.atendida OR a.atendida_en > now() - interval '3 days')
-     ORDER BY a.atendida, a.ocurrido_en DESC LIMIT 200`, [req.empresaId, todas]));
+     ORDER BY a.atendida, a.ocurrido_en DESC, a.id DESC ${tramo(req, { porDefecto: 200 }).sql}`, [req.empresaId, todas])); // RNT-08: por partes, orden total
 });
 
 // Atender: quien edita la plataforma GPS o puede inmovilizar (counter de turno).

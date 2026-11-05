@@ -261,7 +261,8 @@ r.get('/configuracion/salidas/:id', requiere('configuracion', 'ver'), async (req
 // ── Bitácora ──
 r.get('/configuracion/bitacora', requiere('configuracion', 'ver'), async (req, res) => {
   const f = req.query;
-  const porPagina = Math.min(200, Math.max(10, Number(f.por_pagina) || 50));
+  // 5-nov (RNT-11): ?por= es el selector «Filas por página» (10 · 25 · 50 · 100); ?por_pagina= se sigue aceptando.
+  const porPagina = Math.min(200, Math.max(10, Number(f.por || f.por_pagina) || 50));
   const pagina = Math.max(1, Number(f.pagina) || 1);
   const fecha = (s) => (/^\d{4}-\d{2}-\d{2}$/.test(String(s || '')) ? s : null);
   const params = [req.empresaId, f.usuario_id ? Number(f.usuario_id) : null, texto(f.accion, 80), texto(f.entidad, 80), fecha(f.desde), fecha(f.hasta)];

@@ -18,6 +18,7 @@
 // estilo de On Rent). Pestañas: Datos, Plan y módulos, Conexiones (antes «Integraciones»; fase 1, 1-nov), Usuarios, Apps (fase 2), Actividad y bitácora.
 // Nunca llega un secreto: los campos secretos vienen como «••••••••» y solo se reemplazan si se escribe uno nuevo.
 import { iniciarPagina, api, esc, fecha, fechaHora, hora, rut, validarRut, modal, confirmar, toast, toastError, leerForm, ICONOS } from '/comun.js';
+import { htmlPaginacion, enlazarPaginacion, leerPorPagina } from '/paginador.js';
 const yo = await iniciarPagina({ activo: 'empresas', titulo: 'Clientes' });
 const ID = Number(location.pathname.split('/').pop());
 const $ = (s) => document.querySelector(s);
@@ -347,8 +348,12 @@ function apps() {
 const TIPO_SOL = { gps: 'Plataforma GPS', siguelo_os: 'Síguelo OS', facturacion: 'Facturación electrónica', folios: 'Más folios', correo: 'Correo de salida', whatsapp: 'WhatsApp', push: 'Avisos a la app', marcha_blanca: 'Terminar la marcha blanca', plan: 'Cambio de plan', otro: 'Otro' };
 const ESTADO_SOL = { pendiente: ['mb', 'Pendiente'], en_curso: ['info', 'En curso'], resuelta: ['ok', 'Resuelta'], descartada: ['', 'Descartada'] };
 const ACCION = (a) => ({ siguelo_entro_operar: 'Equipo Síguelo entró a operar', siguelo_entro_ver: 'Equipo Síguelo entró con «Ver como»', siguelo_salio: 'Equipo Síguelo salió', cliente_suspendido: 'Cliente suspendido', cliente_reactivado: 'Cliente reactivado', cliente_baja: 'Cliente dado de baja', cliente_alta: 'Alta del cliente', solicitud_siguelo: 'Solicitud a Síguelo' })[a] || a.replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
+// 5-nov (RNT-11): nav del paginador con «Filas por página» (10 · 25 · 50 · 100), recordado en el navegador.
+const ACT = { por: leerPorPagina('empresa:bitacora'), pagina: 1, soloEquipo: false };
+enlazarPaginacion($('#panel'), 'bo-bitacora', { clave: 'empresa:bitacora', mover: (d) => actividad(ACT.pagina + d, ACT.soloEquipo), cambiarPor: (n) => { ACT.por = n; actividad(1, ACT.soloEquipo); } });
 async function actividad(pagina = 1, soloEquipo = false) {
-  const b = await api(`backoffice/clientes/${ID}/bitacora?pagina=${pagina}${soloEquipo ? '&siguelo=1' : ''}`);
+  const b = await api(`backoffice/clientes/${ID}/bitacora?pagina=${pagina}&por=${ACT.por}${soloEquipo ? '&siguelo=1' : ''}`);
+  Object.assign(ACT, { pagina: b.pagina || pagina, soloEquipo });
   $('#panel').innerHTML = `<div class="tarjeta"><div class="bloque" style="padding-bottom:8px"><h2>Solicitudes del cliente <a class="peq" href="/solicitudes">Bandeja de solicitudes</a></h2></div>
       <div class="tabla-env"><table class="tabla"><thead><tr><th>Fecha</th><th>Pide</th><th>Detalle</th><th>Quién</th><th>Estado</th><th>CRM</th></tr></thead><tbody>
       ${D.solicitudes.map((s) => `<tr><td class="mono peq">${fechaHora(s.creado_en)}</td><td>${esc(TIPO_SOL[s.tipo] || s.tipo)}</td><td class="peq">${esc(s.detalle || '')}</td><td class="peq">${esc(s.solicitante_nombre || '')}</td><td><span class="chip ${ESTADO_SOL[s.estado][0]}">${ESTADO_SOL[s.estado][1]}</span></td><td class="mono peq">${s.crm_ticket ? `ticket ${esc(s.crm_ticket)}` : s.crm_estado?.startsWith('pendiente') ? 'reintentando' : SIN}</td></tr>`).join('') || '<tr><td colspan="6" class="rc-vacio">Sin solicitudes</td></tr>'}
@@ -358,10 +363,8 @@ async function actividad(pagina = 1, soloEquipo = false) {
       ${b.filas.map((f) => `<tr><td class="mono peq" style="white-space:nowrap">${fechaHora(f.creado_en)}</td><td>${f.usuario ? esc(f.usuario) : '<span class="muted">Sistema / portal</span>'}${['superadmin', 'soporte'].includes(f.rol) ? ' <span class="chip marca">Síguelo</span>' : ''}</td><td>${esc(ACCION(f.accion))}</td>
         <td class="peq"><div class="cf-detalle-json">${esc(f.detalle?.motivo || f.detalle?.siguelo?.motivo ? `motivo: ${f.detalle.motivo || f.detalle.siguelo.motivo}` : Object.keys(f.detalle || {}).length ? JSON.stringify(f.detalle) : '')}</div></td></tr>`).join('') || '<tr><td colspan="4" class="rc-vacio">Sin registros</td></tr>'}
       </tbody></table></div>
-      <nav class="cf-paginas pg-nav" aria-label="Páginas de la bitácora"><button class="btn peq" id="p-ant"${pagina <= 1 ? ' disabled' : ''}>Anterior</button><span>Página ${b.pagina || pagina} de ${b.paginas || 1}</span><button class="btn peq" id="p-sig"${(b.pagina || pagina) >= (b.paginas || 1) ? ' disabled' : ''}>Siguiente</button></nav></div>`;
+      ${htmlPaginacion({ total: b.total, desde: (ACT.pagina - 1) * (b.por || ACT.por), por: b.por || ACT.por, lista: 'bo-bitacora', etiqueta: 'Páginas de la bitácora', unidad: 'registros', clase: 'cf-paginas' })}</div>`;
   $('#solo-eq').onchange = (ev) => actividad(1, ev.target.checked);
-  $('#p-ant').onclick = () => actividad(pagina - 1, soloEquipo);
-  $('#p-sig').onclick = () => actividad(pagina + 1, soloEquipo);
 }
 
 cargar().catch((e) => { $('#panel').innerHTML = `<p class="aviso error">${esc(e.message)}</p>`; });

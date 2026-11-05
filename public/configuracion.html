@@ -13,7 +13,8 @@
   <section class="cf-panel" id="panel"><p class="rc-cargando">Cargando…</p></section>
 </main>
 <script type="module">
-import { iniciarPagina, api, esc, clp, fecha, hora, fechaHora, rut, validarRut, modal, confirmar, toast, toastError, leerForm, puede, chipEstado, ICONOS, ordenarPestanas } from '/comun.js';
+import { iniciarPagina, api, esc, clp, fecha, hora, fechaHora, rut, validarRut, modal, confirmar, toast, toastError, leerForm, puede, chipEstado, ICONOS, ordenarPestanas, avisarTope } from '/comun.js';
+import { htmlPaginacion, enlazarPaginacion, leerPorPagina } from '/paginador.js';
 const yo = await iniciarPagina({ activo: 'configuracion', titulo: 'Configuración' });
 const esAdmin = ['administrador', 'superadmin', 'soporte'].includes(yo.usuario.rol);
 const panel = document.getElementById('panel');
@@ -535,7 +536,7 @@ function reemplazarInt(n, ed) {
 // ═════════ Bandeja de salida ═════════
 let salFiltro = 'retenida';
 async function salidas() {
-  const lista = await api(`salidas${salFiltro ? `?estado=${salFiltro}` : ''}`);
+  const lista = await api(`salidas?${salFiltro ? `estado=${salFiltro}&` : ''}limite=300`); // RNT-08: por partes, con aviso de tope
   const ed = puede('configuracion', 'editar');
   const EST = { retenida: ['Retenida', 'aviso'], enviada: ['Enviada', 'ok'], error: ['Error', 'error'], descartada: ['Descartada', ''], pendiente: ['Pendiente', 'info'] };
   panel.innerHTML = `<div class="filtros-fila">${[['retenida', 'Retenidas'], ['enviada', 'Enviadas'], ['error', 'Con error'], ['descartada', 'Descartadas'], ['', 'Todas']].map(([k, t]) => `<button type="button" class="filtro" data-f="${k}" aria-pressed="${salFiltro === k}">${t}</button>`).join('')}</div>
@@ -545,6 +546,7 @@ async function salidas() {
       <td class="cf-sal-estado"><span class="chip ${EST[s.estado]?.[1] || ''}">${EST[s.estado]?.[0] || esc(s.estado)}</span>${s.error ? `<div class="peq muted" style="max-width:220px">${esc(s.error)}</div>` : ''}</td>
       <td style="text-align:right;white-space:nowrap"><button class="btn peq" data-ver="${s.id}">Ver</button>${ed && s.estado !== 'enviada' ? ` <button class="btn peq" data-reenviar="${s.id}">Reenviar</button>${s.estado !== 'descartada' ? ` <button class="btn peq peligro" data-desc="${s.id}">Descartar</button>` : ''}` : ''}</td></tr>`).join('') || '<tr><td colspan="6" class="rc-vacio">No hay mensajes en esta bandeja</td></tr>'}
     </tbody></table></div></div>`;
+  avisarTope(panel.querySelector('table.tabla'), lista.length, 300);
   panel.querySelectorAll('[data-f]').forEach((b) => b.onclick = () => { salFiltro = b.dataset.f; salidas(); });
   panel.querySelectorAll('[data-ver]').forEach((b) => b.onclick = async () => {
     try {
@@ -563,7 +565,9 @@ async function salidas() {
 }
 
 // ═════════ Bitácora ═════════
-const BF = { pagina: 1 };
+// 5-nov (RNT-11): el nav es el del paginador (htmlPaginacion) con «Filas por página», recordado en el navegador.
+const BF = { pagina: 1, por: leerPorPagina('configuracion:bitacora') };
+enlazarPaginacion(panel, 'cf-bitacora', { clave: 'configuracion:bitacora', mover: (d) => { BF.pagina += d; bitacora(); }, cambiarPor: (n) => { BF.por = n; BF.pagina = 1; bitacora(); } });
 const ACCION = (a) => (a || '').replace(/_/g, ' ').replace(/^\w/, (c) => c.toUpperCase());
 async function bitacora() {
   const p = new URLSearchParams(Object.entries(BF).filter(([, v]) => v !== '' && v != null));
@@ -579,12 +583,11 @@ async function bitacora() {
     ${r.filas.map((b) => `<tr><td class="mono peq" style="white-space:nowrap">${fechaHora(b.creado_en)}</td><td>${b.usuario ? esc(b.usuario) : '<span class="muted">Sistema / portal</span>'}</td><td>${esc(ACCION(b.accion))}</td>
       <td class="peq">${esc(b.entidad || '')}${b.entidad_id ? ` <span class="mono">#${b.entidad_id}</span>` : ''}</td><td><div class="cf-detalle-json" title="${esc(JSON.stringify(b.detalle))}">${Object.keys(b.detalle || {}).length ? esc(JSON.stringify(b.detalle)) : ''}</div></td><td class="mono peq">${esc(b.ip || '')}</td></tr>`).join('') || '<tr><td colspan="6" class="rc-vacio">Sin registros con estos filtros</td></tr>'}
     </tbody></table></div>
-    <nav class="cf-paginas pg-nav" aria-label="Páginas de la bitácora"><button class="btn peq" id="bp-ant"${r.pagina <= 1 ? ' disabled' : ''}>Anterior</button><span>Página ${r.pagina} de ${r.paginas} · ${r.total.toLocaleString('es-CL')} registros</span><button class="btn peq" id="bp-sig"${r.pagina >= r.paginas ? ' disabled' : ''}>Siguiente</button></nav></div>`;
+    ${htmlPaginacion({ total: r.total, desde: (r.pagina - 1) * r.por_pagina, por: r.por_pagina, lista: 'cf-bitacora', etiqueta: 'Páginas de la bitácora', unidad: 'registros', clase: 'cf-paginas' })}</div>`;
   const f = panel.querySelector('#bf');
+  BF.pagina = r.pagina;
   f.onchange = () => { Object.assign(BF, leerForm(f), { pagina: 1 }); bitacora(); };
-  panel.querySelector('#bf-limpiar').onclick = () => { for (const k of Object.keys(BF)) delete BF[k]; BF.pagina = 1; bitacora(); };
-  panel.querySelector('#bp-ant').onclick = () => { BF.pagina = r.pagina - 1; bitacora(); };
-  panel.querySelector('#bp-sig').onclick = () => { BF.pagina = r.pagina + 1; bitacora(); };
+  panel.querySelector('#bf-limpiar').onclick = () => { const por = BF.por; for (const k of Object.keys(BF)) delete BF[k]; Object.assign(BF, { pagina: 1, por }); bitacora(); };
 }
 
 // ═════════ Portal de reservas ═════════

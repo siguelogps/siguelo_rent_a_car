@@ -17,14 +17,14 @@
 </main>
 <script type="module">
 // Backoffice Síguelo · bandeja «Solicitudes» (22-oct, espec. Backoffice).
-import { iniciarPagina, api, esc, fechaHora, modal, toast, toastError, leerForm } from '/comun.js';
+import { iniciarPagina, api, esc, fechaHora, modal, toast, toastError, leerForm, avisarTope } from '/comun.js';
 const yo = await iniciarPagina({ activo: 'solicitudes', titulo: 'Solicitudes' });
 const EST = { pendiente: ['mb', 'Pendiente'], en_curso: ['info', 'En curso'], resuelta: ['ok', 'Resuelta'], descartada: ['', 'Descartada'] };
 let filtro = '';
 let D = { solicitudes: [], tipos: {} };
 if (!yo.puede_operar) document.getElementById('reintentar').hidden = true;
 async function cargar() {
-  D = await api(`backoffice/solicitudes${filtro ? `?estado=${filtro}` : ''}`);
+  D = await api(`backoffice/solicitudes?limite=200${filtro ? `&estado=${filtro}` : ''}`); // RNT-08: por partes, con aviso de tope
   document.getElementById('filtros').innerHTML = [['', 'Todas'], ['pendiente', 'Pendientes'], ['en_curso', 'En curso'], ['resuelta', 'Resueltas'], ['descartada', 'Descartadas']].map(([k, t]) => `<button class="filtro" data-f="${k}" aria-pressed="${filtro === k}">${t}</button>`).join('');
   document.getElementById('lista').innerHTML = D.solicitudes.map((s) => `<tr>
     <td class="mono peq" style="white-space:nowrap">${fechaHora(s.creado_en)}</td><td><a href="/empresas/${s.empresa_id}#actividad"><b>${esc(s.empresa)}</b></a></td>
@@ -33,6 +33,7 @@ async function cargar() {
     <td class="peq">${s.correo_estado === 'enviado' ? 'correo enviado' : `<span class="muted" title="${esc(s.correo_estado || '')}">correo pendiente</span>`}<br>${s.crm_ticket ? `<span class="mono">ticket ${esc(s.crm_ticket)}</span>` : `<span class="muted" title="${esc(s.crm_estado || '')}">CRM ${s.crm_estado?.startsWith('pendiente') ? 'reintentando' : '—'}</span>`}</td>
     <td><span class="chip ${EST[s.estado][0]}">${EST[s.estado][1]}</span>${s.resuelta_por_nombre ? `<div class="peq muted">${esc(s.resuelta_por_nombre)}</div>` : ''}</td>
     <td>${yo.puede_operar ? `<button class="btn peq" data-cambiar="${s.id}">Cambiar estado</button>` : ''}</td></tr>`).join('') || '<tr><td colspan="8" class="rc-vacio">Sin solicitudes</td></tr>';
+  avisarTope(document.getElementById('lista'), D.solicitudes.length, 200);
 }
 document.querySelector('main').addEventListener('click', async (ev) => {
   const f = ev.target.closest('[data-f]');

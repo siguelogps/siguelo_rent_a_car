@@ -54,7 +54,7 @@
 </main>
 <script src="/vendor/leaflet/leaflet.js"></script>
 <script type="module">
-import { iniciarPagina, api, esc, fecha, hora, fechaHora, pat, patente, chipEstado, modal, toast, toastError, miles, leerForm } from '/comun.js';
+import { iniciarPagina, api, esc, fecha, hora, fechaHora, pat, patente, chipEstado, modal, toast, toastError, miles, leerForm, avisarTope } from '/comun.js';
 
 await iniciarPagina({ activo: 'gps', titulo: 'Plataforma GPS' });
 const $ = (id) => document.getElementById(id);
@@ -264,10 +264,11 @@ function htmlAlerta(a) {
     ${!a.atendida && (estado.puede.editar || estado.puede.inmovilizar) ? `<button type="button" class="btn peq" data-atender="${a.id}">Atender</button>` : ''}</div>`;
 }
 async function pintarAlertas() {
-  const lista = await api(`gps/alertas${$('alertas-todas').checked ? '?todas=1' : ''}`);
+  const lista = await api(`gps/alertas?limite=200${$('alertas-todas').checked ? '&todas=1' : ''}`); // RNT-08: por partes, con aviso de tope
   const pend = lista.filter((a) => !a.atendida).length;
   $('alertas-n').textContent = pend ? `· ${pend} sin atender` : '';
   $('alertas').innerHTML = lista.length ? lista.map(htmlAlerta).join('') : '<div class="vacio">Sin alertas. La flota está en orden.</div>';
+  avisarTope($('alertas'), lista.length, 200);
 }
 $('alertas-todas').onchange = pintarAlertas;
 $('alertas').addEventListener('click', (e) => { const b = e.target.closest('[data-atender]'); if (b) atender(b.dataset.atender); });

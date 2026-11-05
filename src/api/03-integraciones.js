@@ -8,6 +8,7 @@
 //     el dinero va a su cuenta. Síguelo lo ayuda entrando con «Operar».
 import express from 'express';
 import { q } from '../db.js';
+import { tramo } from '../paginacion.js';
 import { requiere, ErrorHttp } from '../auth.js';
 import { TIPOS, leerPublica, guardar, activar, leer, registrarPrueba, marchaBlanca, tiposDe } from '../integraciones/index.js';
 import { probador } from '../integraciones/probadores.js';
@@ -106,7 +107,7 @@ r.post('/integraciones/:tipo/probar', requiere('integraciones', 'ver'), async (r
 r.get('/salidas', requiere('configuracion', 'ver'), async (req, res) => {
   const estado = req.query.estado || null;
   res.json(await q(`SELECT id, canal, destino, asunto, left(cuerpo, 300) AS cuerpo, estado, error, entidad, entidad_id, creado_en, enviado_en
-                      FROM salidas WHERE empresa_id = $1 AND ($2::text IS NULL OR estado = $2) ORDER BY id DESC LIMIT 300`, [req.empresaId, estado]));
+                      FROM salidas WHERE empresa_id = $1 AND ($2::text IS NULL OR estado = $2) ORDER BY id DESC ${tramo(req, { porDefecto: 300 }).sql}`, [req.empresaId, estado])); // RNT-08
 });
 
 r.post('/salidas/:id/reenviar', requiere('configuracion', 'editar'), async (req, res) => {

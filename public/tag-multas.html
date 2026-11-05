@@ -25,7 +25,8 @@
   </div>
 </main>
 <script type="module">
-import { iniciarPagina, api, esc, fecha, hora, fechaHora, pat, patente, clp, miles, modal, toast, toastError, leerForm, puede, ESTADOS_RESERVA } from '/comun.js';
+import { iniciarPagina, api, esc, fecha, hora, fechaHora, pat, patente, clp, miles, modal, toast, toastError, leerForm, puede, ESTADOS_RESERVA, avisarTope } from '/comun.js';
+const TOPE = 1000; // 5-nov (RNT-08): las listas se piden por partes; si llegan TOPE filas, la pantalla lo avisa
 
 await iniciarPagina({ activo: 'tag_multas', titulo: 'TAG y multas' });
 const $ = (id) => document.getElementById(id);
@@ -67,6 +68,7 @@ const acciones = (tipo, x) => (EDITA && !['cobrado', 'cobrada', 'pagada', 'condo
 let filtrosTag = { q: '', estado: '', desde: '', hasta: '' };
 async function verTag() {
   const p = new URLSearchParams(Object.entries(filtrosTag).filter(([, v]) => v));
+  p.set('limite', TOPE);
   const lista = await api(`tag-multas/tag?${p}`);
   const total = lista.reduce((s, t) => s + Number(t.monto), 0);
   $('panel').innerHTML = `
@@ -82,6 +84,7 @@ async function verTag() {
       <td><span class="portico"><b>${esc(t.autopista || '—')}</b><small>${esc(t.portico || '')}</small></span></td><td class="tm-ocultable">${chipOrigen(t.origen)}</td>
       <td>${contrato(t)}</td><td>${chip(t.estado)}${t.notificado_en ? `<span class="sub">avisado ${fecha(t.notificado_en)}</span>` : ''}</td><td class="monto">${clp(t.monto)}</td>${EDITA ? `<td>${acciones('tag', t)}</td>` : ''}</tr>`).join('') || `<tr><td colspan="8" class="vacio">Sin pasadas TAG${EDITA ? '. Impórtalas desde un archivo de la concesionaria o sincroniza el dashboard Síguelo.' : ''}</td></tr>`}
     </tbody></table></div>`;
+  avisarTope($('panel').querySelector('.tm-tabla'), lista.length, TOPE);
   let t = null;
   $('f-q').oninput = (e) => { clearTimeout(t); t = setTimeout(() => { filtrosTag.q = e.target.value; verTag().then(() => { $('f-q').focus(); $('f-q').setSelectionRange(99, 99); }); }, 300); };
   for (const k of ['estado', 'desde', 'hasta']) $(`f-${k}`).onchange = (e) => { filtrosTag[k] = e.target.value; verTag(); };
@@ -92,7 +95,7 @@ async function verTag() {
 
 // ── Multas ──
 async function verMultas() {
-  const [lista, d] = await Promise.all([api('tag-multas/multas'), api('tag-multas/dashboard')]);
+  const [lista, d] = await Promise.all([api(`tag-multas/multas?limite=${TOPE}`), api('tag-multas/dashboard')]);
   dash = d;
   const c = d.cobertura, totalCob = c.revisadas + c.fallidas + c.nunca;
   const u = d.ultima;
@@ -119,6 +122,7 @@ async function verMultas() {
       <td>${chip(m.estado)}${m.notificada_en ? `<span class="sub">avisada ${fecha(m.notificada_en)}</span>` : ''}</td>
       <td class="monto">${clp(m.monto)}${m.sin_valorizar ? '<span class="sub"><span class="chip aviso">sin valorizar</span></span>' : ''}</td>${EDITA ? `<td>${acciones('multas', m)}</td>` : ''}</tr>`).join('') || '<tr><td colspan="7" class="vacio">Sin multas registradas</td></tr>'}
     </tbody></table></div>`;
+  avisarTope([...$('panel').querySelectorAll('.tm-tabla')].pop(), lista.length, TOPE);
 }
 document.addEventListener('click', async (e) => {
   const b = e.target.closest('[data-elegir]'); if (!b) return;

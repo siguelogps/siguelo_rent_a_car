@@ -61,7 +61,11 @@ export function crearCalendario(raiz, { alAbrirNueva, alCambiar }) {
       const a = pos(cols, r.inicio), b = pos(cols, r.fin);
       if (b <= 0 || a >= N) return '';
       const t = `${r.folio} · ${r.cliente || ''}\n${fecha(r.inicio)} ${hora(r.inicio)} → ${fecha(r.fin)} ${hora(r.fin)}${r.sucursal_retiro ? `\n${r.sucursal_retiro} → ${r.sucursal_devolucion}` : ''}`;
-      return `<div class="rc-barra ${claseReserva(r)}${ARRASTRABLES.includes(r.estado) && r.vehiculo_id ? ' rs-movible' : ''}" data-id="${r.id}" style="--ini:${a.toFixed(4)};--dur:${Math.max(0.15, b - a).toFixed(4)}" title="${esc(t)}" tabindex="0" role="link" aria-label="${esc(`${r.folio} ${r.cliente || ''}`)}"><b>${esc(r.cliente || 'Sin cliente')}</b><small>${esc(r.folio)}</small></div>`;
+      // Auditoría 8-nov (On Rent #12): en una barra de poco más de un día visible el nombre quedaba en una letra («N»).
+      // Ahí va solo el folio; el nombre completo sigue en el title y en el aria-label. Se mide lo VISIBLE: una reserva
+      // que empezó antes del período se ve cortada aunque dure semanas.
+      const corta = Math.min(b, N) - Math.max(a, 0) < 1.6 ? ' corta' : '';
+      return `<div class="rc-barra ${claseReserva(r)}${corta}${ARRASTRABLES.includes(r.estado) && r.vehiculo_id ? ' rs-movible' : ''}" data-id="${r.id}" style="--ini:${a.toFixed(4)};--dur:${Math.max(0.15, b - a).toFixed(4)}" title="${esc(t)}" tabindex="0" role="link" aria-label="${esc(`${r.folio} ${r.cliente || ''}`)}"><b>${esc(r.cliente || 'Sin cliente')}</b><small>${esc(r.folio)}</small></div>`;
     };
     const bloqueo = (b) => {
       const a = pos(cols, b.inicio), e = pos(cols, b.fin);

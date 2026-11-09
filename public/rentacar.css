@@ -56,6 +56,7 @@
 .rc-barra { position: absolute; top: 8px; bottom: 8px; left: calc(var(--ini) * 100% / var(--dias) + 2px); width: calc(var(--dur) * 100% / var(--dias) - 4px); border-radius: 7px; padding: 0 9px; display: flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 500; overflow: hidden; white-space: nowrap; cursor: grab; z-index: 2; border-left: 4px solid; }
 .rc-barra b { font-weight: 600; overflow: hidden; text-overflow: ellipsis; }
 .rc-barra small { opacity: .8; font: 500 11px var(--mono); }
+.rc-barra.corta { padding: 0 6px; } .rc-barra.corta b { display: none; } /* barra de un día: solo el folio (auditoría 8-nov) */
 .rc-barra.confirmada { background: var(--blue-soft); color: var(--blue); border-color: var(--blue); }
 .rc-barra.en_curso { background: var(--green-soft); color: var(--tx-verde); border-color: var(--green); }
 .rc-barra.cotizacion { background: var(--card); color: var(--ink-2); border: 1.5px dashed #9AA1AD; border-left: 4px solid #9AA1AD; }
@@ -315,7 +316,9 @@ html.nativa-ios .app, html.nativa-ios .pt-cab { padding-top: env(safe-area-inset
 html.nativa-ios .login { padding-top: calc(24px + env(safe-area-inset-top)); }
 html.nativa-ios .rs-pub-cab { padding-top: calc(12px + env(safe-area-inset-top)); }
 html.nativa-ios .barra { top: env(safe-area-inset-top); }
-html.nativa-ios .menu { top: env(safe-area-inset-top); height: calc(100vh - env(safe-area-inset-top)); }
+/* Auditoría 8-nov (On Rent #18): en iOS 100vh incluye la barra del navegador y el menú quedaba descuadrado; 100dvh es
+   el alto visible de verdad. La primera línea queda solo para un WebView viejo que no conozca dvh. */
+html.nativa-ios .menu { top: env(safe-area-inset-top); height: calc(100vh - env(safe-area-inset-top)); height: calc(100dvh - env(safe-area-inset-top)); }
 @media (max-width: 860px) {
   html.nativa-ios .menu { top: 0; height: auto; padding-top: calc(14px + env(safe-area-inset-top)); }
 }
@@ -510,3 +513,31 @@ html.nativa-ios .rc-movil-pie { padding-bottom: calc(18px + env(safe-area-inset-
 .menu-usuario span { display: block; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .bo-franja.operar > span:first-of-type { min-width: 0; }
 @media (max-width: 860px) { .btn-ayuda { display: none; } }
+
+/* Auditoría 8-nov (On Rent #8): en iPhone, un campo con letra menor a 16 px hace que Safari acerque la pantalla al
+   tocarlo y no vuelva sola (medido: 15 px en /reservar, 14 px en /ingresar). Solo en pantallas táctiles; app.css (base
+   del CRM) no se toca. */
+@media (pointer: coarse) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]), select, textarea { font-size: 16px; }
+}
+
+/* Auditoría 8-nov (On Rent #19): el aviso (toast) aparecía de golpe. Entra subiendo 8 px con opacidad, 200 ms y curva de
+   salida rápida; se mueve con transform y opacity, que no recalculan el diseño. Sin movimiento si el sistema lo pide. */
+@keyframes rc-toast-entra { from { opacity: 0; transform: translate(-50%, 8px); } to { opacity: 1; transform: translate(-50%, 0); } }
+.toast { animation: rc-toast-entra 200ms cubic-bezier(0.23, 1, 0.32, 1); }
+@media (prefers-reduced-motion: reduce) { .toast { animation: none; } }
+
+/* Auditoría 8-nov (On Rent #20): la perilla del interruptor de app.css animaba `left`, que recalcula el diseño en cada
+   cuadro. Se mueve igual (de 3 a 21 px) pero con transform. app.css es la base del CRM y no se edita aquí: el cambio en
+   su origen queda propuesto para Síguelo Gestión. */
+.switch span::after { transition: transform .15s; }
+.switch input:checked + span::after { left: 3px; transform: translateX(18px); }
+@media (prefers-reduced-motion: reduce) { .switch span, .switch span::after, .menu { transition: none; } }
+
+/* Auditoría 8-nov (On Rent #11): en Contratos a 400 px cada celda se partía en varias líneas, la fila medía ~170 px y la
+   columna del cliente quedaba fuera de la vista. En teléfono, una tabla `.rc-una-linea` deja cada celda en una línea y
+   se desplaza de lado dentro de su `.tabla-env` (overflow: auto de app.css). */
+@media (max-width: 860px) {
+  .tabla.rc-una-linea th, .tabla.rc-una-linea td { white-space: nowrap; }
+  .tabla.rc-una-linea td > div { display: inline; margin-left: 6px; }
+}

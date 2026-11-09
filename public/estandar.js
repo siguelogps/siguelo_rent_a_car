@@ -76,3 +76,13 @@ export function htmlFranja(yo, { esc, hora, iconos = {}, desdeOnBoard = false, o
 // vino para que la franja negra ofrezca «Volver a On Board». El ingreso con clave la borra.
 export const COOKIE_ONBOARD = 'desde_onboard';
 export const vieneDeOnBoard = (cookie = '') => new RegExp(`(?:^|;\\s*)${COOKIE_ONBOARD}=1(?:;|$)`).test(String(cookie || ''));
+
+// Auditoría 8-nov (On Rent #1, regla de la casa): con dos ventanas abiertas, Esc cierra solo la de arriba. Antes cada
+// modal() y «Mi cuenta» escuchaban Esc en document sin coordinarse, y un Esc cerraba todo («Mi cuenta» › «Eliminar mi
+// cuenta» › confirmación quedaba en cero ventanas). La de arriba es el último `.modal-fondo` del documento (se agregan al
+// final de <body>); el que la atiende marca el evento con preventDefault() para que nadie más lo tome.
+export function escEsMio(e, fondo, fondos) {
+  if (e.key !== 'Escape' || e.defaultPrevented) return false;
+  const lista = Array.from(fondos || []);
+  return lista.length > 0 && lista[lista.length - 1] === fondo;
+}

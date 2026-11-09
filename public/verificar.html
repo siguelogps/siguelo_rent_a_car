@@ -49,7 +49,10 @@ try {
     </div>${buscador()}`;
   document.title = `Contrato ${d.folio} · ${EST[2]}`;
 } catch (err) {
-  cuerpo.innerHTML = `<div class="tarjeta bloque rs-verif"><div class="rs-ok-grande rs-mal-grande">✕</div><h1>Código no encontrado</h1><p class="muted">${esc(err.message)}. Revisa que el código esté bien escrito.</p></div>${buscador(codigo)}`;
+  // Auditoría 8-nov (On Rent #15): «Código no encontrado» se repetía en el título y en la primera frase. El detalle solo
+  // se muestra si dice otra cosa (p. ej. un error de conexión).
+  const detalle = /^código no encontrado\.?$/i.test(String(err.message).trim()) ? '' : `${esc(String(err.message).replace(/\.$/, ''))}. `;
+  cuerpo.innerHTML = `<div class="tarjeta bloque rs-verif"><div class="rs-ok-grande rs-mal-grande">✕</div><h1>Código no encontrado</h1><p class="muted">${detalle}Revisa que el código esté bien escrito.</p></div>${buscador(codigo)}`;
 }
 const f = document.getElementById('buscar');
 f.onsubmit = (e) => { e.preventDefault(); const c = f.c.value.trim().toUpperCase(); if (c) location.href = `/verificar/${encodeURIComponent(c)}`; };

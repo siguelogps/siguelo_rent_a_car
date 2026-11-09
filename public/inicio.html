@@ -23,16 +23,19 @@
   </div>
 </main>
 <script type="module">
-import { iniciarPagina, api, esc, fecha, hora, pat, diasHasta, chipEstado } from '/comun.js';
+import { iniciarPagina, api, esc, fecha, hora, pat, patente, diasHasta, chipEstado } from '/comun.js';
+import { atrasoTxt } from '/js/reservas-util.js';
+import { resumenDesdeListas, subtitulosHoy } from '/js/indicadores-hoy.js';
 const yo = await iniciarPagina({ activo: 'inicio', titulo: 'Inicio' });
 document.getElementById('saludo').textContent = `Hola, ${yo.usuario.nombre.split(' ')[0]}`;
 document.getElementById('hoy').textContent = new Intl.DateTimeFormat('es-CL', { timeZone: 'America/Santiago', weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }).format(new Date());
 const d = await api('inicio');
 const ocup = d.flota.total ? Math.round(d.flota.ocupados * 100 / d.flota.total) : 0;
+const sub = subtitulosHoy(resumenDesdeListas(d), { esc, patente, atrasoTxt }); // mismos textos que Reservas (auditoría 8-nov, #14)
 document.getElementById('kpis').innerHTML = `
-  <div class="kpi"><span>Retiros hoy</span><b>${d.retiros.length}</b><small>confirmados</small></div>
-  <div class="kpi"><span>Devoluciones hoy</span><b>${d.devoluciones.length}</b><small>en curso que vuelven hoy</small></div>
-  <div class="kpi"><span>Atrasadas</span><b style="${d.atrasadas.length ? 'color:var(--red)' : ''}">${d.atrasadas.length}</b><small class="${d.atrasadas.length ? 'mal' : ''}">${d.atrasadas.map((r) => esc(r.folio)).join(', ') || 'ninguna'}</small></div>
+  <div class="kpi"><span>Retiros hoy</span><b>${d.retiros.length}</b><small>${sub.retiros}</small></div>
+  <div class="kpi"><span>Devoluciones hoy</span><b>${d.devoluciones.length}</b><small>${sub.devoluciones}</small></div>
+  <div class="kpi"><span>Atrasadas</span><b style="${d.atrasadas.length ? 'color:var(--red)' : ''}">${d.atrasadas.length}</b><small class="${d.atrasadas.length ? 'mal' : ''}">${sub.atrasadas}</small></div>
   <div class="kpi"><span>Ocupación</span><b>${ocup} %</b><small>${d.flota.ocupados} de ${d.flota.total} vehículos</small></div>
   <div class="kpi"><span>Disponibles</span><b>${d.flota.disponibles}</b><small>${d.flota.taller} en taller o fuera de servicio</small></div>
   <div class="kpi"><span>Cotizaciones abiertas</span><b>${d.cotizaciones}</b><small>por confirmar</small></div>`;

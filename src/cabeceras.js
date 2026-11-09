@@ -60,6 +60,10 @@ export function cabecerasSeguridad(req, res, next) {
   } else {
     res.setHeader('Content-Security-Policy-Report-Only', POLITICA_CSP_INFORME);
   }
+  // Auditoría 8-nov (On Rent #5): las pantallas con sesión (/inicio, /reservas…) responden 200 sin sesión (el cascarón
+  // pide los datos después), así que un enlace filtrado dejaba indexar páginas vacías con títulos como «Inicio». Todo lo
+  // que no sea público e indexable va con X-Robots-Tag: noindex (también /embed, que repite /reservar con su canonical).
+  if (!esIndexable(req.path)) res.setHeader('X-Robots-Tag', 'noindex, nofollow');
   if (req.path.startsWith('/portal')) {
     res.setHeader('X-Frame-Options', 'DENY');
     res.setHeader('Content-Security-Policy', "frame-ancestors 'none'");
@@ -68,6 +72,11 @@ export function cabecerasSeguridad(req, res, next) {
   }
   next();
 }
+
+// Lo único que un buscador puede indexar: el portal de reservas de cada rentacar, el ingreso, privacidad y soporte
+// (exigidos por las tiendas), y lo que esas páginas muestran al compartirse (logo del rentacar, imágenes, robots.txt).
+export const RUTAS_INDEXABLES = [/^\/reservar\/[^/]+\/?$/, /^\/(ingresar|privacidad|soporte)(\.html)?\/?$/, /^\/img\//, /^\/api\/logo\//, /^\/robots\.txt$/];
+export const esIndexable = (ruta) => RUTAS_INDEXABLES.some((r) => r.test(ruta));
 
 // Rutas que reciben fotos, firmas o documentos como data URL (base64 dentro del JSON) y por eso aceptan 25 MB.
 // Al agregar una ruta nueva que reciba archivos, hay que sumarla aquí: si no, el cuerpo grande cae con 413.

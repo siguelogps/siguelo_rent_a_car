@@ -65,6 +65,7 @@ import { iniciarPagina, api, esc, clp, pat, fecha, hora, chipEstado, puede, desc
 import { crearCalendario, columnas } from '/js/reservas-calendario.js';
 import { abrirFormReserva } from '/js/reservas-form.js';
 import { sumarDias, hoyChile, atrasoTxt, diasArriendo, docTxt } from '/js/reservas-util.js';
+import { subtitulosHoy } from '/js/indicadores-hoy.js';
 
 await iniciarPagina({ activo: 'reservas', titulo: 'Reservas' });
 const $ = (id) => document.getElementById(id);
@@ -111,11 +112,11 @@ $('f-suc').onchange = () => { st.suc = $('f-suc').value; cargar(); };
 
 function kpis(k) {
   const ocup = k.flota.total ? Math.round((k.flota.ocupados * 100) / k.flota.total) : 0;
-  const atr = k.atrasadas[0];
+  const sub = subtitulosHoy(k, { esc, patente, atrasoTxt }); // mismos textos que Inicio (auditoría 8-nov, #14)
   $('kpis').innerHTML = `
-    <div class="kpi"><span>Retiros hoy</span><b>${k.retiros}</b><small>${k.retiros_sucursal ? `${k.retiros_sucursal.n} en ${esc(k.retiros_sucursal.nombre)}` : 'sin retiros pendientes'}</small></div>
-    <div class="kpi"><span>Devoluciones hoy</span><b>${k.devoluciones}</b><small>${k.devoluciones_otra ? `${k.devoluciones_otra} en otra sucursal` : 'todas en su sucursal'}</small></div>
-    <div class="kpi"><span>Atrasadas</span><b${k.atrasadas.length ? ' style="color:var(--red)"' : ''}>${k.atrasadas.length}</b><small class="${k.atrasadas.length ? 'mal' : ''}">${atr ? `${esc(atr.patente ? patente(atr.patente) : atr.folio)} · ${atrasoTxt(atr.fin)}${k.atrasadas.length > 1 ? ` y ${k.atrasadas.length - 1} más` : ''}` : 'ninguna'}</small></div>
+    <div class="kpi"><span>Retiros hoy</span><b>${k.retiros}</b><small>${sub.retiros}</small></div>
+    <div class="kpi"><span>Devoluciones hoy</span><b>${k.devoluciones}</b><small>${sub.devoluciones}</small></div>
+    <div class="kpi"><span>Atrasadas</span><b${k.atrasadas.length ? ' style="color:var(--red)"' : ''}>${k.atrasadas.length}</b><small class="${k.atrasadas.length ? 'mal' : ''}">${sub.atrasadas}</small></div>
     <div class="kpi"><span>Ocupación hoy</span><b>${ocup} %</b><small>${k.flota.ocupados} de ${k.flota.total} vehículos</small></div>
     <div class="kpi"><span>Cotizaciones abiertas</span><b>${k.cotizaciones}</b><small>${k.cotizaciones_48 ? `${k.cotizaciones_48} retiran en 48 h` : 'por confirmar'}</small></div>`;
 }

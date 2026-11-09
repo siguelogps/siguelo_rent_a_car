@@ -54,7 +54,7 @@
 </main>
 <script src="/vendor/leaflet/leaflet.js"></script>
 <script type="module">
-import { iniciarPagina, api, esc, fecha, hora, fechaHora, pat, patente, chipEstado, modal, toast, toastError, miles, leerForm, avisarTope } from '/comun.js';
+import { iniciarPagina, api, esc, fecha, hora, fechaHora, pat, patente, chipEstado, modal, toast, toastError, miles, leerForm, avisarTope, calzaPalabras } from '/comun.js';
 
 await iniciarPagina({ activo: 'gps', titulo: 'Plataforma GPS' });
 const $ = (id) => document.getElementById(id);
@@ -71,6 +71,10 @@ const ICONO_ALERTA = {
 
 let estado = null, vehiculos = [], seleccion = null, filtro = 'todos', marcadores = new Map(), mapa = null, primeraVez = true;
 const sinSenal = (v) => !v.gps_actualizado_en || Date.now() - new Date(v.gps_actualizado_en) > 6 * 3600e3;
+// Auditoría 8-nov (On Rent #10, «no inventar datos»): una velocidad que no llegó (null) no es «detenido». Antes
+// `(v.gps_velocidad || 0) > 0` la convertía en 0: el vehículo salía «detenido» y quedaba fuera de «En movimiento».
+const velSinDato = (v) => v.gps_velocidad == null;
+const enMovimiento = (v) => !sinSenal(v) && !velSinDato(v) && v.gps_velocidad > 0;
 const colorDe = (v) => (v.atrasada ? COLORES.fuera_servicio : COLORES[v.estado] || '#5B6370');
 const hace = (d) => { if (!d) return 'sin datos'; const m = Math.round((Date.now() - new Date(d)) / 60e3); return m < 1 ? 'recién' : m < 60 ? `hace ${m} min` : m < 1440 ? `hace ${Math.floor(m / 60)} h` : `hace ${Math.floor(m / 1440)} d`; };
 const nivel = (n) => (n == null ? '—' : `<span class="rc-comb" title="${n}/8">${Array.from({ length: 8 }, (_, i) => `<i class="${i < n ? 'on' : ''}"></i>`).join('')}</span>`);
@@ -79,13 +83,14 @@ const chipInmov = (e) => `<span class="chip gps-st-${e}">${esc(ESTADOS_INMOV[e] 
 // ── Mapa ──
 function iniciarMapa() {
   mapa = L.map('mapa', { zoomControl: false, attributionControl: true }).setView([-33.45, -70.66], 6);
+  mapa.on('zoomend moveend resize', () => despejarEtiquetas());
   L.control.zoom({ position: 'topright', zoomInTitle: 'Acercar', zoomOutTitle: 'Alejar' }).addTo(mapa);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; colaboradores de <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>' }).addTo(mapa);
 }
 function icono(v, sel) {
-  const mueve = (v.gps_velocidad || 0) > 0;
+  const mueve = !velSinDato(v) && v.gps_velocidad > 0;
   const cls = ['pin', sinSenal(v) ? 'sin' : '', sel ? 'sel' : '', v.alertas ? 'gps-pin-alerta' : '', v.gps_inmovilizado ? 'gps-inmov' : ''].filter(Boolean).join(' ');
-  return L.divIcon({ className: 'pin-envoltura', iconSize: sel ? [44, 44] : [32, 32], iconAnchor: sel ? [22, 22] : [16, 16], html: `<div class="${cls}" style="--c:${colorDe(v)}">${mueve ? v.gps_velocidad : 'P'}</div>` });
+  return L.divIcon({ className: 'pin-envoltura', iconSize: sel ? [44, 44] : [32, 32], iconAnchor: sel ? [22, 22] : [16, 16], html: `<div class="${cls}" style="--c:${colorDe(v)}">${mueve ? v.gps_velocidad : velSinDato(v) ? '—' : 'P'}</div>` });
 }
 function pintarMapa() {
   const vistos = new Set();
@@ -107,24 +112,44 @@ function pintarMapa() {
     if (pts.length) mapa.fitBounds(pts, { padding: [40, 40], maxZoom: 12 });
     primeraVez = false;
   }
+  despejarEtiquetas();
+}
+// Auditoría 8-nov (On Rent #13): a 400 px las patentes de vehículos cercanos se encimaban («SXLR-27», «SYPC-11»…) y no
+// se leía ninguna. Se muestra la etiqueta solo si no choca con otra ya puesta (la del seleccionado va primero); el resto
+// aparece al acercar el mapa. El marcador y su `title` siguen ahí, así que no se pierde ningún vehículo.
+function despejarEtiquetas() {
+  if (!mapa) return;
+  const puestas = [];
+  const orden = [...marcadores.entries()].sort(([a], [b]) => (b === seleccion) - (a === seleccion));
+  for (const [, m] of orden) {
+    const el = m.getTooltip()?.getElement();
+    if (!el) continue;
+    const p = mapa.latLngToContainerPoint(m.getLatLng());
+    const choca = puestas.some((q) => Math.abs(q.x - p.x) < 64 && Math.abs(q.y - p.y) < 22);
+    el.style.visibility = choca ? 'hidden' : '';
+    if (!choca) puestas.push(p);
+  }
 }
 
 // ── Lista y filtros ──
 const FILTROS = [
   ['todos', 'Todos', () => true], ['arrendado', 'Arrendados', (v) => !!v.reserva_id || v.estado === 'arrendado'], ['disponible', 'Disponibles', (v) => v.estado === 'disponible'],
-  ['movimiento', 'En movimiento', (v) => (v.gps_velocidad || 0) > 0 && !sinSenal(v)], ['alertas', 'Con alertas', (v) => v.alertas > 0], ['sin_senal', 'Sin señal', sinSenal]
+  ['movimiento', 'En movimiento', enMovimiento], ['alertas', 'Con alertas', (v) => v.alertas > 0], ['sin_senal', 'Sin señal', sinSenal]
 ];
 function pintarLista() {
   $('filtros').innerHTML = FILTROS.map(([k, n, f]) => `<button type="button" class="filtro" data-f="${k}" aria-pressed="${filtro === k}">${n} <span class="n">${vehiculos.filter(f).length}</span></button>`).join('');
-  const txt = $('buscar').value.trim().toUpperCase().replace(/[^A-Z0-9 ÁÉÍÓÚÑ]/g, '');
+  // Auditoría 8-nov (On Rent #2): búsqueda por palabras (regla de la casa), en cualquier orden y sin tildes: «perez
+  // valentina» encuentra a «Valentina Soto Pérez». Antes era `.includes()` del texto entero. La patente va en los dos
+  // formatos (BCDF12 y BCDF-12) para que calce como se escriba.
+  const txt = $('buscar').value;
   const f = FILTROS.find((x) => x[0] === filtro)[2];
-  const lista = vehiculos.filter(f).filter((v) => !txt || `${v.patente} ${v.marca} ${v.modelo} ${v.cliente || ''} ${v.folio || ''}`.toUpperCase().includes(txt));
+  const lista = vehiculos.filter(f).filter((v) => calzaPalabras(`${v.patente} ${patente(v.patente)} ${v.marca} ${v.modelo} ${v.cliente || ''} ${v.folio || ''}`, txt));
   $('lista').innerHTML = lista.length ? lista.map((v) => {
-    const mueve = (v.gps_velocidad || 0) > 0 && !sinSenal(v);
+    const mueve = enMovimiento(v);
     return `<button type="button" class="gps-item" data-id="${v.id}" aria-pressed="${v.id === seleccion}">
       <span class="gps-bola${sinSenal(v) ? ' sin' : ''}" style="--c:${colorDe(v)}"></span>
       <span class="t"><span class="rc-fila">${pat(v.patente)} <b class="peq">${esc(v.marca)} ${esc(v.modelo)}</b></span><small>${v.cliente ? `${esc(v.cliente)} · ${esc(v.folio)}` : esc(v.sucursal || v.categoria || '')}</small></span>
-      <span class="d">${v.alertas ? `<span class="gps-alerta-n" title="Alertas sin atender">${v.alertas}</span>` : ''}<span class="vel${mueve ? ' mueve' : ''}">${sinSenal(v) ? 'sin señal' : mueve ? `${v.gps_velocidad} km/h` : 'detenido'}</span><small class="muted">${hace(v.gps_actualizado_en)}</small></span>
+      <span class="d">${v.alertas ? `<span class="gps-alerta-n" title="Alertas sin atender">${v.alertas}</span>` : ''}<span class="vel${mueve ? ' mueve' : ''}">${sinSenal(v) ? 'sin señal' : mueve ? `${v.gps_velocidad} km/h` : velSinDato(v) ? 'velocidad sin dato' : 'detenido'}</span><small class="muted">${hace(v.gps_actualizado_en)}</small></span>
     </button>`;
   }).join('') : '<div class="vacio">Sin vehículos para este filtro</div>';
 }
@@ -134,7 +159,7 @@ $('lista').addEventListener('click', (e) => { const b = e.target.closest('[data-
 $('btn-leyenda').onclick = () => $('leyenda').classList.toggle('abierta');
 
 function pintarKpis() {
-  const arr = vehiculos.filter((v) => v.reserva_id).length, mov = vehiculos.filter((v) => (v.gps_velocidad || 0) > 0 && !sinSenal(v)).length;
+  const arr = vehiculos.filter((v) => v.reserva_id).length, mov = vehiculos.filter(enMovimiento).length;
   const sin = vehiculos.filter(sinSenal).length, conGps = vehiculos.filter((v) => v.gps_unidad_id).length;
   $('kpis').innerHTML = `
     <div class="kpi"><span>Con unidad GPS</span><b>${conGps}<small class="muted"> / ${vehiculos.length}</small></b><small>vehículos de la flota</small></div>
@@ -211,7 +236,7 @@ async function pintarDetalle() {
       ${d.cliente_telefono ? `<a class="btn peq" href="tel:${esc(d.cliente_telefono)}">Llamar al cliente</a>` : ''}
       ${rec?.inicio ? `<div class="gps-recorrido"><div><span>Al retiro · ${fecha(rec.inicio.en)}</span><b>${miles(rec.inicio.km)} km</b><span>combustible ${rec.inicio.combustible ?? '—'}/8</span></div><div class="flecha">→</div>
         <div><span>${rec.fin?.actual ? 'Ahora' : 'Al final'}</span><b>${rec.fin ? `${miles(rec.fin.km)} km` : '—'}</b><span>combustible ${rec.fin?.combustible ?? '—'}/8</span></div></div>
-        <div class="gps-total"><span>Recorrido del contrato (plataforma GPS)</span><b>${miles(rec.km_recorridos ?? 0)} km</b></div>${spark(rec.muestras)}` : '<p class="muted peq">Aún no hay lecturas de la plataforma GPS para este contrato.</p>'}`
+        <div class="gps-total"><span>Recorrido del contrato (plataforma GPS)</span><b>${rec.km_recorridos == null ? '—' : `${miles(rec.km_recorridos)} km`}</b></div>${spark(rec.muestras)}` : '<p class="muted peq">Aún no hay lecturas de la plataforma GPS para este contrato.</p>'}`
     : `<p class="muted peq">Sin contrato en curso.${d.proxima_reserva ? ` Próxima: <a href="/reservas/${d.proxima_reserva.id}">${esc(d.proxima_reserva.folio)}</a> · ${esc(d.proxima_reserva.cliente)} · ${fechaHora(d.proxima_reserva.inicio)}` : ''}</p>`}</div>
     ${alertas.length ? `<div class="sec"><h3>Alertas sin atender</h3><div class="gps-alertas">${alertas.map(htmlAlerta).join('')}</div></div>` : ''}
     <div class="sec"><h3>Inmovilización remota</h3>${bloqueInmovilizacion(d)}</div>`;

@@ -21,8 +21,8 @@ const EQUIPOS = {
   ipad: { lienzo: [2064, 2752], escala: 2, vista: [900, 1300] }
 };
 const PANTALLAS = [
-  ['01-inicio', '/inicio', 'Tu rent a car,<br><b>de un vistazo</b>', 'Entregas y devoluciones del día, flota y cobros pendientes'],
-  ['02-reservas', '/reservas', 'Reservas <b>sin topes</b>', 'Disponibilidad por vehículo y sucursal, sin dobles reservas'],
+  ['01-inicio', '/inicio', 'Tu rentacar,<br><b>de un vistazo</b>', 'Entregas y devoluciones del día, flota y cobros pendientes'],
+  ['02-reservas', '/reservas', 'Reservas sin<br><b>dobles asignaciones</b>', 'Disponibilidad por vehículo y sucursal, sin dobles reservas'],
   ['03-patio', '/patio', 'Entrega y devolución<br><b>desde el patio</b>', 'Kilometraje, combustible y fotos con fecha, hora y lugar'],
   ['04-inspeccion', 'INSPECCION', 'Fotos de <b>cada daño</b>', 'Compara la entrega con la devolución en segundos'],
   ['05-contrato', 'CONTRATO', 'Contrato con <b>firma digital</b>', 'El cliente firma en el teléfono y recibe su copia con QR'],

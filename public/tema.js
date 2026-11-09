@@ -27,10 +27,23 @@
     if (pref === 'claro' || pref === 'oscuro') return pref;
     return mq && mq.matches ? 'oscuro' : 'claro';
   }
+  // Auditoría 8-nov (On Rent #17): la barra del navegador y del sistema (meta theme-color) quedaba blanca en oscuro.
+  // Sigue al tema efectivo, también al elegido a mano (dos <meta> con media= solo seguirían al sistema). Solo se toca
+  // la que trae el blanco por omisión: si una pantalla puso su propio color (el de la marca en el ingreso), manda esa.
+  var BARRA = { claro: '#FFFFFF', oscuro: '#1A1F26' };
+  function pintarBarra(tema) {
+    var m = null;
+    try { m = document.querySelector('meta[name="theme-color"]'); } catch (e) { /* sin DOM completo */ }
+    if (!m) return;
+    var c = (m.getAttribute('content') || '').toUpperCase();
+    if (c !== BARRA.claro && c !== BARRA.oscuro) return;
+    m.setAttribute('content', BARRA[tema] || BARRA.claro);
+  }
   function aplicar() {
     var pref = preferencia();
     raiz.setAttribute('data-theme', efectivo(pref));
     raiz.setAttribute('data-tema-pref', pref);
+    pintarBarra(raiz.getAttribute('data-theme'));
     try { window.dispatchEvent(new CustomEvent('tema', { detail: { tema: raiz.getAttribute('data-theme'), preferencia: pref } })); } catch (e) { /* navegador antiguo */ }
   }
   function elegir(pref) {

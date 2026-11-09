@@ -24,6 +24,7 @@ body.pt { background: var(--bg); min-height: 100vh; display: flex; flex-directio
 .pt-buscador { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 18px 20px; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 14px 16px; box-shadow: 0 10px 30px rgba(20,24,30,.08); margin-top: -34px; position: relative; z-index: 1; }
 .pt-buscador .c6 { grid-column: span 6; } .pt-buscador .c4 { grid-column: span 4; } .pt-buscador .c3 { grid-column: span 3; } .pt-buscador .c2 { grid-column: span 2; } .pt-buscador .c12 { grid-column: 1 / -1; }
 .pt-buscador .campo, .pt-form .campo { width: 100%; min-height: 44px; font-size: 15px; }
+@media (pointer: coarse) { .pt-buscador .campo, .pt-form .campo { font-size: 16px; } } /* sin acercamiento al tocar en iPhone (auditoría 8-nov, #8; ver rentacar.css) */
 .pt-fechahora { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(0, 1fr); gap: 8px; }
 .pt-buscador .acciones { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
 .pt-chk { display: inline-flex; align-items: center; gap: 8px; font-size: 13px; color: var(--ink-2); cursor: pointer; }

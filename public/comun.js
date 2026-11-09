@@ -7,7 +7,7 @@ import { instalarPaginador } from '/paginador.js';
 import { instalarSelectorBuscable, sinTildes, calzaPalabras } from '/selector-buscable.js'; // 1-nov: todo <select> de 8 opciones o más con buscador por palabras
 // Fase 2 del estándar (1-nov, maqueta aprobada): menú por grupos, botón «?» solo con manual, pestañas base y franjas viven en
 // /estandar.js (módulo puro, probado en Node); aquí solo se pintan.
-import { MENU, BACKOFFICE_MENU, manualDe, botonAyuda, htmlFranja, vieneDeOnBoard, sinAcceso, htmlSinAcceso } from '/estandar.js';
+import { MENU, BACKOFFICE_MENU, manualDe, botonAyuda, htmlFranja, vieneDeOnBoard, sinAcceso, htmlSinAcceso, escEsMio } from '/estandar.js';
 export { MENU, BACKOFFICE_MENU, PESTANAS_BASE, ordenarPestanas } from '/estandar.js';
 export { instalarSelectorBuscable, convertirSelect, revisarSelectores } from '/selector-buscable.js'; // para las páginas públicas (reservar), que no pasan por iniciarPagina()
 
@@ -182,7 +182,8 @@ export function modal({ titulo, html = '', botones = [{ texto: 'Cerrar' }], anch
       <div class="modal-cuerpo">${html}</div>
       <div class="modal-pie">${botones.map((b, i) => `<button type="button" class="btn ${b.clase || ''}" data-i="${i}">${esc(b.texto)}</button>`).join('')}</div></div>`;
     const cerrar = (v) => { fondo.remove(); document.removeEventListener('keydown', tecla); resolve(v); };
-    const tecla = (e) => { if (e.key === 'Escape') cerrar(null); };
+    // Esc cierra solo la ventana de arriba (auditoría 8-nov, On Rent #1): ver escEsMio() en estandar.js.
+    const tecla = (e) => { if (escEsMio(e, fondo, document.querySelectorAll('.modal-fondo'))) { e.preventDefault(); cerrar(null); } };
     document.addEventListener('keydown', tecla);
     // Fase 1 (1-nov, regla de Pablo): un clic fuera de la ventana NO la cierra, porque se pierde lo escrito. Solo ✕,
     // «Cancelar», el botón de acción o Esc.
@@ -373,7 +374,7 @@ export function abrirMiCuenta() {
     </div>
     <div class="modal-pie"><button type="button" class="btn peligro" data-salir>${ICONOS.salir} Cerrar sesión</button></div></form>`;
   const cerrar = () => { fondo.remove(); document.removeEventListener('keydown', tecla); };
-  const tecla = (e) => { if (e.key === 'Escape') cerrar(); };
+  const tecla = (e) => { if (escEsMio(e, fondo, document.querySelectorAll('.modal-fondo'))) { e.preventDefault(); cerrar(); } }; // solo la de arriba
   document.addEventListener('keydown', tecla);
   const f = fondo.querySelector('form'), err = fondo.querySelector('[data-err]'), errEl = fondo.querySelector('[data-err-el]');
   fondo.addEventListener('click', async (e) => {
@@ -407,6 +408,14 @@ export function abrirMiCuenta() {
 
 function activarBuscador(app) {
   const inp = app.querySelector('#rc-buscar'), res = app.querySelector('#rc-buscar-res');
+  // Auditoría 8-nov (On Rent #16): a 400 px la ayuda quedaba en «Buscar pate…». En teléfono va corta; la completa queda
+  // en aria-label para el lector de pantalla.
+  const AYUDA = 'Buscar patente, RUT, cliente o folio…';
+  inp.setAttribute('aria-label', AYUDA);
+  const angosta = window.matchMedia?.('(max-width: 600px)');
+  const ponerAyuda = () => { inp.placeholder = angosta?.matches ? 'Buscar…' : AYUDA; };
+  ponerAyuda();
+  angosta?.addEventListener?.('change', ponerAyuda);
   let t = null;
   inp.addEventListener('input', () => {
     clearTimeout(t);

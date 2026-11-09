@@ -225,7 +225,10 @@ class CapturasPantallas {
 
     @Test fun p01_ingreso() = play("01-ingreso") { PantallaIngreso("patio@demo.siguelogps.cl", false, null, { _, _ -> }, {}) }
     @Test fun p02_agenda() = play("02-agenda") { conPestanas(Pestana.AGENDA, "Entregas y devoluciones") { ContenidoAgenda(Lectura(tareas), true, emptySet(), setOf(10L), { _, _ -> }, {}, {}) } }
-    @Test fun p03_fotos() = play("03-entrega-fotos") { PantallaAsistente(estado("entrega"), borrador("entrega", 2, fotos = 7), false, sinAcciones) }
+    // Ojo con el nombre: JUnit ordena las pruebas por el hash del nombre, y «p03_fotos» quedaba primera. Si la primera
+    // pantalla que se dibuja es la de fotos (carga imágenes en otro hilo), Robolectric aborta el proceso (134, «JniConstants:
+    // Class not found: java/nio/…»). Con este nombre la primera sigue siendo c06_paso3, como antes.
+    @Test fun p03_fotosEntrega() = play("03-entrega-fotos") { PantallaAsistente(estado("entrega"), borrador("entrega", 2, fotos = 7), false, sinAcciones) }
     @Test fun p04_danos() = play("04-devolucion-danos") {
         val b = borrador("devolucion", 3, fotos = 11).conDano(DanoPendiente("d1", "derecho", 312.0, 330.0, "abolladura", "Golpe en estacionamiento"))
         PantallaAsistente(estado("devolucion"), b, false, sinAcciones)

@@ -21,34 +21,34 @@ Textos listos para copiar en Google Play Console y App Store Connect. Las captur
 
 ## Descripción breve (Play, máx. 80)
 
-Rent a car en tu teléfono: reservas, contratos, entregas y devoluciones.
+Tu rentacar en el teléfono: reservas, contratos, entregas y devoluciones.
 
 ## Subtítulo (App Store, máx. 30)
 
-Administra tu rent a car
+Administra tu rentacar
 
 ## Descripción completa (Play y App Store, máx. 4.000)
 
-Síguelo On Rent es el sistema de administración para empresas de arriendo de vehículos (rent a car) de Síguelo GPS. Con la app, tu equipo de mesón, patio y administración trabaja desde el teléfono o la tablet, con los mismos datos que en el computador.
+Síguelo On Rent es el sistema de administración para empresas de arriendo de vehículos (rentacar) de Síguelo GPS. Con la app, tu equipo de mesón, patio y administración trabaja desde el teléfono o la tablet, con los mismos datos que en el computador.
 
-RESERVAS SIN TOPES
+Reservas sin dobles asignaciones
 • Calendario por vehículo y sucursal: el sistema no permite dobles reservas.
 • Cotiza con tus tarifas, temporadas, extras y códigos de descuento.
 
-ENTREGA Y DEVOLUCIÓN DESDE EL PATIO
+Entrega y devolución desde el patio
 • Kilometraje y combustible leídos desde la plataforma GPS, para confirmar con el tablero.
 • Checklist de accesorios y fotos guiadas del vehículo, selladas con fecha, hora y lugar.
 • Compara la entrega con la devolución y marca cada daño sobre la foto.
 
-CONTRATO CON FIRMA DIGITAL
+Contrato con firma digital
 • El cliente firma en el teléfono; el contrato en PDF lleva un código QR de verificación.
 • Envía la copia por correo o WhatsApp.
 
-COBROS, GARANTÍAS Y DOCUMENTOS
+Cobros, garantías y documentos
 • Pagos y garantías, liquidación de la devolución, boletas y facturas electrónicas.
 • Multas y TAG asociados a cada arriendo.
 
-TU FLOTA, SIEMPRE AL DÍA
+Tu flota, siempre al día
 • Estado de cada vehículo, mantenciones, revisión técnica, seguros y ubicación GPS.
 • Reportes de ocupación y ventas.
 
@@ -57,6 +57,9 @@ Multi-sucursal, con permisos por rol (administración, mesón, patio y finanzas)
 Para usar la app, tu empresa debe tener contratado Síguelo On Rent. Las cuentas las crea el administrador de tu empresa. ¿Quieres conocerlo? Escríbenos a info@siguelogps.cl.
 
 ## Palabras clave (App Store, máx. 100)
+
+<!-- Auditoría 8-nov (marca #12): «rent a car» queda solo aquí, como palabra que la gente busca en la tienda; en los
+     textos que se leen va «rentacar», como manda el CLAUDE.md. -->
 
 rent a car,arriendo,vehículos,flota,reservas,contrato,firma,patio,checklist,inspección,gps,chile
 

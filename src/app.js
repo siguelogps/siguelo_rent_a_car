@@ -53,6 +53,15 @@ export async function crearApp() {
   app.use('/vendor/leaflet', express.static(path.join(RAIZ, 'node_modules/leaflet/dist'), { maxAge: '30d' }));
   app.use(express.static(PUBLICO, { extensions: ['html'], index: false, maxAge: process.env.NODE_ENV === 'production' ? '1h' : 0 }));
 
+  // robots.txt (auditoría 8-nov, On Rent #5): la API no se rastrea, salvo el logo de cada rentacar (es la imagen de la
+  // vista previa del portal). Las pantallas con sesión no se bloquean aquí sino con X-Robots-Tag (src/cabeceras.js): un
+  // Disallow impediría que el buscador lea el noindex y la URL podría quedar listada igual.
+  app.get('/robots.txt', (_req, res) => res.type('text/plain').send('User-agent: *\nAllow: /api/logo/\nDisallow: /api/\n'));
+
+  // Portal de reservas con su <head> armado en el servidor y 404 real para un rentacar que no existe (src/portal/pagina.js).
+  const { paginaPortal } = await import('./portal/pagina.js');
+  app.get(['/reservar/:slug', '/embed/:slug'], paginaPortal);
+
   // URLs limpias de las páginas con parámetro: /reservas/123 → reserva.html, /verificar/ABC → verificar.html, etc.
   const PAGINAS_PARAM = { empresas: 'empresa', invitacion: 'invitacion', carga: 'carga', reservas: 'reserva', vehiculos: 'vehiculo', clientes: 'cliente', contratos: 'contrato', incidentes: 'incidente', liquidaciones: 'liquidacion', verificar: 'verificar', reservar: 'reservar', portal: 'portal', firmar: 'firmar', patio: 'patio-inspeccion', embed: 'reservar' };
   app.get('/:pagina/:id', (req, res, next) => {

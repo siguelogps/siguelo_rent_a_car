@@ -26,11 +26,11 @@ El sistema web además quedó como **PWA** (`public/manifest.webmanifest`, `publ
 - `android/`, `ios/` — proyectos nativos (se abren con Android Studio / Xcode).
 - `www/` — lo único que va dentro de la app: pantalla de carga y «Sin conexión».
 - `assets/` — imágenes de origen de íconos y pantalla de inicio (`scripts/fuentes-iconos.py` las dibuja con los logos oficiales; `npm run iconos` genera todos los tamaños).
-- `tienda/` — textos de la ficha, respuestas de los formularios, capturas (`capturas/android|iphone|ipad`), ícono 1024 y gráfico destacado de Play.
+- `tienda/` — textos de la ficha, respuestas de los formularios, capturas (`capturas/android` de la app nativa; `iphone|ipad` de esta app), ícono 1024 y gráfico destacado de Play.
 
 ## 1. Probarla en el celular (Android)
 
-Cada cambio en `apps/movil` compila solo en GitHub Actions (**Actions → App móvil**, también con «Run workflow»):
+Cada cambio en `apps/movil` (salvo `tienda/`, que son solo textos y capturas) compila solo en GitHub Actions (**Actions → App móvil**, también con «Run workflow»):
 1. En la ejecución, abajo en **Artifacts**, descarga `on-rent-prueba-1.0.N` (un .zip con el .apk).
 2. Pásalo al celular e instálalo (Android pide permitir «instalar apps desconocidas»).
 
@@ -54,7 +54,7 @@ npm run ios              # abre Xcode (solo en Mac)
    Crea `siguelo-on-rent.jks` y carga en GitHub los secretos `ANDROID_KEYSTORE_BASE64`, `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` y `ANDROID_KEY_PASSWORD`. Guarda la llave y su clave en un lugar seguro (es distinta de la de Síguelo Go).
 3. Correr **Actions → App móvil**: deja `on-rent-play-1.0.N` con el **.aab** firmado.
 4. En Play Console: **Crear app** → «Síguelo On Rent», español (Latinoamérica), App, Gratis. Aceptar **Firma de apps de Google Play**.
-5. Completar con `tienda/ficha.md`: ficha (textos, ícono `tienda/icono-1024.png` reducido a 512, gráfico destacado, capturas `tienda/capturas/android` y `ipad` para tablets), Contenido de la app (privacidad, acceso a la app con la cuenta de revisión, anuncios: no, clasificación, público objetivo: 18+, seguridad de los datos, eliminación de cuenta).
+5. Completar con `tienda/ficha.md`: ficha (textos, ícono `tienda/icono-1024.png` reducido a 512, gráfico destacado, capturas de teléfono `tienda/capturas/android`, que son de la app **nativa**; las de `ipad` son de la versión web y no van en Play), Contenido de la app (privacidad, acceso a la app con la cuenta de revisión que se crea en Backoffice › Clientes › «Cuenta de revisión de tiendas», anuncios: no, clasificación, público objetivo: 18+, seguridad de los datos, eliminación de cuenta).
 6. Subir el .aab a **Prueba interna** → probar → **Producción** (cuentas nuevas de desarrollador personal exigen prueba cerrada de 14 días con 12 personas; las cuentas de organización no).
 
 ## 4. App Store
@@ -68,7 +68,7 @@ npm run ios              # abre Xcode (solo en Mac)
 5. Correr **Actions → App móvil**: archiva, firma (los certificados los crea Xcode solo con la llave) y **sube la versión a TestFlight**.
 6. En App Store Connect completar con `tienda/ficha.md`: textos, capturas `tienda/capturas/iphone` (6,9") y `ipad` (13"), URL de privacidad y soporte, etiquetas de privacidad, cuenta de revisión. Elegir la compilación y **Enviar a revisión**.
 
-> Para la revisión de Apple es clave la nota de `tienda/ficha.md` (herramienta B2B, cuentas creadas por la empresa) y una cuenta de demostración con datos.
+> Para la revisión de Apple es clave la nota de `tienda/ficha.md` (herramienta B2B, cuentas creadas por la empresa) y la cuenta de revisión con datos (Backoffice › Clientes › «Cuenta de revisión de tiendas»).
 
 ## Versiones
 

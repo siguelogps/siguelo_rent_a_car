@@ -1,4 +1,4 @@
-// Capturas para las fichas de Google Play y App Store (apps/movil/tienda/capturas/…), con los datos de prueba.
+// Capturas para la ficha de App Store (apps/movil/tienda/capturas/iphone y ipad), con los datos de prueba.
 // Levanta el sistema en memoria (PGlite + demo), toma cada pantalla en tamaño de teléfono/tablet y la monta
 // sobre el fondo de marca con un titular. Uso: npm run capturas-tienda   (requiere Playwright con Chromium)
 import fs from 'node:fs';
@@ -14,9 +14,11 @@ try { ({ chromium } = require('playwright')); } catch { ({ chromium } = require(
 const RAIZ = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 const SALIDA = path.join(RAIZ, 'apps/movil/tienda/capturas');
 
-// Tamaños exigidos: Play (teléfono 9:16 y tablet), App Store (iPhone 6,9" y iPad 13").
+// Tamaños exigidos: App Store (iPhone 6,9" y iPad 13").
+// 🔥 9-nov: ya no se generan las de Play (capturas/android). La app de Android es nativa (android/) y sus capturas las
+// dibuja GitHub Actions (CapturasPantallas.kt, «play-*.png» en la rama capturas-android); estas, de la versión web en
+// Capacitor, las pisaban. Ver apps/movil/tienda/capturas/android/README.md.
 const EQUIPOS = {
-  android: { lienzo: [1080, 1920], escala: 2.5, vista: [393, 820] },
   iphone: { lienzo: [1320, 2868], escala: 3, vista: [402, 900] },
   ipad: { lienzo: [2064, 2752], escala: 2, vista: [900, 1300] }
 };

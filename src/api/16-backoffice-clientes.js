@@ -29,6 +29,7 @@ import { DIAS_EXPORTAR, procesarBajasVencidas } from '../siguelo/bajas.js';
 import { configuracionPush } from '../app-nativa/push.js';
 import { registrarTarea } from '../tareas.js';
 import { ROLES } from '../permisos.js';
+import { estadoCuentaRevision, prepararCuentaRevision, renovarAgendaRevision } from '../siguelo/cuenta-revision.js';
 
 const r = express.Router();
 const base = [requiere(null, 'ver', { sinEmpresa: true }), soloSiguelo];
@@ -476,7 +477,19 @@ r.get('/backoffice/bitacora', ...base, async (req, res) => {
 });
 
 // Tareas: reintento de tickets al CRM y anonimización de bajas vencidas.
+// ── Cuenta de revisión de las tiendas (9-nov, solo superadmin) ──
+// Empresa de demostración en marcha blanca con un usuario para que Google y Apple revisen la app. La clave se genera
+// al azar y vuelve UNA sola vez en esta respuesta (no se guarda en claro, no va a la bitácora ni al registro).
+r.get('/backoffice/cuenta-revision', ...base, soloSuperadmin, async (_req, res) => res.json(await estadoCuentaRevision()));
+r.post('/backoffice/cuenta-revision', ...base, soloSuperadmin, async (req, res) => {
+  const c = await prepararCuentaRevision();
+  await bit(req, c.empresa.id, c.creada ? 'cuenta_revision_creada' : 'cuenta_revision_reiniciada', { correo: c.correo, agenda: c.agenda });
+  res.set('Cache-Control', 'no-store');
+  res.json({ creada: c.creada, empresa: c.empresa, correo: c.correo, clave: c.clave, agenda: c.agenda });
+});
+
 registrarTarea('solicitudes_crm', 10 * 60e3, reintentarCrm);
+registrarTarea('cuenta_revision_agenda', 3600e3, renovarAgendaRevision);
 registrarTarea('bajas', 6 * 3600e3, procesarBajasVencidas);
 
 export default r;

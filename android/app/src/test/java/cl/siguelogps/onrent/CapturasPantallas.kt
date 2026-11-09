@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import cl.siguelogps.onrent.ui.IncidenteBorrador
 import cl.siguelogps.onrent.ui.ListaIncidentes
 import cl.siguelogps.onrent.ui.LocalImagenes
+import cl.siguelogps.onrent.ui.LocalReloj
 import cl.siguelogps.onrent.ui.PantallaActualizar
 import cl.siguelogps.onrent.ui.PantallaAsistente
 import cl.siguelogps.onrent.ui.PantallaCola
@@ -99,14 +100,18 @@ class CapturasPantallas {
         return f.absolutePath
     }
 
+    // Hora fija del sello de las fotos: 22-10-2026 14:03 en Chile, el mismo día de los datos (antes salía la hora del
+    // equipo de GitHub, de madrugada y de otro día).
+    private val relojFijo: () -> Long = { java.time.Instant.parse("2026-10-22T17:03:00Z").toEpochMilli() }
+
     private fun captura(nombre: String, oscuro: Boolean = false, alto: Int? = null, contenido: @Composable () -> Unit) {
         if (alto != null) RuntimeEnvironment.setQualifiers("w360dp-h${alto}dp-xxhdpi")
         val fuente = FuenteImagenes(CargadorImagenes(ApiOnRent("https://onrent.invalid"), RuntimeEnvironment.getApplication().cacheDir))
-        compose.setContent { TemaOnRent(oscuro) { CompositionLocalProvider(LocalImagenes provides fuente) { Box(Modifier.fillMaxSize().background(c.fondo)) { contenido() } } } }
+        compose.setContent { TemaOnRent(oscuro) { CompositionLocalProvider(LocalImagenes provides fuente, LocalReloj provides relojFijo) { Box(Modifier.fillMaxSize().background(c.fondo)) { contenido() } } } }
         compose.onRoot().captureRoboImage("build/capturas/$nombre.png")
     }
 
-    private val yo = leer<Yo>("""{"usuario":{"id":3,"nombre":"Pedro Patio","correo":"patio@andesrent.cl","rol":"administrador","rol_nombre":"Administrador"},
+    private val yo = leer<Yo>("""{"usuario":{"id":3,"nombre":"Pedro Patio","correo":"patio@demo.siguelogps.cl","rol":"administrador","rol_nombre":"Administrador"},
         "permisos":{"inicio":"editar","reservas":"editar","patio":"editar","contratos":"editar","clientes":"editar","flota":"editar","mantencion":"editar","gps":"ver","pagos":"editar","liquidaciones":"editar","incidentes":"editar","reportes":"ver","configuracion":"editar"},
         "empresa":{"id":1,"nombre":"Andes Rent a Car","slug":"andes"}}""")
 
@@ -141,7 +146,7 @@ class CapturasPantallas {
 
     private val sinAcciones = AccionesAsistente()
 
-    @Test fun c01_ingreso() = captura("01-ingreso") { PantallaIngreso("patio@andesrent.cl", false, null, { _, _ -> }, {}) }
+    @Test fun c01_ingreso() = captura("01-ingreso") { PantallaIngreso("patio@demo.siguelogps.cl", false, null, { _, _ -> }, {}) }
 
     @Composable private fun conPestanas(p: Pestana, titulo: String, porSubir: Int = 0, enLinea: Boolean = true, contenido: @Composable () -> Unit) {
         Column(Modifier.fillMaxSize()) {
@@ -211,4 +216,34 @@ class CapturasPantallas {
     @Test fun c18_eliminarCuenta() = captura("18-eliminar-cuenta") { PantallaEliminarCuenta(false, {}, {}, {}) }
     @Test fun c19_actualizar() = captura("19-actualizar") { PantallaActualizar("Hay una versión nueva con mejoras en las fotos de la devolución.") {} }
     @Test fun c20_paso2Oscuro() = captura("20-entrega-fotos-oscuro", oscuro = true, alto = 900) { PantallaAsistente(estado("entrega"), borrador("entrega", 2, fotos = 3), false, sinAcciones) }
+
+    // ── Capturas para la ficha de Google Play (9-nov) ──
+    // Play exige que el lado largo no pase del doble del corto. Las de arriba miden 1080×2340 o más (pantalla completa o
+    // con todo el contenido desplegado, para revisar), y no sirven. Estas se dibujan a 360×700 dp (1080×2100 px, 1,94:1),
+    // como se ven en un teléfono: lo que no cabe queda abajo, como en la app. Se copian a apps/movil/tienda/capturas/android.
+    private fun play(nombre: String, oscuro: Boolean = false, contenido: @Composable () -> Unit) = captura("play-$nombre", oscuro, PLAY_ALTO_DP, contenido)
+
+    @Test fun p01_ingreso() = play("01-ingreso") { PantallaIngreso("patio@demo.siguelogps.cl", false, null, { _, _ -> }, {}) }
+    @Test fun p02_agenda() = play("02-agenda") { conPestanas(Pestana.AGENDA, "Entregas y devoluciones") { ContenidoAgenda(Lectura(tareas), true, emptySet(), setOf(10L), { _, _ -> }, {}, {}) } }
+    // Ojo con el nombre: JUnit ordena las pruebas por el hash del nombre, y «p03_fotos» quedaba primera. Si la primera
+    // pantalla que se dibuja es la de fotos (carga imágenes en otro hilo), Robolectric aborta el proceso (134, «JniConstants:
+    // Class not found: java/nio/…»). Con este nombre la primera sigue siendo c06_paso3, como antes.
+    @Test fun p03_fotosEntrega() = play("03-entrega-fotos") { PantallaAsistente(estado("entrega"), borrador("entrega", 2, fotos = 7), false, sinAcciones) }
+    @Test fun p04_danos() = play("04-devolucion-danos") {
+        val b = borrador("devolucion", 3, fotos = 11).conDano(DanoPendiente("d1", "derecho", 312.0, 330.0, "abolladura", "Golpe en estacionamiento"))
+        PantallaAsistente(estado("devolucion"), b, false, sinAcciones)
+    }
+    @Test fun p05_firma() = play("05-entrega-firma") {
+        val firma = EstadoFirma().apply { empezar(Offset(.08f, .7f)); listOf(.15f to .3f, .22f to .75f, .3f to .35f, .38f to .7f, .48f to .4f, .6f to .65f, .75f to .45f, .9f to .5f).forEach { (x, y) -> seguir(Offset(x, y)) }; terminar() }
+        PantallaAsistente(estado("entrega"), borrador("entrega", 5, fotos = 11).copy(firmante = "Valentina Soto Riquelme"), false, sinAcciones, firma)
+    }
+    @Test fun p06_vehiculosOscuro() = play("06-vehiculos-oscuro", oscuro = true) { conPestanas(Pestana.FLOTA, "Vehículos") { ContenidoFlota(Lectura(flota), true, {}, {}, {}) } }
+    @Test fun p07_contrato() = play("07-contrato") {
+        PantallaContrato(Lectura(leer<FichaContrato>("""{"contrato":{"id":7,"folio":"CT-2026-0418","estado":"firmado","firmado_en":"2026-10-22T17:20:00Z","firmante_nombre":"Valentina Soto Riquelme","codigo_verificacion":"K7M4QX92","creado_en":"2026-10-21T15:00:00Z"},
+            "reserva":{"id":11,"folio":"R-1050","estado":"en_curso","inicio":"2026-10-22T17:00:00Z","fin":"2026-10-25T15:00:00Z","total":189900,"cliente":"Valentina Soto Riquelme","patente":"PBVX61","marca":"Hyundai","modelo":"Accent"},
+            "historial":[{"accion":"contrato_firmado","usuario":"Pedro Patio","creado_en":"2026-10-22T17:20:00Z"},{"accion":"contrato_generado","usuario":"Ana Counter","creado_en":"2026-10-21T15:00:00Z"}]}""")), true, false, {}, AccionesContrato())
+    }
+    @Test fun p08_eliminarCuenta() = play("08-eliminar-cuenta") { PantallaEliminarCuenta(false, {}, {}, {}) }
+
+    private companion object { const val PLAY_ALTO_DP = 700 }
 }

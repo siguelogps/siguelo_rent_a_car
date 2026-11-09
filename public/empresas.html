@@ -10,7 +10,7 @@
 <main>
   <div class="pagina-cab">
     <div><h1>Clientes de Síguelo On Rent</h1><p>Altas, planes, conexiones y estado de cada rentacar. Todo cambio queda en la bitácora.</p></div>
-    <div class="acciones"><a class="btn primario" href="/empresa-nueva" id="nueva">+ Nuevo cliente</a></div>
+    <div class="acciones"><button type="button" class="btn" id="revision" hidden>Cuenta de revisión de tiendas</button><a class="btn primario" href="/empresa-nueva" id="nueva">+ Nuevo cliente</a></div>
   </div>
   <div class="kpis" id="kpis"></div>
   <div class="tarjeta">
@@ -24,7 +24,7 @@
 </main>
 <script type="module">
 // Backoffice Síguelo · lista de clientes (22-oct, espec. aprobada por Pablo, mockup 01-clientes).
-import { iniciarPagina, api, esc, fecha, hora, rut, modal, toastError, calzaPalabras } from '/comun.js';
+import { iniciarPagina, api, esc, fecha, hora, rut, modal, toast, toastError, calzaPalabras } from '/comun.js';
 const yo = await iniciarPagina({ activo: 'empresas', titulo: 'Clientes' });
 const LETRA = { gps: 'G', simpleapi: 'F', correo: 'C', whatsapp: 'W', dashboard_siguelo: 'O' };
 const NOMBRE_SALUD = { ok: 'funciona', esp: 'en preparación', mal: 'falla', no: 'no contratada' };
@@ -32,6 +32,29 @@ const SIMBOLO_SALUD = { ok: '✓', esp: '…', mal: '!', no: '–' }; // fase 2:
 const F = { estado: 'todos', plan: '', integ: '', texto: '' };
 let D = { clientes: [], tipos: [] };
 if (!yo.puede_operar) document.getElementById('nueva').hidden = true;
+// 9-nov: cuenta para que Google Play y App Store revisen la app (solo superadmin). La clave se ve UNA vez: no se guarda.
+if (yo.usuario?.rol === 'superadmin') document.getElementById('revision').hidden = false;
+document.getElementById('revision').addEventListener('click', async () => {
+  try {
+    const st = await api('backoffice/cuenta-revision');
+    const datos = st.existe
+      ? `<p>Ya existe: <b>${esc(st.empresa.nombre)}</b> (${st.empresa.marcha_blanca ? 'en marcha blanca' : 'sin marcha blanca'}), usuario <span class="mono">${esc(st.correo)}</span>${st.usuario_activo ? '' : ' (eliminado desde la app)'}.
+         Último ingreso: ${st.ultimo_acceso ? `${fecha(st.ultimo_acceso)} ${hora(st.ultimo_acceso)}` : '—'}.</p>
+         <p class="peq muted">«Generar clave nueva» deja la cuenta como nueva para el revisor: clave nueva (la anterior deja de servir y se cierran sus sesiones), marcha blanca encendida y entregas y devoluciones para hoy.</p>`
+      : `<p>Crea la empresa de demostración <b>Rentacar Demo Revisión</b> con vehículos, reservas, contratos e incidentes de prueba, y un usuario administrador para la revisión de Google Play y App Store.</p>
+         <p class="peq muted">Queda en marcha blanca y sin conexiones: no sale ningún correo, WhatsApp, cobro, boleta ni inmovilización. Las reservas se mueven solas a hoy para que la agenda del teléfono siempre tenga trabajo.</p>`;
+    const r = await modal({ titulo: 'Cuenta de revisión de tiendas', html: datos,
+      botones: [{ texto: 'Cancelar' }, { texto: st.existe ? 'Generar clave nueva' : 'Crear cuenta', clase: 'primario', accion: () => api('backoffice/cuenta-revision', { body: {} }) }] });
+    if (!r || r === true) return;
+    await modal({ titulo: 'Cuenta de revisión de tiendas', html: `
+      <p>Copia estos datos en Play Console (Contenido de la app › Acceso a la app) y en App Store Connect (Información para la revisión). <b>La clave no se vuelve a mostrar</b>: si se pierde, genera otra.</p>
+      <label class="etiqueta">Correo<input class="campo mono" readonly value="${esc(r.correo)}" data-copiar></label>
+      <label class="etiqueta">Clave<input class="campo mono" readonly value="${esc(r.clave)}" data-copiar></label>
+      <p class="peq muted">Empresa: ${esc(r.empresa.nombre)} · ${r.creada ? 'creada ahora' : 'reiniciada'}.</p>`,
+    botones: [{ texto: 'Copiar correo y clave', accion: async (cu) => { const [c, k] = [...cu.querySelectorAll('[data-copiar]')].map((i) => i.value); await navigator.clipboard.writeText(`${c}\n${k}`); toast('Copiado'); return false; } }, { texto: 'Listo', clase: 'primario' }] });
+    cargar().catch(toastError);
+  } catch (e) { toastError(e); }
+});
 
 const iniciales = (n) => n.split(/\s+/).map((p) => p[0]).slice(0, 2).join('').toUpperCase();
 const cuando = (v) => {

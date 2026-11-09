@@ -10,7 +10,7 @@ const PUBLICO = new URL('../public/', import.meta.url).pathname;
 const CODIGO = fs.readFileSync(path.join(PUBLICO, 'tema.js'), 'utf8');
 const CLAVE = 'onrent-tema';
 
-function correr({ guardado = null, sistemaOscuro = false, bloqueado = false, ruta = '/inicio', busqueda = '' } = {}) {
+function correr({ guardado = null, sistemaOscuro = false, bloqueado = false, ruta = '/inicio', busqueda = '', meta = null } = {}) {
   const attrs = {};
   const datos = guardado ? { [CLAVE]: guardado } : {};
   const oyentes = {};
@@ -23,6 +23,7 @@ function correr({ guardado = null, sistemaOscuro = false, bloqueado = false, rut
   const elementos = [];
   const document = {
     documentElement: { setAttribute: (k, v) => { attrs[k] = v; }, getAttribute: (k) => attrs[k] ?? null, dataset: {} },
+    querySelector: (sel) => (meta && sel === 'meta[name="theme-color"]' ? meta : null),
     createElement: () => { const el = { attrs: {}, setAttribute(k, v) { this.attrs[k] = v; }, addEventListener(t, f) { this['on' + t] = f; } }; elementos.push(el); return el; },
   };
   const window = { matchMedia: () => mq, addEventListener: (t, f) => { oyentes[t] = f; }, dispatchEvent: () => true };
@@ -87,4 +88,19 @@ test('cada página del sistema carga /tema.js antes de sus hojas de estilo', () 
     assert.ok(i > 0, `${f} no carga /tema.js`);
     assert.ok(i < html.indexOf('rel="stylesheet"'), `${f}: /tema.js debe ir antes de las hojas de estilo`);
   }
+});
+
+// Auditoría 8-nov (On Rent #17): la barra del navegador (meta theme-color) seguía blanca en oscuro.
+test('theme-color sigue al tema efectivo, incluso el elegido a mano, y respeta el color propio de una pantalla', () => {
+  const nuevaMeta = (c) => ({ c, getAttribute() { return this.c; }, setAttribute(_k, v) { this.c = v; } });
+  const m1 = nuevaMeta('#FFFFFF');
+  const r = correr({ sistemaOscuro: true, meta: m1 });
+  assert.equal(m1.c, '#1A1F26');
+  r.api.elegir('claro');
+  assert.equal(m1.c, '#FFFFFF');
+  r.api.elegir('oscuro');
+  assert.equal(m1.c, '#1A1F26');
+  const marca = nuevaMeta('#0F5F58'); // el ingreso de una app con marca pone el color del rentacar
+  correr({ sistemaOscuro: true, meta: marca });
+  assert.equal(marca.c, '#0F5F58');
 });

@@ -119,6 +119,7 @@ Los nombres de los artefactos no cambian, así que `siguelo-admin/apps/catalogo.
   falta ver la cámara, el sello de las fotos, la ubicación, la firma con el dedo, que la cola suba después de recuperar
   la señal con la app cerrada, abrir el PDF y los avisos push.
 - Migración `160_app_nativa.sql`: se aplica sola al arrancar el servidor.
-- La ficha de Play: capturas nuevas de la app nativa (las de `apps/movil/tienda/capturas` son de la versión web) y
-  revisar la declaración de datos (fotos, ubicación aproximada en el sello).
+- La ficha de Play (`apps/movil/tienda/ficha.md`) ya está al día con la app nativa (capturas, notas para el revisor,
+  seguridad de los datos). Las capturas para Play son las `play-*.png` de `CapturasPantallas.kt` (1080×2100, dentro
+  del 2:1 que exige Play); se copian a `apps/movil/tienda/capturas/android` cuando cambian las pantallas.
 - iPhone sigue con la app de Capacitor. Una app nativa para iOS sería otro proyecto.

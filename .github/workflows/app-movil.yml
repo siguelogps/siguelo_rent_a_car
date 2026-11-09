@@ -17,7 +17,8 @@ name: App móvil
 
 on:
   push:
-    paths: ['android/**', 'apps/movil/**', '.github/workflows/app-movil.yml', '.github/scripts/**', 'src/app-nativa/**', 'src/api/63-app-nativa.js', 'test/app-nativa.test.js']
+    # 9-nov: la ficha de las tiendas (textos y capturas) no compila apps ni sube a TestFlight.
+    paths: ['android/**', 'apps/movil/**', '!apps/movil/tienda/**', '.github/workflows/app-movil.yml', '.github/scripts/**', 'src/app-nativa/**', 'src/api/63-app-nativa.js', 'test/app-nativa.test.js']
   workflow_dispatch:
 
 permissions:

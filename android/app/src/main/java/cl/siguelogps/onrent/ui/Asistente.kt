@@ -37,6 +37,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -239,6 +240,12 @@ private fun DialogoKm(e: EstadoPatio, b: BorradorInspeccion, onCerrar: () -> Uni
         dismissButton = { TextButton(onCerrar) { Txt("Cancelar", color = c.gris) } })
 }
 
+/**
+ * Reloj del sello que se ve sobre el visor. En la app es la hora del teléfono; las capturas de pantalla (CapturasPantallas)
+ * ponen una hora fija de día, para que la ficha de Play no muestre la hora del equipo de compilación (de madrugada).
+ */
+val LocalReloj = staticCompositionLocalOf<() -> Long> { { System.currentTimeMillis() } }
+
 // ── Paso 2: fotos guiadas ──
 @Composable
 private fun Paso2(e: EstadoPatio, b: BorradorInspeccion, a: AccionesAsistente, fotoInicial: String?) {
@@ -249,8 +256,9 @@ private fun Paso2(e: EstadoPatio, b: BorradorInspeccion, a: AccionesAsistente, f
     val local = b.fotos.firstOrNull { it.posicion == sel }
     val serv = e.fotos.firstOrNull { it.posicion == sel }
     val def = Patio.POSICIONES.firstOrNull { it.clave == sel }
-    var reloj by remember { mutableStateOf(System.currentTimeMillis()) }
-    LaunchedEffect(Unit) { while (true) { delay(1000); reloj = System.currentTimeMillis() } }
+    val ahora = LocalReloj.current
+    var reloj by remember { mutableStateOf(ahora()) }
+    LaunchedEffect(Unit) { while (true) { delay(1000); reloj = ahora() } }
     Box(Modifier.fillMaxWidth().aspectRatio(4f / 3f).clip(RoundedCornerShape(14.dp)).background(Color(0xFF8C939D))) {
         if (local != null || serv != null) {
             ImagenLlena(local?.ruta, serv?.archivoId, Patio.nombrePosicion(sel))

@@ -15,8 +15,10 @@ export async function sembrar(E) {
   const ahora = Date.now();
 
   const veh = Object.fromEntries((await q('SELECT * FROM vehiculos WHERE empresa_id = $1', [E])).map((v) => [v.patente, v]));
-  const usuario = async (correo) => (await uno('SELECT id, nombre FROM usuarios WHERE correo = $1', [correo]));
-  const admin = await usuario('demo@siguelogps.cl'), counter = await usuario('counter@siguelogps.cl');
+  // 🔥 9-nov: por rol dentro de la empresa, no por correo: con los correos fijos de la demo, otra empresa sembrada con
+  // estos datos (la cuenta de revisión de tiendas) habría tomado como autores a usuarios de «Andes Rent a Car».
+  const usuario = async (rol) => (await uno('SELECT id, nombre FROM usuarios WHERE empresa_id = $1 AND rol = $2 ORDER BY id LIMIT 1', [E, rol]));
+  const admin = await usuario('administrador'), counter = await usuario('counter');
   if (!veh.SXLR27 || !admin || !counter) return;
 
   // Contrato anterior del SXLR27 que terminó el mismo día en que lo retiró Camila: sirve para mostrar una multa «revisar».

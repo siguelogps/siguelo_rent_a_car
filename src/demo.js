@@ -10,20 +10,26 @@ import { desdeLocal } from './util/formato.js';
 const DIA = 864e5;
 const isoFecha = (ms) => new Date(ms).toISOString().slice(0, 10);
 
+// Correos de los usuarios de la demo de siempre. Otra empresa sembrada con los mismos datos (la cuenta de revisión de
+// las tiendas, src/siguelo/cuenta-revision.js) pasa los suyos: el correo de un usuario es único en todo el sistema.
+export const CORREOS_DEMO = { administrador: 'demo@siguelogps.cl', counter: 'counter@siguelogps.cl', patio: 'patio@siguelogps.cl', finanzas: 'finanzas@siguelogps.cl' };
+
 // superadminDemo: false en producción (src/arranque.js, RNT-03): no se crea la cuenta compartida soporte@siguelogps.cl.
-export async function sembrarDemo({ clave = 'demo1234', superadminDemo = true } = {}) {
+// 🔥 9-nov (cuenta de revisión de tiendas): `empresa` cambia los datos de la empresa, `correos` los de los usuarios y
+// `clave: null` deja a esos usuarios sin clave (no pueden ingresar; solo existen para que los datos tengan autores).
+export async function sembrarDemo({ clave = 'demo1234', superadminDemo = true, empresa = {}, correos = CORREOS_DEMO } = {}) {
   const e = await crearEmpresa({
     nombre: 'Andes Rent a Car', slug: 'andes-rent', rut: '76543210-3', razon_social: 'Andes Rent a Car SpA', giro: 'Arriendo de vehículos',
     direccion: 'Av. Providencia 2133, of. 401', comuna: 'Providencia', ciudad: 'Santiago', telefono: '+56 2 2345 6789', correo: 'reservas@andesrent.cl',
-    sucursal: 'Aeropuerto SCL', admin_nombre: 'María José Rojas', admin_correo: 'demo@siguelogps.cl', admin_clave: clave
+    sucursal: 'Aeropuerto SCL', admin_nombre: 'María José Rojas', ...empresa, admin_correo: correos.administrador, admin_clave: clave
   });
   const E = e.id;
-  const h = hashClave(clave);
+  const h = clave ? hashClave(clave) : null;
   await q('UPDATE sucursales SET direccion = $2, comuna = $3, ciudad = $4, lat = -33.3968, lng = -70.7937, horario = $5 WHERE empresa_id = $1', [E, 'Aeropuerto Arturo Merino Benítez, estacionamiento 3', 'Pudahuel', 'Santiago', 'Todos los días 06:00 a 23:00']);
   const [scl] = await q('SELECT id FROM sucursales WHERE empresa_id = $1', [E]);
   const [prov] = await q(`INSERT INTO sucursales (empresa_id, nombre, direccion, comuna, ciudad, lat, lng, horario) VALUES ($1,'Providencia','Av. Providencia 2133','Providencia','Santiago',-33.4206,-70.6075,'Lun a sáb 08:30 a 19:30') RETURNING id`, [E]);
   const [pmo] = await q(`INSERT INTO sucursales (empresa_id, nombre, direccion, comuna, ciudad, lat, lng, horario) VALUES ($1,'Puerto Montt','Av. Diego Portales 1050','Puerto Montt','Puerto Montt',-41.4693,-72.9424,'Lun a dom 08:00 a 21:00') RETURNING id`, [E]);
-  for (const [n, c, rol, s] of [['Paula Contreras', 'counter@siguelogps.cl', 'counter', scl.id], ['Jorge Salinas', 'patio@siguelogps.cl', 'patio', scl.id], ['Rodrigo Fuenzalida', 'finanzas@siguelogps.cl', 'finanzas', prov.id]]) {
+  for (const [n, c, rol, s] of [['Paula Contreras', correos.counter, 'counter', scl.id], ['Jorge Salinas', correos.patio, 'patio', scl.id], ['Rodrigo Fuenzalida', correos.finanzas, 'finanzas', prov.id]]) {
     await q('INSERT INTO usuarios (empresa_id, nombre, correo, clave_hash, rol, sucursal_id) VALUES ($1,$2,$3,$4,$5,$6)', [E, n, c, h, rol, s]);
   }
   if (superadminDemo) await q(`INSERT INTO usuarios (empresa_id, nombre, correo, clave_hash, rol) VALUES (NULL, 'Soporte Síguelo', 'soporte@siguelogps.cl', $1, 'superadmin') ON CONFLICT (correo) DO NOTHING`, [h]);

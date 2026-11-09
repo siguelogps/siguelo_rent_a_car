@@ -16,7 +16,7 @@ object Web {
         ModuloWeb("tag_multas", "TAG y multas", "/tag-multas", "Pasadas TAG y multas por contrato"),
         ModuloWeb("tarifas", "Tarifas", "/tarifas", "Precios, temporadas y descuentos"),
         ModuloWeb("reportes", "Reportes", "/reportes", "Indicadores y planillas"),
-        ModuloWeb("configuracion", "Configuración", "/configuracion", "Empresa, sucursales, usuarios e integraciones"),
+        ModuloWeb("configuracion", "Configuración", "/configuracion", "Empresa, sucursales, usuarios y conexiones"),
     )
 
     /** Los que el usuario puede ver según su rol y el plan contratado (el servidor igual los vuelve a revisar). */
